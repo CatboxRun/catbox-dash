@@ -439,20 +439,82 @@ function show(el) {
   syncRotate();
 }
 
-function isPortraitPhone() {
-  const w = window.visualViewport?.width || window.innerWidth;
-  const h = window.visualViewport?.height || window.innerHeight;
-  return Math.min(w, window.innerWidth) < 900 && h > w;
+function isWalletDappBrowser() {
+  try {
+    const eth = window.ethereum || {};
+    const ua = navigator.userAgent || "";
+    if (
+      eth.isTokenPocket ||
+      eth.isTrust ||
+      eth.isTrustWallet ||
+      eth.isImToken ||
+      eth.isCoinbaseWallet ||
+      eth.isCoinbaseBrowser ||
+      eth.isOkxWallet ||
+      eth.isOKExWallet ||
+      eth.isBitKeep ||
+      eth.isMathWallet ||
+      eth.isSafePal ||
+      eth.isRainbow ||
+      eth.isBinance
+    ) {
+      return true;
+    }
+    if (window.tokenpocket || window.imToken || window.okxwallet || window.bitkeep || window.BinanceChain) {
+      return true;
+    }
+    return /TokenPocket|TrustWallet|imToken|BitKeep|Bitget|OKApp|CoinbaseWallet|MetaMaskMobile|Rainbow|SafePal|MathWallet/i.test(
+      ua,
+    );
+  } catch (_) {
+    return false;
+  }
 }
 
+function markWalletDapp() {
+  const on = isWalletDappBrowser();
+  document.documentElement.classList.toggle("wallet-dapp", on);
+  if (document.body) document.body.classList.toggle("wallet-dapp", on);
+  return on;
+}
+
+function viewportBox() {
+  const iw = window.innerWidth || document.documentElement.clientWidth || 0;
+  const ih = window.innerHeight || document.documentElement.clientHeight || 0;
+  const vw = window.visualViewport?.width || iw;
+  const vh = window.visualViewport?.height || ih;
+  const w = Math.min(iw || vw, vw || iw);
+  const h = Math.max(ih || vh, vh || ih);
+  return { w, h };
+}
+
+function isPortraitPhone() {
+  const { w, h } = viewportBox();
+  return Math.min(w, h) < 900 && h > w;
+}
+
+let sawLandscape = false;
+
 function syncRotate() {
+  const wallet = markWalletDapp();
+  const { w, h } = viewportBox();
+  if (w > h) sawLandscape = true;
+  const playing = !game.classList.contains("hidden");
+  const portrait = isPortraitPhone();
   const gate = $("rotateGate");
-  if (!gate) return;
-  const need = !game.classList.contains("hidden") && isPortraitPhone();
-  gate.classList.toggle("hidden", !need);
+  if (gate) {
+    const need = playing && portrait && !wallet;
+    gate.classList.toggle("hidden", !need);
+  }
+  const soft = $("rotateSoft");
+  if (soft) {
+    const hint = wallet && playing && portrait && sawLandscape;
+    soft.classList.toggle("hidden", !hint);
+  }
 }
 
 async function enterPlay() {
+  if (markWalletDapp()) return;
   try {
     const root = document.documentElement;
     if (root.requestFullscreen) await root.requestFullscreen();
@@ -716,7 +778,7 @@ function jump() {
 
 window.addEventListener("pointerdown", (e) => {
   if (game.classList.contains("hidden")) return;
-  if (e.target.closest("a, button, .langs, .lang-btn, .rotate-gate")) return;
+  if (e.target.closest("a, button, .langs, .lang-btn, .rotate-gate, .rotate-soft")) return;
   e.preventDefault();
   jump();
 });
@@ -730,6 +792,13 @@ window.addEventListener("keydown", (e) => {
 window.addEventListener("orientationchange", syncRotate);
 window.addEventListener("resize", syncRotate);
 window.visualViewport?.addEventListener("resize", syncRotate);
+window.addEventListener("ethereum#initialized", markWalletDapp, { once: true });
+setTimeout(markWalletDapp, 0);
+setTimeout(markWalletDapp, 400);
+setTimeout(() => {
+  markWalletDapp();
+  syncRotate();
+}, 1200);
 document.addEventListener(
   "touchmove",
   (e) => {

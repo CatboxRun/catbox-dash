@@ -568,7 +568,21 @@ button.primary, button.ghost {
   button.primary, button.ghost { min-height: 36px; padding: 8px 12px; }
   .swap-card { max-height: calc(100dvh - 16px); overflow: auto; }
   .rotate-gate { display: none !important; }
+  .rotate-soft { display: none !important; }
 }
+
+html.wallet-dapp .rotate-gate,
+body.wallet-dapp .rotate-gate { display: none !important; }
+
+.rotate-soft {
+  margin: 0 0 4px;
+  font-size: 7px;
+  line-height: 1.5;
+  color: var(--dim);
+  text-align: center;
+  pointer-events: none;
+}
+body:not([data-lang="en"]) .rotate-soft { font-size: 11px; letter-spacing: 0; }
 
 body.playing {
   overflow: hidden;
@@ -593,6 +607,16 @@ body.playing .panel.game {
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  padding: 4px 6px;
+}
+body.playing .hud {
+  margin-bottom: 4px;
+  font-size: 7px;
+}
+body.playing .bar {
+  height: 6px;
+  margin-bottom: 4px;
+  border-width: 2px;
 }
 body.playing .stage { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; }
 body.playing #cv {
