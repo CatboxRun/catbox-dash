@@ -45,19 +45,30 @@ function loadInviteBoard() {
   }
 }
 
+function rowPts(r) {
+  if (!r) return 0;
+  const v = r.score != null ? r.score : r.pts;
+  const n = typeof v === "bigint" ? Number(v) : Number(v);
+  return Number.isFinite(n) ? Math.floor(n) : 0;
+}
+
+function scoredRows(rows) {
+  return (rows || []).filter((r) => rowPts(r) > 0);
+}
+
 function renderList(id, rows, emptyKey) {
   const el = $(id);
   if (!el) return;
-  if (!rows || !rows.length) {
+  const ranked = scoredRows(rows);
+  if (!ranked.length) {
     el.innerHTML = `<li class="empty">${t(emptyKey || "emptyBoard")}</li>`;
     return;
   }
-  el.innerHTML = rows
+  el.innerHTML = ranked
     .slice(0, 6)
     .map((r, i) => {
       const name = r.you ? `${r.tag} · ${t("you")}` : r.tag;
-      const val = r.score != null ? r.score : r.pts;
-      return `<li class="${r.you ? "you" : ""}"><span class="tag">${i + 1}. ${name}</span><span>${val}</span></li>`;
+      return `<li class="${r.you ? "you" : ""}"><span class="tag">${i + 1}. ${name}</span><span>${rowPts(r)}</span></li>`;
     })
     .join("");
 }
@@ -80,9 +91,21 @@ function renderBurns(rows) {
     .join("");
 }
 
+function mergeWeekBoard(liveWeek) {
+  const live = scoredRows(liveWeek);
+  const localYou = loadBoard().find((r) => r.you && rowPts(r) > 0);
+  if (!localYou) return live;
+  const liveYou = live.find((r) => r.you);
+  if (liveYou && rowPts(liveYou) >= rowPts(localYou)) return live;
+  const others = live.filter((r) => !r.you);
+  return [...others, { tag: localYou.tag, score: rowPts(localYou), you: true }]
+    .sort((a, b) => rowPts(b) - rowPts(a))
+    .slice(0, 8);
+}
+
 function renderBoards() {
   if (window._liveBoards) {
-    renderList("weekList", window._liveBoards.week);
+    renderList("weekList", mergeWeekBoard(window._liveBoards.week));
     renderList("inviteList", window._liveBoards.invite);
   } else {
     renderList("weekList", loadBoard());
@@ -103,7 +126,7 @@ async function pullLiveBoards() {
     ]);
     window._liveBoards = boards;
     window._liveBurns = burns;
-    renderList("weekList", boards.week);
+    renderList("weekList", mergeWeekBoard(boards.week));
     renderList("inviteList", boards.invite);
     renderBurns(burns);
   } catch (_) {}

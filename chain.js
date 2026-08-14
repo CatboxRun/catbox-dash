@@ -703,14 +703,35 @@ const CatboxChain = (() => {
     return swapExact(fromSym, "LIM", amountIn);
   }
 
+  function asPts(v) {
+    if (v == null) return 0;
+    try {
+      const n = typeof v === "bigint" ? Number(v) : Number(v.toString ? v.toString() : v);
+      return Number.isFinite(n) ? Math.floor(n) : 0;
+    } catch (_) {
+      return 0;
+    }
+  }
+
+  function eventScore(e) {
+    try {
+      const raw = e?.args?.score;
+      if (raw == null) return 0n;
+      return typeof raw === "bigint" ? raw : BigInt(raw);
+    } catch (_) {
+      return 0n;
+    }
+  }
+
   function toRows(map, youAddr) {
     return Object.entries(map)
       .map(([addr, pts]) => ({
         tag: short(addr),
         addr,
-        pts: Math.floor(Number(pts)),
+        pts: asPts(pts),
         you: youAddr && addr.toLowerCase() === youAddr.toLowerCase(),
       }))
+      .filter((r) => r.pts > 0)
       .sort((a, b) => b.pts - a.pts)
       .slice(0, 8);
   }
@@ -739,8 +760,10 @@ const CatboxChain = (() => {
     const dayFrom = Math.max(0, latest - dayBlocks);
     for (const e of settled) {
       if (e.blockNumber < dayFrom) continue;
+      const add = eventScore(e);
+      if (add <= 0n) continue;
       const player = e.args.player;
-      week[player] = (week[player] || 0n) + BigInt(e.args.score);
+      week[player] = (week[player] || 0n) + add;
     }
     for (const e of started) {
       const ref = e.args.referrer;
