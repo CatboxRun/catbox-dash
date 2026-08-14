@@ -77,6 +77,32 @@ body {
   touch-action: manipulation;
 }
 .lang-btn:hover { color: var(--ink); border-color: var(--gold); }
+.bgm-btn {
+  font-family: "Press Start 2P", monospace;
+  font-size: 12px;
+  line-height: 1;
+  padding: 7px 8px;
+  min-width: 32px;
+  min-height: 32px;
+  cursor: pointer;
+  color: var(--gold);
+  background: #0b1220;
+  border: 2px solid var(--gold);
+  flex-shrink: 0;
+  touch-action: manipulation;
+}
+.bgm-btn:hover { color: var(--ink); border-color: var(--ink); }
+.bgm-btn.muted { color: var(--dim); border-color: var(--line); }
+.bgm-ico { display: block; position: relative; }
+.bgm-btn.muted .bgm-ico::after {
+  content: "";
+  position: absolute;
+  left: -2px;
+  right: -2px;
+  top: 50%;
+  border-top: 2px solid currentColor;
+  transform: rotate(-28deg);
+}
 .wallet-btn {
   font-family: "Noto Sans", "Noto Sans SC", sans-serif;
   font-size: 11px;
@@ -552,7 +578,7 @@ button.primary, button.ghost {
   .logo { width: 28px; height: 28px; }
   .title { font-size: 9px; }
   .sub { display: none; }
-  .lang-btn, .wallet-btn, .swap-btn, .claim-btn { min-height: 28px; padding: 4px 6px; font-size: 10px; }
+  .lang-btn, .wallet-btn, .swap-btn, .claim-btn, .bgm-btn { min-height: 28px; padding: 4px 6px; font-size: 10px; }
   .langs { max-width: none; }
   .panel {
     flex: 1;
