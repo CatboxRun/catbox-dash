@@ -15,6 +15,7 @@ const CatboxChain = (() => {
 
   let account = null;
   let provider = null;
+  let v6Cached = null;
 
   const BSC = {
     chainId: "0x38",
@@ -48,6 +49,8 @@ const CatboxChain = (() => {
     "function rewardBps(address) view returns (uint256)",
     "function withdrawDaily(uint256)",
     "function currentDay() view returns (uint256)",
+    "function playedDay(address) view returns (uint256)",
+    "function inviteDay(address) view returns (uint256)",
     "function tgClaimed(address) view returns (bool)",
     "function claimTgBonus()",
     "function xClaimed(address) view returns (bool)",
@@ -164,6 +167,7 @@ const CatboxChain = (() => {
       }
     }
     const daily = d + (eq || 0n);
+    v6Cached = v6;
     return {
       week: daily,
       day: daily,
@@ -177,6 +181,18 @@ const CatboxChain = (() => {
       free,
       total: daily + i,
     };
+  }
+
+  async function isV6() {
+    if (v6Cached != null) return v6Cached;
+    try {
+      const c = gameContract(await readProvider());
+      await c.dayEqPool();
+      v6Cached = true;
+    } catch (_) {
+      v6Cached = false;
+    }
+    return v6Cached;
   }
 
   async function pendingOf(addr = account) {
@@ -817,6 +833,7 @@ const CatboxChain = (() => {
     ticketPrice,
     poolBalance,
     pendingOf,
+    isV6,
     invitePoints,
     inviteCountOf,
     rewardBpsOf,

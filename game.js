@@ -251,6 +251,8 @@ async function refreshClaimUi() {
   const amt = $("claimAmt");
   const when = $("claimWhen");
   const btn = $("claimBtn");
+  const dailyBtn = $("claimDailyBtn");
+  const inviteBtn = $("claimInviteBtn");
   const acc = window.CatboxChain?.account;
   const nextLabel = (ts) => {
     const ms = Math.max(0, Number(ts) * 1000 - Date.now());
@@ -258,25 +260,46 @@ async function refreshClaimUi() {
     const m = Math.floor((ms % 3600000) / 60000);
     return t("claimWait", { t: `${h}h ${m}m` });
   };
-  if (!acc || !chainReady) {
+  const paintWait = (whenText) => {
     if (amt) amt.textContent = t("claimNone");
-    if (when) when.textContent = t("claimWhen");
+    if (when) when.textContent = whenText || t("claimWhen");
     if (btn) btn.disabled = true;
+    if (dailyBtn) {
+      dailyBtn.disabled = true;
+      dailyBtn.hidden = true;
+    }
+    if (inviteBtn) {
+      inviteBtn.disabled = true;
+      inviteBtn.hidden = true;
+    }
+  };
+  if (!acc || !chainReady) {
+    paintWait();
     return;
   }
   try {
-    const [p, next] = await Promise.all([
+    const [p, next, v6] = await Promise.all([
       CatboxChain.pendingOf(acc),
       CatboxChain.nextClaimAt(),
+      CatboxChain.isV6(),
     ]);
-    const text = `${CatboxChain.formatLim(p.total)} LIM`;
-    if (amt) amt.textContent = p.total > 0n ? `${t("claimPending")} ${text}` : t("claimNone");
-    if (when) when.textContent = p.total > 0n ? t("claimReady") : nextLabel(next);
-    if (btn) btn.disabled = p.total === 0n;
+    const dailySettled = v6 ? p.wk : 0n;
+    const inviteSettled = v6 ? p.inv : 0n;
+    const settled = dailySettled + inviteSettled;
+    const text = `${CatboxChain.formatLim(settled)} LIM`;
+    if (amt) amt.textContent = settled > 0n ? `${t("claimPending")} ${text}` : t("claimNone");
+    if (when) when.textContent = settled > 0n ? t("claimReady") : nextLabel(next);
+    if (btn) btn.disabled = settled === 0n;
+    if (dailyBtn) {
+      dailyBtn.disabled = dailySettled === 0n;
+      dailyBtn.hidden = dailySettled === 0n;
+    }
+    if (inviteBtn) {
+      inviteBtn.disabled = inviteSettled === 0n;
+      inviteBtn.hidden = inviteSettled === 0n;
+    }
   } catch (_) {
-    if (amt) amt.textContent = t("claimNone");
-    if (when) when.textContent = t("claimWhen");
-    if (btn) btn.disabled = true;
+    paintWait();
   }
 }
 
@@ -319,9 +342,13 @@ async function refreshFreeUi() {
 
 async function doClaim() {
   const btn = $("claimBtn");
+  const dailyBtn = $("claimDailyBtn");
+  const inviteBtn = $("claimInviteBtn");
   const amt = $("claimAmt");
   try {
     if (btn) btn.disabled = true;
+    if (dailyBtn) dailyBtn.disabled = true;
+    if (inviteBtn) inviteBtn.disabled = true;
     if (amt) amt.textContent = t("claiming");
     const hash = await CatboxChain.claim();
     if (amt) {
@@ -332,7 +359,7 @@ async function doClaim() {
     await syncOnchainPool();
   } catch (e) {
     if (amt) amt.textContent = e?.shortMessage?.includes("none") || e?.message?.includes("none") ? t("claimNone") : t("txFail");
-    if (btn) btn.disabled = false;
+    await refreshClaimUi();
   }
 }
 
@@ -739,6 +766,8 @@ async function bootWallet() {
   bootSwap();
   bootShare();
   $("claimBtn") && ($("claimBtn").onclick = doClaim);
+  $("claimDailyBtn") && ($("claimDailyBtn").onclick = doClaim);
+  $("claimInviteBtn") && ($("claimInviteBtn").onclick = doClaim);
   startLiveClock();
   try { CatboxChain.referrer(); } catch (_) {}
 }

@@ -41,7 +41,7 @@
       href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@500;700&family=Noto+Sans+SC:wght@500;700&family=Noto+Sans+JP:wght@500;700&family=Noto+Sans+KR:wght@500;700&family=Noto+Sans+Thai:wght@500;700&family=Press+Start+2P&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="./styles.css?v=34" />
+    <link rel="stylesheet" href="./styles.css?v=35" />
   </head>
   <body>
     <div class="crt">
@@ -137,7 +137,7 @@
                 <li data-i18n="ruleInvitePay">Each friend who starts a run from your link adds +5% LIM on final settlement. Four friends and every coin caught settles at 120% of the ticket. Cap 200%.</li>
                 <li data-i18n="ruleLeft">Missed coins go to the pools: daily 50% · invite 20% · burn 30%.</li>
                 <li data-i18n="ruleDaily">The daily board gets 50% of missed LIM, split equally among that day's paid players. Claim yesterday at 00:00 Singapore — today's paid runs cannot be claimed early. Free runs appear on the daily board with score 0 and do not share the prize pool.</li>
-                <li data-i18n="ruleInviteBoard">The invite board gets 20% of missed LIM, split evenly among the top 200 inviters. Claim anytime.</li>
+                <li data-i18n="ruleInviteBoard">The invite board gets 20% of missed LIM, split evenly among the top 200 inviters. Same rule as daily: claim yesterday at 00:00 Singapore — today's invite leftover cannot be claimed early.</li>
               </ol>
             </article>
           </div>
@@ -149,12 +149,14 @@
                 <b>50%</b><span data-i18n="weekBoard">DAILY · 50%</span><i id="weekPoolAmt">0</i>
                 <small class="split-note" data-i18n="daySplitNote">That 50% is split equally among that day's paid players at 00:00 Singapore. Free runs are on the board at 0 and do not share the pool</small>
                 <small id="daySplitLive" class="split-live hidden"></small>
+                <button class="ghost split-claim" id="claimDailyBtn" type="button" disabled data-i18n="claimDaily">CLAIM DAILY</button>
               </div>
               <div class="split invite">
                 <img src="./assets/icon-invite.png?v=1" alt="" />
                 <b>20%</b><span data-i18n="inviteBoard">INVITE · 20%</span><i id="invitePoolAmt">0</i>
-                <small class="split-note" data-i18n="inviteTopNote">Equal split among the top 200 inviters</small>
+                <small class="split-note" data-i18n="inviteTopNote">Equal split among the top 200 inviters at 00:00 Singapore. Yesterday only</small>
                 <small id="inviteTopLive" class="split-live hidden"></small>
+                <button class="ghost split-claim" id="claimInviteBtn" type="button" disabled data-i18n="claimInvite">CLAIM INVITE</button>
               </div>
               <div class="split burn">
                 <img src="./assets/icon-burn.png?v=1" alt="" />
@@ -273,7 +275,7 @@
           </div>
         </div>
         <p id="payCopy"></p>
-        <p class="eligible" data-i18n="eligible">Catch every coin, keep the ticket LIM · missed: daily 50% (equal among that day's paid players) / invite 20% (top 200 even) / burn 30%</p>
+        <p class="eligible" data-i18n="eligible">Catch every coin, keep the ticket LIM · missed: daily 50% (equal among that day's paid players at 00:00 Singapore) / invite 20% (top 200 equal at 00:00 Singapore) / burn 30%</p>
         <div class="meter-preview">
           <img src="./assets/hero-cat.png?v=1" alt="" />
           <img class="coin-logo" src="./assets/coin.png?v=4" alt="" />
@@ -389,9 +391,9 @@
 
     <script src="./config.js?v=26"></script>
     <script src="https://cdn.jsdelivr.net/npm/ethers@6.13.5/dist/ethers.umd.min.js"></script>
-    <script src="./chain.js?v=37"></script>
-    <script src="./i18n.js?v=42"></script>
-    <script src="./game.js?v=41"></script>
+    <script src="./chain.js?v=38"></script>
+    <script src="./i18n.js?v=43"></script>
+    <script src="./game.js?v=42"></script>
     <script src="./bgm.js?v=26"></script>
   </body>
 </html>
