@@ -16,6 +16,7 @@ const CatboxChain = (() => {
   let account = null;
   let provider = null;
   let v6Cached = null;
+  let playCountCache = { addr: "", n: 0, at: 0 };
 
   const BSC = {
     chainId: "0x38",
@@ -57,6 +58,7 @@ const CatboxChain = (() => {
     "function claimXBonus()",
     "function freeScoutUsed(address) view returns (uint8)",
     "function scoutIsFree(address) view returns (bool)",
+    "function playCount(address) view returns (uint256)",
   ];
 
   function gameContract(s) {
@@ -283,15 +285,117 @@ const CatboxChain = (() => {
     }
   }
 
+  function playStorageKey(addr) {
+    return `catbox-plays-${String(addr || "").toLowerCase()}`;
+  }
+
+  function localPlayCount(addr) {
+    if (!addr) return 0;
+    try {
+      const n = Number(localStorage.getItem(playStorageKey(addr)) || 0);
+      return Number.isFinite(n) && n > 0 ? Math.floor(n) : 0;
+    } catch (_) {
+      return 0;
+    }
+  }
+
+  function rememberPlayCount(addr, n) {
+    if (!addr) return;
+    const v = Math.max(0, Math.floor(Number(n) || 0));
+    if (v <= localPlayCount(addr)) return;
+    try {
+      localStorage.setItem(playStorageKey(addr), String(v));
+    } catch (_) {}
+  }
+
+  function notePlay(addr = account) {
+    if (!addr) return 0;
+    const n = localPlayCount(addr) + 1;
+    try {
+      localStorage.setItem(playStorageKey(addr), String(n));
+    } catch (_) {}
+    playCountCache = { addr: String(addr).toLowerCase(), n, at: Date.now() };
+    return n;
+  }
+
+  function rewardBpsFromParts(inviteN, playN) {
+    const inv = Math.max(0, Math.floor(Number(inviteN) || 0)) * 500;
+    const extra = Math.max(0, Math.floor(Number(playN) || 0) - 1) * 10;
+    return Math.min(20000, 10500 + inv + extra);
+  }
+
+  function parseStoredRun(id, r) {
+    const player = r.player || r[0];
+    const paid = r.paid != null ? r.paid : r[1];
+    const startedAt = r.startedAt != null ? r.startedAt : r[2];
+    const settled = Boolean(r.settled != null ? r.settled : r[3]);
+    let free = null;
+    if (r.free != null) free = Boolean(r.free);
+    else if (r.length > 4 && r[4] != null) free = Boolean(r[4]);
+    return {
+      id,
+      player,
+      paid: paid ?? 0n,
+      startedAt: Number(startedAt || 0),
+      settled,
+      free,
+    };
+  }
+
+  async function scanPlayCount(addr) {
+    const want = ethers.getAddress(addr);
+    const c = gameContract(await publicReadProvider());
+    const n = Number(await c.nextRunId());
+    const from = Math.max(1, n - 400);
+    let count = 0;
+    const batch = 8;
+    for (let i = n - 1; i >= from; i -= batch) {
+      const ids = [];
+      for (let id = i; id >= Math.max(from, i - batch + 1); id--) ids.push(id);
+      const runs = await Promise.all(ids.map((id) => c.runs(id).catch(() => null)));
+      for (let j = 0; j < runs.length; j++) {
+        if (!runs[j]) continue;
+        const parsed = parseStoredRun(ids[j], runs[j]);
+        if (!parsed.player || parsed.player === ethers.ZeroAddress) continue;
+        if (ethers.getAddress(parsed.player) === want) count += 1;
+      }
+    }
+    return count;
+  }
+
+  async function countPlaysOf(addr = account) {
+    if (!addr) return 0;
+    const key = String(addr).toLowerCase();
+    const local = localPlayCount(addr);
+    if (playCountCache.addr === key && Date.now() - playCountCache.at < 120000) {
+      return Math.max(playCountCache.n, local);
+    }
+    let chain = 0;
+    try {
+      const c = gameContract(await publicReadProvider());
+      try {
+        const v = await c.playCount(addr);
+        if (v != null && v > 0n) chain = Number(v);
+      } catch (_) {
+        chain = await scanPlayCount(addr);
+      }
+    } catch (_) {}
+    const n = Math.max(chain || 0, local);
+    rememberPlayCount(addr, n);
+    playCountCache = { addr: key, n, at: Date.now() };
+    return n;
+  }
+
   async function rewardBpsOf(addr = account) {
     if (!addr) return 10500n;
+    let invite = 0;
     try {
-      const c = gameContract(await readProvider());
-      const v = await c.rewardBps(addr);
-      return v >= 10500n ? v : 10500n;
+      invite = Number(await inviteCountOf(addr));
     } catch (_) {
-      return 10500n;
+      invite = 0;
     }
+    const plays = await countPlaysOf(addr);
+    return BigInt(rewardBpsFromParts(invite, plays));
   }
 
   function sgtClaimWindow() {
@@ -480,6 +584,7 @@ const CatboxChain = (() => {
     if (!ref || ref.toLowerCase() === account.toLowerCase()) ref = ethers.ZeroAddress;
     const tx = await game.enter(ref, tierId);
     const rec = await tx.wait();
+    notePlay(account);
     return rec.hash;
   }
 
@@ -925,34 +1030,102 @@ const CatboxChain = (() => {
     };
   }
 
-  async function fetchBurns() {
+  function asAmt(v) {
+    if (v == null) return 0n;
     try {
-      const p = await logsReadProvider();
-      const iface = gameContract(p).interface;
-      const topic = iface.getEvent("Burned").topicHash;
-      const latest = await p.getBlockNumber();
-      const logs = await p.getLogs({
-        address: cfg.address,
-        topics: [topic],
-        fromBlock: Math.max(0, latest - 800),
-        toBlock: latest,
-      });
-      return logs
-        .slice()
-        .reverse()
-        .slice(0, 8)
-        .map((log) => {
-          const parsed = iface.parseLog(log);
-          return {
-            player: parsed.args.player,
-            tag: short(parsed.args.player),
-            amount: parsed.args.amount,
-            hash: log.transactionHash,
-          };
-        });
+      return typeof v === "bigint" ? v : BigInt(v);
     } catch (_) {
-      return [];
+      return 0n;
     }
+  }
+
+  async function fetchBurnsFromRuns() {
+    const c = gameContract(await publicReadProvider());
+    const n = Number(await c.nextRunId());
+    if (!Number.isFinite(n) || n <= 1) return [];
+    const from = Math.max(1, n - 400);
+    const batch = 8;
+    const rows = [];
+    for (let i = n - 1; i >= from && rows.length < 30; i -= batch) {
+      const ids = [];
+      for (let id = i; id >= Math.max(from, i - batch + 1); id--) ids.push(id);
+      const runs = await Promise.all(ids.map((id) => c.runs(id).catch(() => null)));
+      for (let j = 0; j < runs.length && rows.length < 30; j++) {
+        if (!runs[j]) continue;
+        const parsed = parseStoredRun(ids[j], runs[j]);
+        if (!parsed.settled) continue;
+        if (!parsed.player || parsed.player === ethers.ZeroAddress) continue;
+        const paid = asAmt(parsed.paid);
+        if (paid <= 0n) continue;
+        // V5 Run has no leftover/collected; 30% of uncollected is the burn share.
+        const burned = (paid * 30n) / 100n;
+        if (burned <= 0n) continue;
+        rows.push({
+          player: ethers.getAddress(parsed.player),
+          tag: short(parsed.player),
+          amount: burned,
+          hash: "",
+          runId: parsed.id,
+        });
+      }
+    }
+    return rows;
+  }
+
+  function mergeBurnLogs(rows, burnedLogs, settledLogs) {
+    const byId = new Map(rows.map((r) => [r.runId, r]));
+    for (const log of settledLogs || []) {
+      const id = Number(log.args.runId);
+      const row = byId.get(id);
+      if (!row) continue;
+      const burned = asAmt(log.args.burned);
+      const leftover = asAmt(log.args.leftover);
+      if (burned > 0n) {
+        row.amount = burned;
+        if (log.transactionHash) row.hash = log.transactionHash;
+      } else if (leftover === 0n) {
+        row.drop = true;
+      }
+    }
+    const byPlayer = new Map();
+    for (const log of burnedLogs || []) {
+      const p = String(log.args.player || "").toLowerCase();
+      if (!p) continue;
+      if (!byPlayer.has(p)) byPlayer.set(p, []);
+      byPlayer.get(p).push(log);
+    }
+    for (const [, arr] of byPlayer) {
+      arr.sort((a, b) => (b.blockNumber || 0) - (a.blockNumber || 0));
+    }
+    const used = new Set();
+    for (const row of rows) {
+      if (row.drop) continue;
+      if (row.hash) continue;
+      const logs = byPlayer.get(row.player.toLowerCase()) || [];
+      const log = logs.find((l) => l.transactionHash && !used.has(l.transactionHash));
+      if (!log) continue;
+      used.add(log.transactionHash);
+      const amt = asAmt(log.args.amount);
+      if (amt > 0n) row.amount = amt;
+      row.hash = log.transactionHash;
+    }
+    return rows.filter((r) => !r.drop);
+  }
+
+  async function fetchBurns() {
+    const rows = await fetchBurnsFromRuns();
+    try {
+      const extra = Promise.all([
+        fetchRawLogs("Burned").catch(() => []),
+        fetchRawLogs("RunSettled").catch(() => []),
+      ]);
+      const raced = await Promise.race([
+        extra.then(([burnedLogs, settledLogs]) => ({ burnedLogs, settledLogs })),
+        sleep(2000).then(() => null),
+      ]);
+      if (raced) return mergeBurnLogs(rows, raced.burnedLogs, raced.settledLogs).slice(0, 30);
+    } catch (_) {}
+    return rows.slice(0, 30);
   }
 
   return {
@@ -971,6 +1144,9 @@ const CatboxChain = (() => {
     isV6,
     invitePoints,
     inviteCountOf,
+    countPlaysOf,
+    notePlay,
+    rewardBpsFromParts,
     rewardBpsOf,
     nextClaimAt,
     claimWindow: sgtClaimWindow,

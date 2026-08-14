@@ -79,13 +79,22 @@ function renderBurns(rows) {
     el.innerHTML = `<li class="empty">${t("emptyBurn")}</li>`;
     return;
   }
+  const explorer = window.CatboxChain?.cfg?.explorer || "https://bscscan.com";
   el.innerHTML = rows
-    .slice(0, 6)
+    .slice(0, 30)
     .map((r) => {
       const amt = window.CatboxChain ? CatboxChain.formatLim(r.amount) : r.amount;
-      const href = CatboxChain.txUrl(r.hash);
-      const shortHash = `${r.hash.slice(0, 10)}…${r.hash.slice(-6)}`;
-      return `<li><span class="tag">${r.tag} · ${amt} LIM</span><a href="${href}" target="_blank" rel="noopener">${shortHash}</a></li>`;
+      const who = r.player
+        ? `<a href="${explorer}/address/${r.player}" target="_blank" rel="noopener">${r.tag}</a>`
+        : r.tag;
+      const runBit = r.runId != null ? ` · #${r.runId}` : "";
+      const label = `<span class="tag">${who}${runBit} · ${amt} LIM</span>`;
+      if (r.hash) {
+        const href = CatboxChain.txUrl(r.hash);
+        const shortHash = `${r.hash.slice(0, 10)}…${r.hash.slice(-6)}`;
+        return `<li>${label}<a href="${href}" target="_blank" rel="noopener">${shortHash}</a></li>`;
+      }
+      return `<li>${label}</li>`;
     })
     .join("");
 }
@@ -126,10 +135,8 @@ async function pullLiveBoards() {
   } catch (_) {}
   try {
     const burns = await CatboxChain.fetchBurns();
-    if (burns.length) {
-      window._liveBurns = burns;
-      renderBurns(burns);
-    }
+    window._liveBurns = burns;
+    renderBurns(burns);
   } catch (_) {}
 }
 
@@ -401,7 +408,7 @@ async function refreshInviteUi() {
     ptsEl.textContent = "0";
   }
   window._rewardBps = bps;
-  const pct = `${Math.round(bps / 100)}%`;
+  const pct = fmtRewardPct(bps);
   if ($("rewardPct")) $("rewardPct").textContent = `${t("rewardCap")} ${pct}`;
   if ($("myRewardPct")) $("myRewardPct").textContent = pct;
   if ($("hudBonus")) $("hudBonus").textContent = pct;
@@ -1074,28 +1081,44 @@ function refreshHud() {
 
 let lastFinish = null;
 
+function fmtRewardPct(bps) {
+  const n = Number(bps || 10500);
+  const pct = n / 100;
+  if (Math.abs(pct - Math.round(pct)) < 1e-9) return `${Math.round(pct)}%`;
+  return `${pct.toFixed(1)}%`;
+}
+
 function refreshOver() {
   if (!lastFinish || over.classList.contains("hidden")) return;
   const { cap, ticket, got, leftover, score, coins, whyKey, rank, burned, burnHash, payout, bps, free } = lastFinish;
   const fail = String(whyKey || "").startsWith("die");
+  over.classList.toggle("cap", Boolean(cap));
   const whyEl = $("overWhy");
   if (whyEl) {
-    whyEl.textContent = t(whyKey);
-    whyEl.className = `over-why ${whyKey}`;
+    if (cap && fail) {
+      whyEl.textContent = t(`${whyKey}Cap`);
+      whyEl.className = `over-why encore ${whyKey}`;
+    } else {
+      whyEl.textContent = t(whyKey);
+      whyEl.className = `over-why ${whyKey}`;
+    }
   }
-  if (fail) {
+  if (cap) {
+    $("overKicker").textContent = t("overFullK");
+    $("overTitle").textContent = t("overFullT");
+  } else if (fail) {
     $("overKicker").textContent = t("overFailK");
     $("overTitle").textContent = t(`${whyKey}Title`);
   } else {
-    $("overKicker").textContent = cap ? t("overFullK") : t("overPartK");
-    $("overTitle").textContent = cap ? t("overFullT") : t("overPartT");
+    $("overKicker").textContent = t("overPartK");
+    $("overTitle").textContent = t("overPartT");
   }
   const burnAmt = leftover * 0.3;
   const weekAmt = leftover * 0.5;
   const invAmt = leftover * 0.2;
   const burnShown = typeof burned === "number" ? burned : burnAmt;
-  const pct = Math.round((bps || window._rewardBps || 10500) / 100);
-  const paid = payout != null ? payout : Math.min(got * pct / 100, ticket * 2);
+  const pct = fmtRewardPct(bps || window._rewardBps || 10500).replace("%", "");
+  const paid = payout != null ? payout : Math.min(got * (Number(bps || window._rewardBps || 10500) / 10000), ticket * 2);
   $("overResult").innerHTML = t(cap ? "resultFull" : "resultPart", {
     coins,
     got: got.toFixed(4),
@@ -1156,6 +1179,7 @@ async function payAndStart() {
     status.textContent = free ? t("paying") : t("approve");
     const hash = await CatboxChain.approveAndEnter(selected.id);
     status.innerHTML = `<a href="${CatboxChain.txUrl(hash)}" target="_blank" rel="noopener">${hash.slice(0, 10)}…</a>`;
+    await refreshInviteUi();
     enterPlay();
     startRun(selected, teach, free);
   } catch (e) {
@@ -1367,6 +1391,10 @@ function startRun(tier, teach, freeRun) {
     clearWait: 0,
     coinsOut: false,
     overtime: false,
+    overtimeT: 0,
+    grabMarks: 0,
+    speedMarks: 0,
+    notePri: 0,
     noteT: 0,
     startedMs: Date.now(),
     tutorial: false,
@@ -1386,7 +1414,7 @@ function startRun(tier, teach, freeRun) {
   $("hudTier").textContent = `${tierText(tier.id).name} · ${tier.cost} LIM`;
   $("rebateBar").style.width = "0%";
   $("hudRebate").textContent = `0.00/${tier.cost} LIM`;
-  if ($("hudBonus")) $("hudBonus").textContent = `${Math.round((window._rewardBps || 10500) / 100)}%`;
+  if ($("hudBonus")) $("hudBonus").textContent = fmtRewardPct(window._rewardBps || 10500);
   $("runNote")?.classList.add("hidden");
   $("hudScore")?.parentElement?.classList.remove("x2");
   show(game);
@@ -1405,9 +1433,13 @@ function progress(run) {
 function currentSpeed(run) {
   const p = progress(run);
   const grab = run.tier.cost > 0 ? run.collected / run.tier.cost : 0;
-  let haste = p * p * 0.72;
+  let haste = Math.pow(p, 1.4) * 0.72;
   if (grab > 0.7) haste += (grab - 0.7) * 0.25;
-  if (run.overtime) haste += 0.18;
+  if (run.overtime) {
+    let u = Math.min(1, (run.overtimeT || 0) / 150);
+    u = u * u * (3 - 2 * u);
+    haste += 0.18 * u;
+  }
   haste = Math.min(0.82, haste);
   return run.tier.speed + (run.tier.speedMax - run.tier.speed) * haste;
 }
@@ -1860,26 +1892,62 @@ function tick() {
   run.objects = run.objects.filter((o) => o.x > -120 && !(o.kind === "coin" && o.hit));
   run.popped = run.popped.filter((n) => --n.t > 0);
   tickFx();
+  if (run.overtime) run.overtimeT = (run.overtimeT || 0) + 1;
   if (run.flash > 0) run.flash -= 1;
   if (run.t - (run.lastJumpT || 0) < 96) addRaw(0.22);
   const pct = (run.collected / run.tier.cost) * 100;
   $("hudRebate").textContent = `${run.collected.toFixed(3)}/${run.tier.cost} LIM`;
   $("rebateBar").style.width = `${Math.min(100, pct)}%`;
   $("hudScore").textContent = String(boardScore());
+  if (!run.tutorial) {
+    const grab = run.tier.cost > 0 ? run.collected / run.tier.cost : 0;
+    const grabKeys = [
+      [0.25, "grab25", 1],
+      [0.5, "grab50", 2],
+      [0.75, "grab75", 4],
+    ];
+    let grabNote = "";
+    for (const [th, key, bit] of grabKeys) {
+      if (grab >= th && !(run.grabMarks & bit)) {
+        run.grabMarks |= bit;
+        grabNote = key;
+      }
+    }
+    if (grabNote) showRunNote(grabNote, { flash: true });
+    const curve = Math.pow(progress(run), 1.4);
+    const speedKeys = [
+      [0.25, 1],
+      [0.5, 2],
+      [0.75, 4],
+    ];
+    for (const [th, bit] of speedKeys) {
+      if (curve >= th && !(run.speedMarks & bit)) {
+        run.speedMarks |= bit;
+        showRunNote("trackHaste", { soft: true });
+      }
+    }
+  }
   if (!run.overtime && run.collected + 1e-9 >= run.tier.cost) {
     run.overtime = true;
-    showRunNote("coinsOutFull");
+    run.overtimeT = 0;
+    showRunNote("coinsOutFull", { flash: true });
     $("hudScore")?.parentElement?.classList.add("x2");
   }
   if (run.noteT > 0) {
     run.noteT -= 1;
-    if (run.noteT <= 0) $("runNote")?.classList.add("hidden");
+    if (run.noteT <= 0) {
+      run.notePri = 0;
+      $("runNote")?.classList.add("hidden");
+    }
   }
   if (run.tutorial) tickTutorial();
 }
 
-function showRunNote(key) {
-  run.noteT = 200;
+function showRunNote(key, opts = {}) {
+  if (opts.soft && run.notePri > 0) return;
+  run.noteT = opts.soft ? 140 : 200;
+  run.notePri = opts.soft ? 0 : 1;
+  if (opts.flash) run.flash = Math.max(run.flash || 0, 14);
   const note = $("runNote");
   if (!note) return;
   note.textContent = t(key);
