@@ -448,6 +448,7 @@ function show(el) {
   el.classList.remove("hidden");
   document.body.classList.toggle("playing", el === game);
   syncRotate();
+  requestAnimationFrame(syncRotate);
 }
 
 function isWalletDappBrowser() {
@@ -492,11 +493,19 @@ function markWalletDapp() {
 function viewportBox() {
   const iw = window.innerWidth || document.documentElement.clientWidth || 0;
   const ih = window.innerHeight || document.documentElement.clientHeight || 0;
-  const vw = window.visualViewport?.width || iw;
-  const vh = window.visualViewport?.height || ih;
+  const vv = window.visualViewport;
+  const vw = vv?.width || iw;
+  const vh = vv?.height || ih;
   const w = Math.min(iw || vw, vw || iw);
   const h = Math.max(ih || vh, vh || ih);
-  return { w, h };
+  return {
+    w,
+    h,
+    vw: vw || w,
+    vh: vh || h,
+    ox: vv?.offsetLeft || 0,
+    oy: vv?.offsetTop || 0,
+  };
 }
 
 function isPortraitPhone() {
@@ -505,6 +514,54 @@ function isPortraitPhone() {
 }
 
 let sawLandscape = false;
+
+function clearFakeLandscape(stage) {
+  if (!stage) return;
+  stage.style.position = "";
+  stage.style.width = "";
+  stage.style.height = "";
+  stage.style.left = "";
+  stage.style.top = "";
+  stage.style.right = "";
+  stage.style.bottom = "";
+  stage.style.margin = "";
+  stage.style.transform = "";
+  stage.style.transformOrigin = "";
+  stage.style.zIndex = "";
+  stage.style.maxWidth = "";
+}
+
+function applyFakeLandscape() {
+  const stage = $("playStage");
+  const wallet = document.documentElement.classList.contains("wallet-dapp") ||
+    document.body.classList.contains("wallet-dapp");
+  const playing = document.body.classList.contains("playing");
+  const { vw, vh, ox, oy } = viewportBox();
+  const portrait = vh > vw;
+  const on = wallet && playing && portrait;
+  document.documentElement.classList.toggle("force-landscape", on);
+  document.body.classList.toggle("force-landscape", on);
+  if (!stage) return;
+  if (!on) {
+    clearFakeLandscape(stage);
+    return;
+  }
+  /* Portrait-locked TP: layout a landscape stage (width=vh, height=vw), then
+     rotate 90° clockwise around center so it fills the visual viewport.
+     Home/USB-C on the right is the usual game hold; taps map through CSS. */
+  stage.style.position = "fixed";
+  stage.style.width = `${vh}px`;
+  stage.style.height = `${vw}px`;
+  stage.style.left = `${ox + vw / 2}px`;
+  stage.style.top = `${oy + vh / 2}px`;
+  stage.style.right = "auto";
+  stage.style.bottom = "auto";
+  stage.style.margin = "0";
+  stage.style.maxWidth = "none";
+  stage.style.zIndex = "6";
+  stage.style.transformOrigin = "center center";
+  stage.style.transform = "translate(-50%, -50%) rotate(90deg)";
+}
 
 function syncRotate() {
   const wallet = markWalletDapp();
@@ -517,9 +574,10 @@ function syncRotate() {
     const need = playing && portrait && !wallet;
     gate.classList.toggle("hidden", !need);
   }
+  applyFakeLandscape();
   const soft = $("rotateSoft");
   if (soft) {
-    const hint = wallet && playing && portrait && sawLandscape;
+    const hint = wallet && playing && portrait && sawLandscape && !document.body.classList.contains("force-landscape");
     soft.classList.toggle("hidden", !hint);
   }
 }
@@ -926,6 +984,7 @@ window.addEventListener("keydown", (e) => {
 window.addEventListener("orientationchange", syncRotate);
 window.addEventListener("resize", syncRotate);
 window.visualViewport?.addEventListener("resize", syncRotate);
+window.visualViewport?.addEventListener("scroll", syncRotate);
 window.addEventListener("ethereum#initialized", markWalletDapp, { once: true });
 setTimeout(markWalletDapp, 0);
 setTimeout(markWalletDapp, 400);
