@@ -155,8 +155,7 @@ async function syncOnchainPool() {
       if (pool.v6 && pool.dayEq != null) {
         dayLive.classList.remove("hidden");
         dayLive.textContent = t("daySplitLive", {
-          eq: CatboxChain.formatLim(pool.dayEq),
-          score: CatboxChain.formatLim(pool.dayScore ?? 0n),
+          eq: CatboxChain.formatLim(pool.dayEq ?? pool.day ?? 0n),
           n: String(pool.dayPlayers ?? 0n),
         });
       } else {
@@ -282,7 +281,7 @@ async function refreshClaimUi() {
 }
 
 function assumedFreeUi() {
-  return { used: 0, left: 2, pool: 0n, eligible: true };
+  return { used: 0, left: 1, pool: 0n, eligible: true, scoutFree: true };
 }
 
 function paintFreeUi(st) {
@@ -290,9 +289,19 @@ function paintFreeUi(st) {
   const prev = window._freeStatus;
   window._freeStatus = st;
   if (!el) return;
-  if (st.left <= 0) el.textContent = "";
+  if (st.vaultFree != null) {
+    const bits = [];
+    if (st.scoutFree) bits.push("1 LIM");
+    if (st.vaultFree) bits.push("10 LIM");
+    el.textContent = bits.length ? t("freeLeftOffer", { n: bits.join(" · ") }) : "";
+  } else if (st.left <= 0) el.textContent = "";
   else el.textContent = t("freeLeft", { n: st.left });
-  const changed = !prev || prev.left !== st.left || prev.eligible !== st.eligible;
+  const changed =
+    !prev ||
+    prev.left !== st.left ||
+    prev.eligible !== st.eligible ||
+    prev.scoutFree !== st.scoutFree ||
+    prev.vaultFree !== st.vaultFree;
   if (changed && typeof renderTickets === "function") renderTickets();
 }
 
@@ -493,7 +502,7 @@ const X_TWEET = [
   "🐱 CATBOX DASH · 100,000 LIM AIRDROP",
   "🎮 Play to get it. Jump for LIM coins — keep what you catch.",
   "",
-  "✨ 2 free SCOUT for new wallets. Join TG or post this for +1 each (once per address).",
+  "✨ 1 free 1 LIM SCOUT + 1 free 10 LIM VAULT for new wallets. Join TG or post this for +1 SCOUT each (once per address).",
   "🔒 Every transfer, private by default.",
   "",
   "@LiminalFi",
@@ -973,7 +982,22 @@ function scoutIsFree(tier) {
   if (!tier || tier.id !== 0) return false;
   const st = window._freeStatus;
   if (!st) return true;
+  if (st.scoutFree != null) return Boolean(st.scoutFree);
   return Number(st.left) > 0;
+}
+
+function vaultIsFree(tier) {
+  if (!tier || tier.id !== 3) return false;
+  const st = window._freeStatus;
+  if (!st || st.vaultFree == null) return false;
+  return Boolean(st.vaultFree);
+}
+
+function freeForTier(tier) {
+  if (!tier) return false;
+  if (tier.id === 0) return scoutIsFree(tier);
+  if (tier.id === 3) return vaultIsFree(tier);
+  return false;
 }
 
 function renderTickets() {
@@ -985,12 +1009,12 @@ function renderTickets() {
   ];
   $("tickets").innerHTML = TIERS.map((tier) => {
     const copy = tierText(tier.id);
-    const free = scoutIsFree(tier);
+    const free = freeForTier(tier);
     return `
     <button class="ticket t${tier.id}" data-id="${tier.id}">
       <img class="ticket-mascot" src="./assets/hero-cat.png?v=1" alt="" />
       <img class="ticket-coin" src="${glyphs[tier.id]}" alt="" />
-      ${free ? `<span class="free-badge">${t("freeScout")} · ${window._freeStatus?.left ?? 2}</span>` : ""}
+      ${free ? `<span class="free-badge">${t("freeScout")} · ${tier.cost} LIM</span>` : ""}
       <div class="cost"><img src="./assets/icon-ticket.png?v=1" alt="" />${free ? t("freeScout") + " · " : ""}${tier.cost} LIM</div>
       <h3>${copy.name}</h3>
       <p>${copy.blurb}</p>
@@ -1008,7 +1032,7 @@ function renderTickets() {
 function openPay(tier) {
   selected = tier;
   const copy = tierText(tier.id);
-  const free = scoutIsFree(tier);
+  const free = freeForTier(tier);
   $("payTitle").textContent = free ? `${t("freeScout")} · ${tier.cost} LIM` : `${tier.cost} LIM`;
   $("payCopy").textContent = free ? t("freePay") : t("payCopy", { name: copy.name, cost: tier.cost });
   $("payGo").textContent = free ? t("payGoFree") : t("payGo");
@@ -1102,7 +1126,7 @@ async function payAndStart() {
       return;
     }
     await refreshFreeUi();
-    const free = scoutIsFree(selected);
+    const free = freeForTier(selected);
     const teach = shouldTeach(selected);
     status.textContent = free ? t("paying") : t("approve");
     const hash = await CatboxChain.approveAndEnter(selected.id);
@@ -1172,7 +1196,8 @@ function shouldTeach(tier) {
   if (!tier || tier.id !== 0) return false;
   if (isTutorialDone()) return false;
   const st = window._freeStatus;
-  if (st && Number(st.left) <= 0) return false;
+  if (st && st.scoutFree === false) return false;
+  if (st && Number(st.left) <= 0 && st.scoutFree == null) return false;
   if (Number(st?.used) > 0) return false;
   return true;
 }

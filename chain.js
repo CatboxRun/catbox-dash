@@ -52,6 +52,10 @@ const CatboxChain = (() => {
     "function claimTgBonus()",
     "function xClaimed(address) view returns (bool)",
     "function claimXBonus()",
+    "function freeScoutUsed(address) view returns (uint8)",
+    "function freeVaultUsed(address) view returns (bool)",
+    "function scoutIsFree(address) view returns (bool)",
+    "function vaultIsFree(address) view returns (bool)",
   ];
 
   function gameContract(s) {
@@ -210,13 +214,21 @@ const CatboxChain = (() => {
     }
   }
 
+  function sgtNextMidnight() {
+    const DAY = 86400;
+    const BJ_OFFSET = 8 * 3600;
+    const now = Math.floor(Date.now() / 1000);
+    const bj = now + BJ_OFFSET;
+    return BigInt((Math.floor(bj / DAY) + 1) * DAY - BJ_OFFSET);
+  }
+
   async function nextClaimAt() {
     try {
       const c = gameContract(await readProvider());
-      return await c.nextClaimAt();
-    } catch (_) {
-      return 0n;
-    }
+      const v = await c.nextClaimAt();
+      if (v && v > 0n) return v;
+    } catch (_) {}
+    return sgtNextMidnight();
   }
 
   async function claim() {
@@ -259,7 +271,7 @@ const CatboxChain = (() => {
   }
 
   function assumedFree() {
-    return { used: 0, left: 2, pool: 0n, eligible: true };
+    return { used: 0, left: 1, pool: 0n, eligible: true, scoutFree: true };
   }
 
   async function freeStatus(addr = account) {
@@ -271,7 +283,14 @@ const CatboxChain = (() => {
       const left = Number(s[1]);
       const pool = s[2];
       const eligible = Boolean(s[3]) || (left > 0 && pool > 0n);
-      return { used, left, pool, eligible };
+      const out = { used, left, pool, eligible };
+      try {
+        const [sf, vf] = await Promise.all([c.scoutIsFree(addr), c.vaultIsFree(addr)]);
+        out.scoutFree = Boolean(sf);
+        out.vaultFree = Boolean(vf);
+        out.v6 = true;
+      } catch (_) {}
+      return out;
     } catch (_) {
       return assumedFree();
     }
@@ -348,13 +367,16 @@ const CatboxChain = (() => {
     const lim = limContract(s);
     const price = await game.ticketPrice(tierId);
     let useFree = false;
-    if (Number(tierId) === 0) {
-      try {
-        const st = await freeStatus(account);
-        useFree = Boolean(st.eligible) || Number(st.left) > 0;
-      } catch (_) {
-        useFree = true;
+    const id = Number(tierId);
+    try {
+      const st = await freeStatus(account);
+      if (id === 0) {
+        useFree = st.scoutFree != null ? Boolean(st.scoutFree) : Boolean(st.eligible) || Number(st.left) > 0;
+      } else if (id === 3) {
+        useFree = st.vaultFree === true;
       }
+    } catch (_) {
+      useFree = id === 0;
     }
     if (!useFree) {
       const bal = await lim.balanceOf(account);

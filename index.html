@@ -97,7 +97,7 @@
             </section>
 
             <p class="play-now" data-i18n="playNow">PICK A TICKET</p>
-            <p class="free-offer" data-i18n="freeOffer">New wallets: two free SCOUT runs. Join Telegram or post to X for +1 each, once per address.</p>
+            <p class="free-offer" data-i18n="freeOffer">New players can try one free 1 LIM SCOUT and one free 10 LIM VAULT. Once each. Join Telegram or post to X for +1 SCOUT each, once per address.</p>
             <p class="reward-line" data-i18n="inviteBoost">Each invite +5% LIM on final settlement. Four friends and every coin caught settles at 120%. Cap 200%.</p>
             <div class="tickets" id="tickets"></div>
             <button type="button" class="rules-jump" id="openRules" data-i18n="openRules">HOW TO PLAY</button>
@@ -132,12 +132,12 @@
               <p class="how-note" data-i18n="howNote">Stay low under lights. Jump red pipes and gaps. The track never stops — miss a jump and you fall.</p>
               <ol class="rules full">
                 <li data-i18n="rulePlay">Pick a ticket. Coins on the track are that ticket's LIM. Catch them to keep them. The run ends if you hit a red pipe, a searchlight, or a gap.</li>
-                <li data-i18n="ruleFree">New players get two free SCOUT runs. Join Telegram or post to X for +1 extra each, once per address. Free SCOUT appears on the daily board with score 0 and does not share the prize pool.</li>
+                <li data-i18n="ruleFree">New players get one free 1 LIM SCOUT and one free 10 LIM VAULT, once each. Join Telegram or post to X for +1 extra SCOUT each, once per address. Free runs appear on the daily board with score 0 and do not share the prize pool.</li>
                 <li data-i18n="ruleFull">Catch every coin and the ticket LIM stays yours — nothing burned this run. Then keep running: new score ×2 until you crash. It gets faster.</li>
                 <li data-i18n="ruleInvitePay">Each friend who starts a run from your link adds +5% LIM on final settlement. Four friends and every coin caught settles at 120% of the ticket. Cap 200%.</li>
                 <li data-i18n="ruleLeft">Missed coins go to the pools: daily 50% · invite 20% · burn 30%.</li>
-                <li data-i18n="ruleDaily">The daily board gets 50% of missed LIM. Of that, 40% is split evenly among everyone who played that day; 60% follows the day's scores. Claim yesterday at 00:00 Singapore.</li>
-                <li data-i18n="ruleInviteBoard">The invite board gets 20% of missed LIM, split evenly among the top 200 inviters.</li>
+                <li data-i18n="ruleDaily">The daily board gets 50% of missed LIM, split equally among that day's paid players. Claim yesterday at 00:00 Singapore — today's paid runs cannot be claimed early. Free runs appear on the daily board with score 0 and do not share the prize pool.</li>
+                <li data-i18n="ruleInviteBoard">The invite board gets 20% of missed LIM, split evenly among the top 200 inviters. Claim anytime.</li>
               </ol>
             </article>
           </div>
@@ -147,7 +147,7 @@
               <div class="split week">
                 <img src="./assets/icon-trophy.png?v=1" alt="" />
                 <b>50%</b><span data-i18n="weekBoard">DAILY · 50%</span><i id="weekPoolAmt">0</i>
-                <small class="split-note" data-i18n="daySplitNote">Of that 50%: 40% equal among paid runs that day · 60% by paid score. Free SCOUT is on the board at 0 and does not share the pool</small>
+                <small class="split-note" data-i18n="daySplitNote">That 50% is split equally among that day's paid players at 00:00 Singapore. Free runs are on the board at 0 and do not share the pool</small>
                 <small id="daySplitLive" class="split-live hidden"></small>
               </div>
               <div class="split invite">
@@ -244,12 +244,12 @@
               <a class="cta x" href="https://twitter.com/intent/tweet" target="_blank" rel="noopener noreferrer">
                 <span class="cta-k" data-i18n="xTitle">X</span>
                 <span class="cta-t" data-i18n="xBtn">POST TO X</span>
-                <span class="cta-s" data-i18n="xBody">+1 free SCOUT · once per address.</span>
+                <span class="cta-s" data-i18n="xBody">+1 free 1 LIM SCOUT · once per address.</span>
               </a>
               <a class="cta tg" href="https://t.me/Liminal_Official" target="_blank" rel="noopener noreferrer">
                 <span class="cta-k" data-i18n="tgTitle">TELEGRAM</span>
                 <span class="cta-t" data-i18n="tgBtn">JOIN TELEGRAM</span>
-                <span class="cta-s" data-i18n="tgBody">+1 free SCOUT · once per address.</span>
+                <span class="cta-s" data-i18n="tgBody">+1 free 1 LIM SCOUT · once per address.</span>
               </a>
               <a class="cta portal" href="https://www.liminalnetwork.xyz/#/index" target="_blank" rel="noopener noreferrer">
                 <span class="cta-k" data-i18n="privacyTitle">PRIVACY TRANSFER</span>
@@ -273,7 +273,7 @@
           </div>
         </div>
         <p id="payCopy"></p>
-        <p class="eligible" data-i18n="eligible">Catch every coin, keep the ticket LIM · missed: daily 50% / invite 20% / burn 30%</p>
+        <p class="eligible" data-i18n="eligible">Catch every coin, keep the ticket LIM · missed: daily 50% (equal among that day's paid players) / invite 20% (top 200 even) / burn 30%</p>
         <div class="meter-preview">
           <img src="./assets/hero-cat.png?v=1" alt="" />
           <img class="coin-logo" src="./assets/coin.png?v=4" alt="" />
@@ -327,11 +327,11 @@
         <div class="ctas mini">
           <a class="cta x" href="https://twitter.com/intent/tweet" target="_blank" rel="noopener noreferrer">
             <span class="cta-t" data-i18n="xBtn">POST TO X</span>
-            <span class="cta-s" data-i18n="xBody">+1 free SCOUT · once per address.</span>
+            <span class="cta-s" data-i18n="xBody">+1 free 1 LIM SCOUT · once per address.</span>
           </a>
           <a class="cta tg" href="https://t.me/Liminal_Official" target="_blank" rel="noopener noreferrer">
             <span class="cta-t" data-i18n="tgBtn">JOIN TELEGRAM</span>
-            <span class="cta-s" data-i18n="tgBody">+1 free SCOUT · once per address.</span>
+            <span class="cta-s" data-i18n="tgBody">+1 free 1 LIM SCOUT · once per address.</span>
           </a>
           <a class="cta portal" href="https://www.liminalnetwork.xyz/#/index" target="_blank" rel="noopener noreferrer">
             <span class="cta-t" data-i18n="privacyBtn">PRIVACY TRANSFER</span>
@@ -389,9 +389,9 @@
 
     <script src="./config.js?v=26"></script>
     <script src="https://cdn.jsdelivr.net/npm/ethers@6.13.5/dist/ethers.umd.min.js"></script>
-    <script src="./chain.js?v=34"></script>
-    <script src="./i18n.js?v=39"></script>
-    <script src="./game.js?v=38"></script>
+    <script src="./chain.js?v=36"></script>
+    <script src="./i18n.js?v=41"></script>
+    <script src="./game.js?v=40"></script>
     <script src="./bgm.js?v=26"></script>
   </body>
 </html>
