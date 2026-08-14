@@ -280,7 +280,7 @@ async function refreshFreeUi() {
     }
     if (st.left <= 0) el.textContent = "";
     else if (st.eligible) el.textContent = t("freeLeft", { n: st.left });
-    else el.textContent = t("freeWait", { n: st.left });
+    else el.textContent = "";
     const changed = !prev || prev.left !== st.left || prev.eligible !== st.eligible;
     if (changed && typeof renderTickets === "function") renderTickets();
   } catch (_) {
@@ -563,6 +563,26 @@ const imgCat = new Image();
 imgCat.src = "./assets/catbox.png?v=2";
 const imgLogo = new Image();
 imgLogo.src = "./assets/logo.png?v=2";
+let logoMark = null;
+function punchLogoMark() {
+  if (!imgLogo.naturalWidth) return;
+  const w = imgLogo.naturalWidth;
+  const h = imgLogo.naturalHeight;
+  const c = document.createElement("canvas");
+  c.width = w;
+  c.height = h;
+  const g = c.getContext("2d");
+  g.drawImage(imgLogo, 0, 0);
+  const img = g.getImageData(0, 0, w, h);
+  const d = img.data;
+  for (let i = 0; i < d.length; i += 4) {
+    if (d[i] < 22 && d[i + 1] < 22 && d[i + 2] < 22) d[i + 3] = 0;
+  }
+  g.putImageData(img, 0, 0);
+  logoMark = c;
+}
+imgLogo.addEventListener("load", punchLogoMark);
+if (imgLogo.complete) punchLogoMark();
 
 let selected = null;
 let run = null;
@@ -1993,7 +2013,8 @@ function drawLight(o, night) {
 }
 
 function drawCoin(o) {
-  const r = o.gold ? 11 : 8;
+  if (!logoMark) return;
+  const s = o.gold ? 44 : 32;
   const bob = Math.sin((o.bob || 0)) * 3;
   const spin = 0.42 + Math.abs(Math.sin(run.t * 0.1 + o.x * 0.02)) * 0.58;
   const x = Math.round(o.x);
@@ -2001,17 +2022,10 @@ function drawCoin(o) {
   ctx.save();
   ctx.translate(x, y);
   ctx.scale(spin, 1);
-  ctx.fillStyle = o.gold ? "#ffe08a" : "#f0c14a";
-  ctx.fillRect(-r + 2, -r, (r - 2) * 2, r * 2);
-  ctx.fillRect(-r, -r + 2, r * 2, (r - 2) * 2);
-  ctx.fillStyle = "#c49a4a";
-  ctx.fillRect(-r, r - 3, r * 2, 2);
-  ctx.fillRect(r - 3, -r + 2, 2, r * 2 - 4);
-  ctx.fillStyle = "#fff6c8";
-  ctx.fillRect(-r + 2, -r + 2, 3, 3);
-  ctx.fillStyle = "#7a5a18";
-  ctx.fillRect(-2, -5, 4, 10);
+  ctx.imageSmoothingEnabled = true;
+  ctx.drawImage(logoMark, -s / 2, -s / 2, s, s);
   ctx.restore();
+  ctx.imageSmoothingEnabled = false;
 }
 
 function drawCat() {
