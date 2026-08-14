@@ -1347,7 +1347,7 @@ body.playing.force-landscape .hud-chip { padding: 2px 5px; }
   box-shadow: none !important;
   border-radius: 50%;
   object-fit: contain !important;
-  background: transparent;
+  background: transparent !important;
   image-rendering: auto !important;
 }
 .over-stub h1 { margin: 0; }

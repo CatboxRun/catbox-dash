@@ -558,31 +558,63 @@ const BASE_GROUND = 400;
 const PLAYER_SX = 160;
 
 const imgCoin = new Image();
-imgCoin.src = "./assets/coin.png?v=3";
+imgCoin.src = "./assets/coin.png?v=4";
 const imgCat = new Image();
 imgCat.src = "./assets/catbox.png?v=2";
-const imgLogo = new Image();
-imgLogo.src = "./assets/logo.png?v=2";
-let logoMark = null;
-function punchLogoMark() {
-  if (!imgLogo.naturalWidth) return;
-  const w = imgLogo.naturalWidth;
-  const h = imgLogo.naturalHeight;
+let coinMark = null;
+function punchCoinMark() {
+  if (!imgCoin.naturalWidth) return;
+  const w = imgCoin.naturalWidth;
+  const h = imgCoin.naturalHeight;
   const c = document.createElement("canvas");
   c.width = w;
   c.height = h;
   const g = c.getContext("2d");
-  g.drawImage(imgLogo, 0, 0);
+  g.drawImage(imgCoin, 0, 0);
   const img = g.getImageData(0, 0, w, h);
   const d = img.data;
-  for (let i = 0; i < d.length; i += 4) {
-    if (d[i] < 22 && d[i + 1] < 22 && d[i + 2] < 22) d[i + 3] = 0;
+  const isBg = (i) => {
+    const r = d[i];
+    const gv = d[i + 1];
+    const b = d[i + 2];
+    const mx = r > gv ? (r > b ? r : b) : gv > b ? gv : b;
+    const mn = r < gv ? (r < b ? r : b) : gv < b ? gv : b;
+    return mx < 28 || (mn > 232 && mx - mn < 18);
+  };
+  const seen = new Uint8Array(w * h);
+  const q = [];
+  const push = (x, y) => {
+    if (x < 0 || y < 0 || x >= w || y >= h) return;
+    const idx = y * w + x;
+    if (seen[idx]) return;
+    seen[idx] = 1;
+    q.push(idx);
+  };
+  for (let x = 0; x < w; x++) {
+    push(x, 0);
+    push(x, h - 1);
+  }
+  for (let y = 0; y < h; y++) {
+    push(0, y);
+    push(w - 1, y);
+  }
+  while (q.length) {
+    const idx = q.pop();
+    const i = idx * 4;
+    if (!isBg(i)) continue;
+    d[i + 3] = 0;
+    const x = idx % w;
+    const y = (idx / w) | 0;
+    push(x + 1, y);
+    push(x - 1, y);
+    push(x, y + 1);
+    push(x, y - 1);
   }
   g.putImageData(img, 0, 0);
-  logoMark = c;
+  coinMark = c;
 }
-imgLogo.addEventListener("load", punchLogoMark);
-if (imgLogo.complete) punchLogoMark();
+imgCoin.addEventListener("load", punchCoinMark);
+if (imgCoin.complete) punchCoinMark();
 
 let selected = null;
 let run = null;
@@ -744,7 +776,7 @@ function scoutIsFree(tier) {
 
 function renderTickets() {
   const glyphs = [
-    "./assets/coin.png?v=3",
+    "./assets/coin.png?v=4",
     "./assets/icon-ticket.png?v=1",
     "./assets/icon-trophy.png?v=1",
     "./assets/icon-burn.png?v=1",
@@ -2012,18 +2044,35 @@ function drawLight(o, night) {
   }
 }
 
+function drawLimMark(s) {
+  const rings = [
+    [-0.16, -0.16, "#e8a84a", -0.55],
+    [0.16, -0.16, "#4ec4e8", 0.55],
+    [-0.16, 0.16, "#c45ec8", 0.55],
+    [0.16, 0.16, "#9ad84a", -0.55],
+  ];
+  ctx.lineWidth = Math.max(3, s * 0.11);
+  ctx.lineCap = "round";
+  for (const [dx, dy, col, rot] of rings) {
+    ctx.strokeStyle = col;
+    ctx.beginPath();
+    ctx.ellipse(dx * s, dy * s, s * 0.26, s * 0.16, rot, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+}
+
 function drawCoin(o) {
-  if (!logoMark) return;
-  const s = o.gold ? 44 : 32;
+  const s = o.gold ? 48 : 36;
   const bob = Math.sin((o.bob || 0)) * 3;
-  const spin = 0.42 + Math.abs(Math.sin(run.t * 0.1 + o.x * 0.02)) * 0.58;
+  const spin = 0.86 + Math.abs(Math.sin(run.t * 0.08 + o.x * 0.02)) * 0.14;
   const x = Math.round(o.x);
   const y = Math.round(o.y + bob);
   ctx.save();
   ctx.translate(x, y);
   ctx.scale(spin, 1);
   ctx.imageSmoothingEnabled = true;
-  ctx.drawImage(logoMark, -s / 2, -s / 2, s, s);
+  if (coinMark) ctx.drawImage(coinMark, -s / 2, -s / 2, s, s);
+  else drawLimMark(s);
   ctx.restore();
   ctx.imageSmoothingEnabled = false;
 }
