@@ -1179,14 +1179,15 @@ function shuffle(arr) {
 function splitTicket(cost) {
   const pieces = [];
   let remain = cost;
-  const min = cost * 0.012;
+  const min = cost * 0.0001;
   let guard = 0;
-  while (remain > min && guard++ < 20) {
+  while (remain > min && guard++ < 88) {
     const r = Math.random();
     let pct;
-    if (r < 0.2) pct = 0.09 + Math.random() * 0.05;
-    else if (r < 0.55) pct = 0.045 + Math.random() * 0.035;
-    else pct = 0.022 + Math.random() * 0.02;
+    if (r < 0.08) pct = 0.03 + Math.random() * 0.02;
+    else if (r < 0.24) pct = 0.012 + Math.random() * 0.016;
+    else if (r < 0.5) pct = 0.005 + Math.random() * 0.008;
+    else pct = 0.0002 + Math.random() * 0.003;
     let v = cost * pct;
     if (v > remain) v = remain;
     v = +v.toFixed(6);
@@ -1255,9 +1256,8 @@ function refreshTutorialCopy() {}
 function seedTutorialCourse(state) {
   const g = BASE_GROUND;
   spawnCoinW(state, 380, g - 34);
-  spawnCoinW(state, 460, g - 92);
-  spawnCoinW(state, 540, g - 148);
-  spawnCoinW(state, 640, g - 72);
+  spawnCoinW(state, 640, g - 48);
+  spawnCoinW(state, 920, g - 40);
   state.objects.push({ kind: "light", x: 1080, w: 74, phase: 0, slow: 0.022, armed: false });
   state.objects.push({ kind: "beam", x: 1520, y: g - 48, w: 28, h: 48, style: "pipe" });
   spawnCoinW(state, 1590, g - 104);
@@ -1359,6 +1359,7 @@ function startRun(tier, teach, freeRun) {
     lastJumpT: 0,
     lastLightWx: -9999,
     lastGapWx: -9999,
+    lastCoinWx: -9999,
     night: false,
     popped: [],
     flash: 0,
@@ -1481,16 +1482,13 @@ function isGapAt(run, wx) {
 }
 
 function spawnCoinW(run, wx, wy) {
+  if (run.lastCoinWx != null && wx - run.lastCoinWx < 240) return;
   spawnCoin(run, wx - run.scroll, wy);
+  run.lastCoinWx = wx;
 }
 
 function coinArc(run, x0, x1) {
-  const n = 2;
-  for (let i = 0; i < n; i++) {
-    const t = (i + 0.5) / n;
-    const wx = x0 + t * (x1 - x0);
-    spawnCoinW(run, wx, reachableCoinY(run, wx));
-  }
+  spawnCoinW(run, x0 + (x1 - x0) * 0.5, reachableCoinY(run, x0 + (x1 - x0) * 0.5));
 }
 
 function pushFlat(run, x0, x1) {
@@ -1530,24 +1528,22 @@ function addTerrainChunk(run) {
   if (wantSafe) {
     const flavor = Math.random();
     if (flavor < 0.4 && p > 0.02) {
-      const w = 300 + Math.floor(Math.random() * 160);
+      const w = 340 + Math.floor(Math.random() * 180);
       const peak = 22 + Math.floor(Math.random() * 28);
       run.terrain.push({ kind: "hill", x0: x, x1: x + w, y: BASE_GROUND, peak });
       coinArc(run, x, x + w);
       x += w;
     } else if (flavor < 0.58 && p > 0.18) {
-      const w = 84 + Math.floor(Math.random() * 32);
+      const w = 120 + Math.floor(Math.random() * 40);
       const peak = 16 + Math.floor(Math.random() * 10);
       run.terrain.push({ kind: "bump", x0: x, x1: x + w, y: BASE_GROUND, peak });
       spawnCoinW(run, x + w * 0.5, BASE_GROUND - peak - 42);
-      if (Math.random() > 0.45) spawnCoinW(run, x + w * 0.72, BASE_GROUND - peak * 0.5 - 28);
       x += w;
     } else {
-      const w = 180 + Math.floor(Math.random() * 90);
+      const w = 240 + Math.floor(Math.random() * 100);
       pushFlat(run, x, x + w);
       const mid = BASE_GROUND - 28 + Math.random() * 22;
-      spawnCoinW(run, x + 48, mid);
-      if (Math.random() > 0.55) spawnCoinW(run, x + 120, mid - 18);
+      spawnCoinW(run, x + w * 0.55, mid);
       x += w;
     }
     run.nextTerrain = x;
@@ -1614,7 +1610,6 @@ function addHazardChunk(run, x, p, withCoins) {
     }
     if (withCoins) {
       spawnCoinW(run, x + (duo ? 88 : 70), BASE_GROUND - h - 56);
-      if (Math.random() > 0.28) spawnCoinW(run, x + w - 24, BASE_GROUND - h - 28);
     }
     run.lastHazard = run.t;
     x += w;
