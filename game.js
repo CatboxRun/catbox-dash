@@ -438,17 +438,14 @@ function showToast(msg) {
 
 const TG_URL = "https://t.me/Liminal_Official";
 const SITE_URL = "https://catboxrun.github.io/catbox-dash/";
-const POSTER_URL = `${SITE_URL}lim-airdrop-100000-poster.png`;
 const X_TWEET = [
-  "CATBOX DASH · 100,000 LIM AIRDROP",
-  "Play to get it. Jump for LIM coins — keep what you catch.",
+  "🐱 CATBOX DASH · 100,000 LIM AIRDROP",
+  "🎮 Play to get it. Jump for LIM coins — keep what you catch.",
   "",
-  "2 free SCOUT for new wallets. Join TG or post this for +1 each (once per address).",
-  "",
-  "Every transfer, private by default.",
+  "✨ 2 free SCOUT for new wallets. Join TG or post this for +1 each (once per address).",
+  "🔒 Every transfer, private by default.",
   "",
   "@LiminalFi",
-  POSTER_URL,
 ].join("\n");
 
 function xIntentUrl() {
