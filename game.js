@@ -119,15 +119,17 @@ async function pullLiveBoards() {
   if (!window.CatboxChain) return;
   try {
     if (!(await CatboxChain.isDeployed())) return;
-    const [boards, burns] = await Promise.all([
-      CatboxChain.fetchLeaderboards(),
-      CatboxChain.fetchBurns(),
-    ]);
-    window._liveBoards = boards;
-    window._liveBurns = burns;
-    renderList("weekList", mergeWeekBoard(boards.week));
-    renderList("inviteList", boards.invite);
-    renderBurns(burns);
+    const boards = await CatboxChain.fetchLeaderboards();
+    const burns = await CatboxChain.fetchBurns();
+    if (boards.week.length || boards.invite.length) {
+      window._liveBoards = boards;
+      renderList("weekList", mergeWeekBoard(boards.week));
+      renderList("inviteList", boards.invite);
+    }
+    if (burns.length) {
+      window._liveBurns = burns;
+      renderBurns(burns);
+    }
   } catch (_) {}
 }
 

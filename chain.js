@@ -128,6 +128,31 @@ const CatboxChain = (() => {
     "https://1rpc.io/bnb",
   ];
 
+  const LOG_RPCS = [
+    "https://bsc-rpc.publicnode.com",
+    "https://bsc.publicnode.com",
+  ];
+  let logsProvider = null;
+  let logsOkAt = 0;
+
+  function sleep(ms) {
+    return new Promise((r) => setTimeout(r, ms));
+  }
+
+  async function logsReadProvider() {
+    if (logsProvider && Date.now() - logsOkAt < 30000) return logsProvider;
+    for (const url of LOG_RPCS) {
+      try {
+        const p = makePublic(url);
+        const n = await p.getBlockNumber();
+        await p.getLogs({ address: cfg.address, fromBlock: n, toBlock: n });
+        logsProvider = p;
+        logsOkAt = Date.now();
+        return p;
+      } catch (_) {}
+    }
+    throw new Error("NO_LOGS_RPC");
+  }
   let publicProvider = null;
   let publicRpc = "";
   let publicOkAt = 0;
@@ -799,6 +824,48 @@ const CatboxChain = (() => {
     }
   }
 
+  async function fetchRawLogs(eventName) {
+    const p = await logsReadProvider();
+    const iface = gameContract(p).interface;
+    const topic = iface.getEvent(eventName).topicHash;
+    const latest = await p.getBlockNumber();
+    const chunk = 1200;
+    const maxChunks = 10;
+    const out = [];
+    for (let i = 0; i < maxChunks; i++) {
+      const toBlock = latest - i * chunk;
+      if (toBlock < 0) break;
+      const fromBlock = Math.max(0, toBlock - chunk + 1);
+      let got = null;
+      for (let attempt = 0; attempt < 3 && !got; attempt++) {
+        try {
+          got = await p.getLogs({
+            address: cfg.address,
+            topics: [topic],
+            fromBlock,
+            toBlock,
+          });
+        } catch (_) {
+          await sleep(300 * (attempt + 1));
+        }
+      }
+      if (got) {
+        for (const log of got) {
+          try {
+            const parsed = iface.parseLog(log);
+            out.push({
+              args: parsed.args,
+              blockNumber: log.blockNumber,
+              transactionHash: log.transactionHash,
+            });
+          } catch (_) {}
+        }
+      }
+      await sleep(150);
+    }
+    return out;
+  }
+
   function toRows(map, youAddr) {
     return Object.entries(map)
       .map(([addr, pts]) => ({
@@ -811,41 +878,9 @@ const CatboxChain = (() => {
       .slice(0, 20);
   }
 
-  async function queryLogs(c, filter, latest, lookback) {
-    const span = lookback || 20000;
-    const chunk = 2000;
-    const from = Math.max(0, latest - span);
-    const ranges = [];
-    for (let start = from; start <= latest; start += chunk) {
-      ranges.push([start, Math.min(latest, start + chunk - 1)]);
-    }
-    const out = [];
-    const limit = 4;
-    for (let i = 0; i < ranges.length; i += limit) {
-      const batch = ranges.slice(i, i + limit);
-      const parts = await Promise.all(
-        batch.map(async ([a, b]) => {
-          try {
-            return await c.queryFilter(filter, a, b);
-          } catch (_) {
-            return [];
-          }
-        }),
-      );
-      for (const part of parts) out.push(...part);
-    }
-    return out;
-  }
-
   async function fetchLeaderboards() {
-    const p = await publicReadProvider();
-    const c = gameContract(p);
-    const latest = await p.getBlockNumber();
-    const dayBlocks = 28800;
-    const [started, settled] = await Promise.all([
-      queryLogs(c, c.filters.RunStarted(), latest, dayBlocks),
-      queryLogs(c, c.filters.RunSettled(), latest, dayBlocks),
-    ]);
+    const settled = await fetchRawLogs("RunSettled");
+    const started = await fetchRawLogs("RunStarted");
     const week = {};
     const invite = {};
     for (const e of settled) {
@@ -865,10 +900,7 @@ const CatboxChain = (() => {
   }
 
   async function fetchBurns() {
-    const p = await publicReadProvider();
-    const c = gameContract(p);
-    const latest = await p.getBlockNumber();
-    const logs = await queryLogs(c, c.filters.Burned(), latest, 20000);
+    const logs = await fetchRawLogs("Burned");
     return logs
       .slice()
       .reverse()
