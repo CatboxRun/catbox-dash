@@ -40,7 +40,15 @@ body {
   padding: calc(16px + var(--safe-t)) 16px calc(28px + var(--safe-b));
 }
 .topbar { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; flex-wrap: nowrap; }
-.logo { width: 36px; height: 36px; object-fit: contain; flex-shrink: 0; image-rendering: pixelated; }
+.logo {
+  width: 42px;
+  height: 42px;
+  object-fit: cover;
+  flex-shrink: 0;
+  border-radius: 50%;
+  overflow: hidden;
+  background: #3a0c0c;
+}
 .brand-text { min-width: 0; flex: 1; }
 .title { font-size: 11px; letter-spacing: 1px; font-family: "Press Start 2P", monospace; color: var(--gold-hi); text-shadow: 0 0 12px rgba(240, 193, 74, 0.45); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .sub { font-size: 11px; color: var(--dim); margin-top: 4px; }
@@ -807,7 +815,7 @@ button.primary, button.ghost {
   h1 { font-size: 13px; }
   .title { font-size: 13px; letter-spacing: 0; font-family: "Noto Sans", sans-serif; font-weight: 800; }
   .sub { display: none; }
-  .logo { width: 28px; height: 28px; }
+  .logo { width: 32px; height: 32px; }
   .topbar { margin-bottom: 6px; gap: 6px; }
   .lang-btn, .wallet-btn, .swap-btn, .claim-btn, .bgm-btn {
     min-height: 30px; min-width: 28px; padding: 5px 6px; font-size: 11px;
