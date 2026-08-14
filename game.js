@@ -779,6 +779,109 @@ function splitTicket(cost) {
   return shuffle(pieces);
 }
 
+const TUTORIAL_KEY = "catbox-tutorial-done";
+const TUT_COPY = {
+  jump: ["tutJump", "tutJumpSub"],
+  coin: ["tutCoin", "tutCoinSub"],
+  light: ["tutLight", "tutLightSub"],
+  pipe: ["tutPipe", "tutPipeSub"],
+  gap: ["tutGap", "tutGapSub"],
+};
+
+function isTutorialDone() {
+  try {
+    return localStorage.getItem(TUTORIAL_KEY) === "1";
+  } catch (_) {
+    return false;
+  }
+}
+
+function hideTutorial() {
+  const layer = $("tutLayer");
+  if (layer) layer.classList.add("hidden");
+}
+
+function completeTutorial() {
+  try {
+    localStorage.setItem(TUTORIAL_KEY, "1");
+  } catch (_) {}
+  hideTutorial();
+  if (run) {
+    run.tutorial = false;
+    run.tutId = "";
+  }
+}
+
+function showTutorialStep(id) {
+  const layer = $("tutLayer");
+  if (!layer || !run) return;
+  run.tutId = id;
+  layer.classList.remove("hidden");
+  layer.dataset.step = id;
+  const pair = TUT_COPY[id];
+  const title = $("tutTitle");
+  const sub = $("tutSub");
+  if (pair && title) title.textContent = t(pair[0]);
+  if (pair && sub) sub.textContent = t(pair[1]);
+}
+
+function refreshTutorialCopy() {
+  if (!run || !run.tutorial || !run.tutId) return;
+  showTutorialStep(run.tutId);
+}
+
+function seedTutorialCourse(state) {
+  const g = BASE_GROUND;
+  spawnCoinW(state, 380, g - 34);
+  spawnCoinW(state, 460, g - 92);
+  spawnCoinW(state, 540, g - 148);
+  spawnCoinW(state, 640, g - 72);
+  state.objects.push({ kind: "light", x: 1080, w: 74, phase: 0.15, slow: 0.024 });
+  state.objects.push({ kind: "beam", x: 1520, y: g - 48, w: 28, h: 48, style: "pipe" });
+  spawnCoinW(state, 1590, g - 104);
+  state.objects.push({ kind: "beam", x: 1740, y: g - 26, w: 32, h: 26, style: "brick" });
+  state.terrain = [
+    { kind: "flat", x0: -480, x1: 1940, y: g },
+    { kind: "gap", x0: 1940, x1: 2020, y: g },
+    { kind: "flat", x0: 2020, x1: 2680, y: g },
+  ];
+  state.nextTerrain = 2680;
+  state.lastHazard = 0;
+}
+
+function tickTutorial() {
+  if (!run || !run.tutorial) return;
+  const t = run.t;
+  if (t >= 720) {
+    completeTutorial();
+    return;
+  }
+  let next = run.tutId || "jump";
+  if (t < 110) next = "jump";
+  else if (t < 230) next = "coin";
+  else {
+    const light = run.objects.find((o) => o.kind === "light" && o.x > 50 && o.x < 560);
+    const beam = run.objects.find((o) => o.kind === "beam" && o.x > 50 && o.x < 560);
+    const gapSoon = isGapAt(run, run.scroll + 220) || isGapAt(run, run.scroll + 300);
+    if (gapSoon) next = "gap";
+    else if (beam) next = "pipe";
+    else if (light) next = "light";
+    else if (t < 280) next = "coin";
+  }
+  if (next !== run.tutId) showTutorialStep(next);
+}
+
+function bootTutorial() {
+  const skip = $("tutSkip");
+  if (!skip) return;
+  skip.addEventListener("pointerdown", (e) => e.stopPropagation());
+  skip.onclick = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    completeTutorial();
+  };
+}
+
 function startRun(tier) {
   run = {
     tier,
@@ -807,7 +910,17 @@ function startRun(tier) {
     flash: 0,
     clearWait: 0,
     startedMs: Date.now(),
+    tutorial: false,
+    tutId: "",
   };
+  if (!isTutorialDone()) {
+    run.tutorial = true;
+    run.invuln = Math.max(run.invuln, 80);
+    seedTutorialCourse(run);
+    showTutorialStep("jump");
+  } else {
+    hideTutorial();
+  }
   $("hudTier").textContent = `${tierText(tier.id).name} · ${tier.cost} LIM`;
   $("rebateBar").style.width = "0%";
   $("hudRebate").textContent = `0.00/${tier.cost} LIM`;
@@ -1004,7 +1117,7 @@ function jump() {
 
 window.addEventListener("pointerdown", (e) => {
   if (game.classList.contains("hidden")) return;
-  if (e.target.closest("a, button, .langs, .lang-btn, .rotate-gate, .rotate-soft")) return;
+  if (e.target.closest("a, button, .langs, .lang-btn, .rotate-gate, .rotate-soft, .tut-skip")) return;
   e.preventDefault();
   jump();
 });
@@ -1156,6 +1269,7 @@ function tick() {
       finish(run.collected + 1e-9 >= run.tier.cost ? "clearFull" : "clearPart");
     }
   }
+  if (run.tutorial) tickTutorial();
 }
 
 function boardScore() {
@@ -1493,6 +1607,7 @@ function draw() {
 
 function finish(whyKey) {
   if (!run || run.dead) return;
+  if (run.tutorial) completeTutorial();
   run.dead = true;
   cancelAnimationFrame(raf);
   const cap = run.collected + 1e-9 >= run.tier.cost;
@@ -1547,5 +1662,6 @@ async function settleOnchain(got, ticket, score) {
 
 mountLangs();
 applyI18n();
+bootTutorial();
 show(lobby);
 bootWallet();

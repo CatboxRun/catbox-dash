@@ -31,7 +31,7 @@
       href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@500;700&family=Noto+Sans+SC:wght@500;700&family=Noto+Sans+JP:wght@500;700&family=Noto+Sans+KR:wght@500;700&family=Noto+Sans+Thai:wght@500;700&family=Press+Start+2P&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="./styles.css?v=19" />
+    <link rel="stylesheet" href="./styles.css?v=20" />
   </head>
   <body>
     <div class="crt">
@@ -49,9 +49,9 @@
             <button class="lang-btn" id="langNow" type="button">EN</button>
             <nav class="lang-menu hidden" id="langs" aria-label="Language"></nav>
           </div>
-          <button class="swap-btn" id="swapBtn" type="button" data-i18n="swap">BUY LIM</button>
+          <button class="swap-btn pulse-cta" id="swapBtn" type="button" data-i18n="swap">BUY LIM</button>
           <button class="claim-btn" id="claimBtn" type="button" data-i18n="claim">CLAIM</button>
-          <button class="wallet-btn" id="walletBtn" type="button" data-i18n="connect">CONNECT</button>
+          <button class="wallet-btn pulse-cta" id="walletBtn" type="button" data-i18n="connect">CONNECT</button>
         </div>
       </header>
 
@@ -70,7 +70,9 @@
           <div class="hero-copy">
             <img class="hero-mascot" src="./assets/hero-cat.png?v=1" alt="Catbox" />
             <div class="hero-text">
-              <p class="marquee" data-i18n="marquee">PICK A TICKET · JUMP · CATCH COINS</p>
+              <div class="marquee-wrap">
+                <p class="marquee" data-i18n="marquee">PICK A TICKET · JUMP · CATCH COINS</p>
+              </div>
               <h1 data-i18n="hero">JUMP THE COIN.<br />BANK THE TICKET.</h1>
               <p class="play-lead" data-i18n="playLead">Tickets start at 1 LIM. Catch coins. Keep what you grab.</p>
             </div>
@@ -107,6 +109,28 @@
         </section>
 
         <p class="play-now" data-i18n="playNow">PICK A TICKET</p>
+        <nav class="how-strip" aria-label="How to play">
+          <div class="how-item">
+            <img src="./assets/hero-cat.png?v=1" alt="" />
+            <span data-i18n="howJump">TAP · JUMP</span>
+          </div>
+          <div class="how-item">
+            <img src="./assets/coin.png?v=2" alt="" />
+            <span data-i18n="howCoin">COINS = LIM</span>
+          </div>
+          <div class="how-item">
+            <span class="how-glyph light" aria-hidden="true"></span>
+            <span data-i18n="howLight">WALK UNDER LIGHTS</span>
+          </div>
+          <div class="how-item">
+            <span class="how-glyph pipe" aria-hidden="true"></span>
+            <span data-i18n="howPipe">JUMP RED PIPES</span>
+          </div>
+          <div class="how-item">
+            <span class="how-glyph gap" aria-hidden="true"></span>
+            <span data-i18n="howGap">JUMP GAPS</span>
+          </div>
+        </nav>
         <div class="tickets" id="tickets"></div>
         <details class="rules-fold">
           <summary data-i18n="rulesToggle">RULES</summary>
@@ -200,9 +224,17 @@
         </div>
       </section>
 
-      <section id="pay" class="panel hidden">
-        <p class="kicker" data-i18n="payKicker">CONFIRM TICKET</p>
-        <h1 id="payTitle">PAY</h1>
+      <section id="pay" class="panel hidden pay-panel">
+        <div class="pay-stub">
+          <div class="pay-stub-l">
+            <p class="kicker" data-i18n="payKicker">CONFIRM TICKET</p>
+            <h1 id="payTitle">PAY</h1>
+          </div>
+          <div class="pay-stub-art">
+            <img src="./assets/icon-ticket.png?v=1" alt="" />
+            <img src="./assets/hero-cat.png?v=1" alt="" />
+          </div>
+        </div>
         <p id="payCopy"></p>
         <p class="eligible" data-i18n="eligible">Weekly 50% · Invite 20% · Burn 30%</p>
         <div class="meter-preview">
@@ -213,21 +245,29 @@
         <p class="tx-line" id="payStatus"></p>
         <div class="row">
           <button class="ghost" id="payBack" data-i18n="back">BACK</button>
-          <button class="primary" id="payGo" data-i18n="payGo">PAY &amp; RUN</button>
+          <button class="primary pulse-cta" id="payGo" data-i18n="payGo">PAY &amp; RUN</button>
         </div>
       </section>
 
       <section id="game" class="panel game hidden">
         <div class="play-stage" id="playStage">
           <div class="hud">
-            <span id="hudTier"></span>
-            <span id="hudScore">0</span>
-            <span id="hudRebate">0%</span>
+            <span class="hud-chip tier" id="hudTier"></span>
+            <span class="hud-chip score"><small data-i18n="hudScore">SCORE</small><b id="hudScore">0</b></span>
+            <span class="hud-chip grab"><small>LIM</small><b id="hudRebate">0%</b></span>
           </div>
           <div class="bar"><i id="rebateBar"></i></div>
           <p id="rotateSoft" class="rotate-soft hidden" data-i18n="rotateSoft">Play here. Rotate only if this browser turns landscape.</p>
           <div class="stage">
             <canvas id="cv" width="960" height="540"></canvas>
+            <div id="tutLayer" class="tut-layer hidden" aria-live="polite">
+              <button type="button" class="tut-skip" id="tutSkip" data-i18n="tutSkip">GOT IT</button>
+              <div class="tut-callout" id="tutCallout">
+                <span class="tut-hand" aria-hidden="true"></span>
+                <p class="tut-title" id="tutTitle"></p>
+                <p class="tut-sub" id="tutSub"></p>
+              </div>
+            </div>
           </div>
         </div>
         <p class="hint" data-i18n="hint">JUMP THE CATBOX INTO COINS · WALK UNDER LIGHTS · JUMP RED BLOCKS</p>
@@ -243,7 +283,7 @@
         <p class="tx-line" id="overTx"></p>
         <div class="row">
           <button class="ghost" id="toLobby" data-i18n="lobby">LOBBY</button>
-          <button class="primary" id="again" data-i18n="again">SAME TIER</button>
+          <button class="primary pulse-cta" id="again" data-i18n="again">SAME TIER</button>
         </div>
         <div class="ctas mini">
           <a class="cta x" href="https://x.com/LiminalFi" target="_blank" rel="noopener noreferrer">
@@ -261,6 +301,7 @@
     <div id="swapModal" class="swap-modal hidden">
       <div class="swap-card">
         <div class="swap-head">
+          <img class="swap-ico" src="./assets/coin.png?v=2" alt="" />
           <h2 data-i18n="swapTitle">BUY LIM</h2>
           <button class="ghost" id="swapClose" type="button">✕</button>
         </div>
@@ -285,7 +326,7 @@
           </div>
         </label>
         <p class="tx-line" id="swapStatus"></p>
-        <button class="primary" id="swapGo" type="button" data-i18n="swapGo">SWAP</button>
+        <button class="primary pulse-cta" id="swapGo" type="button" data-i18n="swapGo">SWAP</button>
       </div>
     </div>
 
@@ -296,11 +337,11 @@
       </div>
     </div>
 
-    <script src="./config.js?v=19"></script>
+    <script src="./config.js?v=20"></script>
     <script src="https://cdn.jsdelivr.net/npm/ethers@6.13.5/dist/ethers.umd.min.js"></script>
-    <script src="./chain.js?v=19"></script>
-    <script src="./i18n.js?v=19"></script>
-    <script src="./game.js?v=19"></script>
-    <script src="./bgm.js?v=19"></script>
+    <script src="./chain.js?v=20"></script>
+    <script src="./i18n.js?v=20"></script>
+    <script src="./game.js?v=20"></script>
+    <script src="./bgm.js?v=20"></script>
   </body>
 </html>
