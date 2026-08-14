@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#070b12" />
+    <meta name="robots" content="noindex,nofollow" />
+    <link rel="icon" href="./assets/favicon.png?v=1" type="image/png" />
+    <title>CATBOX DASH · OWNER</title>
+    <script>
+      (function () {
+        try {
+          var ua = navigator.userAgent || "";
+          if (
+            /TokenPocket|TrustWallet|imToken|BitKeep|Bitget|OKApp|CoinbaseWallet|MetaMaskMobile|Rainbow|SafePal|MathWallet/i.test(
+              ua,
+            )
+          ) {
+            document.documentElement.classList.add("wallet-dapp");
+          }
+        } catch (e) {}
+      })();
+    </script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@500;700&family=Press+Start+2P&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./styles.css?v=36" />
+    <style>
+      .admin-page { max-width: 1180px; }
+      .admin-page .sub { word-break: break-word; }
+      .admin-gate {
+        border: 3px solid var(--gold);
+        background: #0b1220;
+        padding: 28px 18px;
+        text-align: center;
+        margin-top: 18px;
+      }
+      .admin-gate h1 {
+        font-family: "Press Start 2P", monospace;
+        font-size: 12px;
+        color: var(--gold-hi);
+        margin: 0 0 12px;
+        line-height: 1.6;
+      }
+      .admin-gate p { color: var(--dim); margin: 0 0 16px; }
+      .admin-gate .denied {
+        color: #ff8a8a;
+        font-size: 16px;
+        font-weight: 800;
+        margin: 8px 0 0;
+      }
+      .admin-toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        align-items: center;
+        margin: 12px 0;
+      }
+      .admin-toolbar input[type="search"] {
+        flex: 1;
+        min-width: 180px;
+        background: #0b1220;
+        color: var(--ink);
+        border: 2px solid var(--line);
+        padding: 8px 10px;
+        font: inherit;
+      }
+      .admin-toolbar .ghost,
+      .admin-toolbar .primary {
+        min-height: 36px;
+      }
+      .chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin: 10px 0 14px;
+      }
+      .chip {
+        border: 2px solid var(--line);
+        background: #0b1220;
+        padding: 8px 10px;
+        min-width: 92px;
+      }
+      .chip span {
+        display: block;
+        color: var(--dim);
+        font-size: 11px;
+        letter-spacing: 0.04em;
+      }
+      .chip b {
+        display: block;
+        margin-top: 4px;
+        color: var(--gold-hi);
+        font-size: 14px;
+      }
+      .table-wrap {
+        overflow: auto;
+        border: 2px solid var(--line);
+        background: #0b1220;
+        max-height: calc(100vh - 260px);
+      }
+      table.runs {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 12px;
+        min-width: 980px;
+      }
+      table.runs th,
+      table.runs td {
+        text-align: left;
+        padding: 8px 10px;
+        border-bottom: 1px solid var(--line);
+        vertical-align: top;
+        white-space: nowrap;
+      }
+      table.runs th {
+        position: sticky;
+        top: 0;
+        background: #101c32;
+        color: var(--gold);
+        font-size: 11px;
+        cursor: pointer;
+        user-select: none;
+        z-index: 1;
+      }
+      table.runs th:hover { color: var(--gold-hi); }
+      table.runs th[data-dir="desc"]::after { content: " ▾"; }
+      table.runs th[data-dir="asc"]::after { content: " ▴"; }
+      table.runs .addr {
+        font-family: ui-monospace, Menlo, Consolas, monospace;
+        font-size: 11px;
+      }
+      table.runs a { color: #8ec0ff; }
+      table.runs .copy {
+        margin-left: 6px;
+        padding: 2px 6px;
+        font-size: 11px;
+        cursor: pointer;
+        color: var(--gold);
+        background: transparent;
+        border: 1px solid var(--line);
+      }
+      table.runs .yes { color: #7dffb1; }
+      table.runs .no { color: #ff8a8a; }
+      table.runs .free { color: var(--gold-hi); }
+      .status-line { color: var(--dim); min-height: 1.4em; margin: 8px 0; }
+      .empty { color: var(--dim); padding: 24px; text-align: center; }
+    </style>
+  </head>
+  <body>
+    <div class="crt admin-page">
+      <header class="topbar">
+        <img class="logo" src="./assets/logo.png?v=4" alt="LIMINAL" />
+        <div class="brand-text">
+          <div class="title">CATBOX DASH</div>
+          <div class="sub">OWNER RUNS</div>
+        </div>
+        <div class="top-right">
+          <button class="wallet-btn pulse-cta" id="walletBtn" type="button">连接钱包</button>
+        </div>
+      </header>
+
+      <section id="gate" class="admin-gate">
+        <h1>OWNER</h1>
+        <p id="gateHint">连接钱包后查看链上对局。TokenPocket / MetaMask 均可。</p>
+        <p id="denied" class="denied hidden">无权限</p>
+        <button class="wallet-btn pulse-cta" id="gateConnect" type="button">连接钱包</button>
+      </section>
+
+      <section id="board" class="panel hidden">
+        <div class="admin-toolbar">
+          <input id="filter" type="search" placeholder="按地址筛选" autocomplete="off" />
+          <button class="ghost" id="refreshBtn" type="button">刷新</button>
+        </div>
+        <p class="status-line" id="status"></p>
+        <div class="chips" id="chips"></div>
+        <div class="table-wrap">
+          <table class="runs">
+            <thead>
+              <tr>
+                <th data-key="id" data-dir="desc">局号</th>
+                <th data-key="player">玩家</th>
+                <th data-key="tierId">档位 / 门票</th>
+                <th data-key="free">付费</th>
+                <th data-key="collected">捡到</th>
+                <th data-key="leftover">剩余</th>
+                <th data-key="burned">销毁</th>
+                <th data-key="score">分数</th>
+                <th data-key="weekPts">周积分</th>
+                <th data-key="settled">已结算</th>
+                <th data-key="startedAt">时间</th>
+                <th data-key="referrer">推荐人</th>
+              </tr>
+            </thead>
+            <tbody id="rows">
+              <tr>
+                <td colspan="12" class="empty">等待扫描…</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+
+    <script src="./config.js?v=26"></script>
+    <script src="https://cdn.jsdelivr.net/npm/ethers@6.13.5/dist/ethers.umd.min.js"></script>
+    <script src="./chain.js?v=45"></script>
+    <script src="./admin.js?v=1"></script>
+  </body>
+</html>
