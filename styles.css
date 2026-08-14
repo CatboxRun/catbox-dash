@@ -1233,6 +1233,16 @@ body:not([data-lang="en"]) .auto-card h2 { font-size: 18px; }
   border-color: #d94b3a;
   color: #ffb4a8;
 }
+.over-why.encore,
+.over-why.encore.dieBlock,
+.over-why.encore.dieLight,
+.over-why.encore.dieGap {
+  border-color: var(--gold);
+  color: var(--gold-hi);
+}
+.over-panel.cap .kicker {
+  color: var(--gold-hi);
+}
 .over-panel h1 {
   font-size: 16px;
   line-height: 1.3;

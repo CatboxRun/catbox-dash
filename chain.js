@@ -373,12 +373,17 @@ const CatboxChain = (() => {
     let chain = 0;
     try {
       const c = gameContract(await publicReadProvider());
+      let fromAbi = false;
       try {
-        const v = await c.playCount(addr);
-        if (v != null && v > 0n) chain = Number(v);
-      } catch (_) {
-        chain = await scanPlayCount(addr);
-      }
+        if (await isV6()) {
+          const v = await c.playCount(addr);
+          if (v != null) {
+            chain = Number(v);
+            fromAbi = true;
+          }
+        }
+      } catch (_) {}
+      if (!fromAbi) chain = await scanPlayCount(addr);
     } catch (_) {}
     const n = Math.max(chain || 0, local);
     rememberPlayCount(addr, n);

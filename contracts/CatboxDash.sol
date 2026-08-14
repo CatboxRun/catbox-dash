@@ -12,7 +12,7 @@ interface IERC20 {
 /// Leftover: daily board 50% / invite board 20% / burn 30%.
 /// Daily 50%: 100% equal among that day's paid players (snapshot/pull at SGT 00:00). No score weight.
 /// Invite 20%: equal among top 200 inviters (O(200) list + equal accumulator). Same day-boundary as daily.
-/// Coin payout: collected * (105% + 5% per invited friend), cap 200% of ticket.
+/// Coin payout: collected * (105% + 5% per invited friend + 0.1% per extra run), cap 200% of ticket.
 /// Both boards: Singapore 00:00 rollover (UTC+8 / BJ_OFFSET). Yesterday only — today's leftover is not claimable until then.
 /// Free: 2× SCOUT (tier 0, 1 LIM) per address. No free VAULT.
 /// TG/X extras are local/social on live V5. Free runs: board score 0, skipped from _markPlayed / prize share. Extra over collected from freePool.
@@ -27,6 +27,7 @@ contract CatboxDash {
     uint256 public constant BJ_OFFSET = 8 hours;
     uint256 public constant BASE_BPS = 10500;
     uint256 public constant INVITE_BPS = 500;
+    uint256 public constant PLAY_BPS = 10;
     uint256 public constant MAX_BPS = 20000;
     uint256 public constant TOP_CAP = 200;
 
@@ -62,6 +63,7 @@ contract CatboxDash {
     mapping(address => uint256) public inviteDebt;
     mapping(address => address) public refOf;
     mapping(address => uint256) public inviteCount;
+    mapping(address => uint256) public playCount;
     mapping(address => uint256) public scoredDay;
     mapping(address => uint256) public playedDay;
     mapping(address => uint256) public inviteDay;
@@ -140,7 +142,9 @@ contract CatboxDash {
     }
 
     function rewardBps(address player) public view returns (uint256) {
-        uint256 bps = BASE_BPS + inviteCount[player] * INVITE_BPS;
+        uint256 plays = playCount[player];
+        uint256 extra = plays > 0 ? (plays - 1) * PLAY_BPS : 0;
+        uint256 bps = BASE_BPS + inviteCount[player] * INVITE_BPS + extra;
         if (bps > MAX_BPS) bps = MAX_BPS;
         return bps;
     }
@@ -226,6 +230,7 @@ contract CatboxDash {
         runId = nextRunId++;
         runs[runId] = Run(msg.sender, price, uint64(block.timestamp), false, free);
         activeRun[msg.sender] = runId;
+        playCount[msg.sender] += 1;
         ticketFloat += price;
         emit RunStarted(runId, msg.sender, ref, price);
         if (free) emit FreeEnter(msg.sender, runId, freeScoutUsed[msg.sender]);
