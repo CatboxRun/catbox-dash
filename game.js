@@ -355,6 +355,8 @@ function bootLobbyTabs() {
   tabs.forEach((btn) => {
     btn.onclick = () => setTab(btn.dataset.tab);
   });
+  const open = $("openRules");
+  if (open) open.onclick = () => setTab("rules");
 }
 
 let quoteTimer = 0;
@@ -954,7 +956,7 @@ function seedTutorialCourse(state) {
   spawnCoinW(state, 460, g - 92);
   spawnCoinW(state, 540, g - 148);
   spawnCoinW(state, 640, g - 72);
-  state.objects.push({ kind: "light", x: 1080, w: 74, phase: 0.15, slow: 0.024 });
+  state.objects.push({ kind: "light", x: 1080, w: 74, phase: 0, slow: 0.022, armed: false });
   state.objects.push({ kind: "beam", x: 1520, y: g - 48, w: 28, h: 48, style: "pipe" });
   spawnCoinW(state, 1590, g - 104);
   state.objects.push({ kind: "beam", x: 1740, y: g - 26, w: 32, h: 26, style: "brick" });
@@ -1047,10 +1049,13 @@ function startRun(tier, teach) {
     vy: 0,
     ground: BASE_GROUND,
     scroll: 0,
-    terrain: [{ kind: "flat", x0: -480, x1: 1000, y: BASE_GROUND }],
-    nextTerrain: 1000,
+    terrain: [{ kind: "flat", x0: -480, x1: 680, y: BASE_GROUND }],
+    nextTerrain: 680,
     objects: [],
     lastHazard: -999,
+    lastJumpT: 0,
+    lastLightWx: -9999,
+    lastGapWx: -9999,
     night: false,
     popped: [],
     flash: 0,
@@ -1210,14 +1215,15 @@ function addTerrainChunk(run) {
 
   const sinceHazard = run.t - run.lastHazard;
   const grab = run.collected / run.tier.cost;
-  const minGap = Math.max(46, 100 - p * 38 - grab * 22);
+  const idle = run.t - (run.lastJumpT || 0) > 140;
+  const minGap = Math.max(28, 64 - p * 26 - grab * 16);
   const roll = Math.random();
-  const pad = 28 + Math.floor(Math.random() * 24);
+  const pad = 24 + Math.floor(Math.random() * 20);
   pushFlat(run, x, x + pad);
   x += pad;
 
-  const safeChance = Math.max(0.2, 0.56 - p * 0.3 - grab * 0.16);
-  const wantSafe = p < 0.08 || roll < safeChance || sinceHazard < minGap;
+  const safeChance = Math.max(0.08, 0.32 - p * 0.22 - grab * 0.12);
+  const wantSafe = !idle && (p < 0.05 || roll < safeChance || sinceHazard < minGap);
 
   if (wantSafe) {
     const flavor = Math.random();
@@ -1254,23 +1260,42 @@ function addTerrainChunk(run) {
 
 function addHazardChunk(run, x, p, withCoins) {
   const roll = Math.random();
-  const pad = 28 + Math.floor(Math.random() * 36);
+  const pad = 28 + Math.floor(Math.random() * 28);
   pushFlat(run, x, x + pad);
   x += pad;
-  if (p < 0.3 || roll < 0.8) {
+
+  const nearLight = Math.abs(x - (run.lastLightWx || -99999)) < 280;
+  const nearGap = Math.abs(x - (run.lastGapWx || -99999)) < 300;
+  const idle = run.t - (run.lastJumpT || 0) > 140;
+
+  let kind;
+  if (idle && !nearLight && p > 0.03) kind = "gap";
+  else if (nearGap) kind = roll < 0.5 ? "pipe" : "light";
+  else if (nearLight) kind = roll < 0.45 ? "pipe" : "gap";
+  else if (p < 0.1) kind = roll < 0.62 ? "light" : "pipe";
+  else if (roll < 0.32) kind = "light";
+  else if (roll < 0.6) kind = "pipe";
+  else kind = "gap";
+
+  if (kind === "light" && nearGap) kind = "pipe";
+  if (kind === "gap" && nearLight) kind = "pipe";
+
+  if (kind === "light") {
     const w = 128 + Math.floor(p * 24);
     pushFlat(run, x, x + w);
     run.objects.push({
       kind: "light",
       x: x + 24 - run.scroll,
       w: 70 + p * 24,
-      phase: 0.05,
-      slow: 0.016 + p * 0.012,
+      phase: 0,
+      slow: 0.018 + p * 0.01,
+      armed: false,
     });
     if (withCoins) spawnCoinW(run, x + 58, BASE_GROUND - 28);
     run.lastHazard = run.t;
+    run.lastLightWx = x + 24 + (70 + p * 24) / 2;
     x += w;
-  } else if (p < 0.5 || roll < 0.91) {
+  } else if (kind === "pipe") {
     const duo = Math.random() < 0.3 && p > 0.2;
     const w = duo ? 176 : 108;
     pushFlat(run, x, x + w);
@@ -1295,13 +1320,14 @@ function addHazardChunk(run, x, p, withCoins) {
     run.lastHazard = run.t;
     x += w;
   } else {
-    const gw = 46 + p * 14;
-    const ap = 80;
+    const gw = 54 + p * 20;
+    const ap = 72;
     pushFlat(run, x, x + ap);
     run.terrain.push({ kind: "gap", x0: x + ap, x1: x + ap + gw, y: BASE_GROUND });
     pushFlat(run, x + ap + gw, x + ap + gw + ap);
     if (withCoins) spawnCoinW(run, x + ap + gw * 0.5, BASE_GROUND - 96);
     run.lastHazard = run.t;
+    run.lastGapWx = x + ap + gw / 2;
     x += ap + gw + ap;
   }
   run.nextTerrain = x;
@@ -1314,10 +1340,12 @@ function jump() {
     run.vy = -13.2;
     run.jumps = 1;
     run.coyote = 0;
+    run.lastJumpT = run.t;
     spawnDust(PLAYER_SX, run.ground);
   } else if (run.jumps < 2) {
     run.vy = -11.8;
     run.jumps = 2;
+    run.lastJumpT = run.t;
     if (run.fx) {
       for (let i = 0; i < 4; i++) {
         run.fx.push({
@@ -1463,7 +1491,13 @@ function tick() {
 
   for (const o of run.objects) {
     o.x -= spd;
-    if (o.kind === "light") o.phase += o.slow || 0.02;
+    if (o.kind === "light") {
+      if (!o.armed && o.x < 560) {
+        o.armed = true;
+        o.phase = 0.82;
+      }
+      if (o.armed) o.phase += o.slow || 0.02;
+    }
     if (o.kind === "beam") {
       o.y = groundAt(run, run.scroll + o.x + o.w / 2) - o.h;
     }
@@ -1532,7 +1566,7 @@ function tick() {
   run.popped = run.popped.filter((n) => --n.t > 0);
   tickFx();
   if (run.flash > 0) run.flash -= 1;
-  addRaw(0.28);
+  if (run.t - (run.lastJumpT || 0) < 96) addRaw(0.22);
   const pct = (run.collected / run.tier.cost) * 100;
   $("hudRebate").textContent = `${run.collected.toFixed(3)}/${run.tier.cost} LIM`;
   $("rebateBar").style.width = `${Math.min(100, pct)}%`;

@@ -241,27 +241,11 @@ body:not([data-lang="en"]) .swap-head h2 { font-size: 18px; }
   color: var(--gold-hi);
   font-size: 12px;
 }
-.lobby-pane.hidden { display: none; }
+.lobby-pane.hidden { display: none !important; }
 
 @media (min-width: 901px) {
-  .lobby-tabs { display: none; }
-  .lobby-grid {
+  .pane-more:not(.hidden) {
     display: grid;
-    grid-template-columns: 1.2fr 0.8fr;
-    gap: 12px;
-    align-items: start;
-  }
-  .lobby-pane,
-  .lobby-pane.hidden {
-    display: block !important;
-  }
-  .pane-play { grid-column: 1; grid-row: 1; }
-  .pane-pool { grid-column: 2; grid-row: 1; }
-  .pane-rules { grid-column: 1 / -1; grid-row: 2; }
-  .pane-more {
-    grid-column: 1 / -1;
-    grid-row: 3;
-    display: grid !important;
     grid-template-columns: 1fr 1fr;
     gap: 12px;
   }
@@ -269,6 +253,25 @@ body:not([data-lang="en"]) .swap-head h2 { font-size: 18px; }
   .pane-more .admin {
     grid-column: 1 / -1;
   }
+}
+.rules-jump {
+  display: block;
+  width: 100%;
+  margin: 0 0 4px;
+  padding: 10px;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--gold-hi);
+  background: #0b1220;
+  border: 2px solid var(--gold);
+  cursor: pointer;
+}
+.how-note {
+  margin: 0 0 12px;
+  color: var(--gold-hi);
+  font-size: 13px;
+  line-height: 1.5;
 }
 #freeLeft { color: var(--gold-hi); }
 #freeLeft:empty { display: none; }
@@ -808,7 +811,6 @@ button.primary, button.ghost {
   .ctas { grid-template-columns: 1fr 1fr; }
   .cta { min-height: 0; padding: 8px; }
   .lede, .rules-fold, .hero-arcade, .auto-card { display: none; }
-  .pane-rules, .rules-card, .rules.full { display: block; }
   .kicker { margin-bottom: 4px; }
   h1 { font-size: 11px; margin-bottom: 6px; }
   .hint { display: none; }
@@ -1120,7 +1122,6 @@ body:not([data-lang="en"]) .auto-card h2 { font-size: 18px; }
   .auto-steps { display: none; }
   .ticket-mascot { width: 40px; height: 40px; }
   .play-tag { font-size: 7px; padding: 4px 0; }
-  .how-strip { display: none; }
 }
 
 .auto-card {
@@ -1144,7 +1145,11 @@ body:not([data-lang="en"]) .auto-card h2 { font-size: 18px; }
   display: grid;
   grid-template-columns: repeat(5, 1fr);
   gap: 6px;
-  margin: 10px 0 0;
+  margin: 0 0 12px;
+}
+.panel.game .how-strip,
+.panel.game .hint {
+  display: none !important;
 }
 .over-why {
   margin: 10px 0 0;
