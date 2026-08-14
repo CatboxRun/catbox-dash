@@ -117,12 +117,44 @@ async function syncOnchainPool() {
       if ($("weekPoolAmt")) $("weekPoolAmt").textContent = "—";
       if ($("invitePoolAmt")) $("invitePoolAmt").textContent = "—";
       if ($("burnedAmt")) $("burnedAmt").textContent = "—";
+      if ($("daySplitLive")) {
+        $("daySplitLive").classList.add("hidden");
+        $("daySplitLive").textContent = "";
+      }
+      if ($("inviteTopLive")) {
+        $("inviteTopLive").classList.add("hidden");
+        $("inviteTopLive").textContent = "";
+      }
       return;
     }
     const pool = await CatboxChain.poolBalance();
     if ($("weekPoolAmt")) $("weekPoolAmt").textContent = `${CatboxChain.formatLim(pool.week)} LIM`;
     if ($("invitePoolAmt")) $("invitePoolAmt").textContent = `${CatboxChain.formatLim(pool.invite)} LIM`;
     if ($("burnedAmt")) $("burnedAmt").textContent = `${CatboxChain.formatLim(pool.burned)} LIM`;
+    const dayLive = $("daySplitLive");
+    const inviteLive = $("inviteTopLive");
+    if (dayLive) {
+      if (pool.v6 && pool.dayEq != null) {
+        dayLive.classList.remove("hidden");
+        dayLive.textContent = t("daySplitLive", {
+          eq: CatboxChain.formatLim(pool.dayEq),
+          score: CatboxChain.formatLim(pool.dayScore ?? 0n),
+          n: String(pool.dayPlayers ?? 0n),
+        });
+      } else {
+        dayLive.classList.add("hidden");
+        dayLive.textContent = "";
+      }
+    }
+    if (inviteLive) {
+      if (pool.v6 && pool.topLen != null) {
+        inviteLive.classList.remove("hidden");
+        inviteLive.textContent = t("inviteTopLive", { n: String(pool.topLen) });
+      } else {
+        inviteLive.classList.add("hidden");
+        inviteLive.textContent = "";
+      }
+    }
     const st = window._freeStatus;
     const freeShown = st?.pool != null ? st.pool : pool.free;
     if ($("freePoolAmt") && freeShown != null) {
@@ -178,7 +210,6 @@ async function refreshWalletUi() {
     }
   }
   if (admin) admin.classList.toggle("hidden", !(acc && CatboxChain.isOwner() && chainReady));
-  if ($("fundAddr") && window.CatboxChain) $("fundAddr").value = CatboxChain.cfg.address;
   if (!banner) return;
   try {
     const deployed = await CatboxChain.isDeployed();
@@ -315,6 +346,7 @@ function bootLobbyTabs() {
   const tabs = document.querySelectorAll(".lobby-tab");
   if (!tabs.length) return;
   const setTab = (id) => {
+    if (!id) id = "play";
     tabs.forEach((b) => b.classList.toggle("on", b.dataset.tab === id));
     document.querySelectorAll(".lobby-pane").forEach((p) => {
       p.classList.toggle("hidden", p.dataset.pane !== id);
@@ -472,19 +504,6 @@ async function bootWallet() {
       alert(t("txFail"));
     }
   };
-  if ($("fundAddr") && window.CatboxChain) {
-    $("fundAddr").value = CatboxChain.cfg.address;
-  }
-  if ($("copyFund")) {
-    $("copyFund").onclick = async () => {
-      const val = $("fundAddr")?.value || CatboxChain.cfg.address;
-      try {
-        await navigator.clipboard.writeText(val);
-        $("copyFund").textContent = t("copied");
-        setTimeout(() => { $("copyFund").textContent = t("copyAddr"); }, 1200);
-      } catch (_) {}
-    };
-  }
   if ($("fundBtn")) {
     $("fundBtn").onclick = async () => {
       const status = $("fundStatus");
@@ -2147,5 +2166,4 @@ applyI18n();
 bootTutorial();
 bootLobbyTabs();
 show(lobby);
-if ($("fundAddr") && window.CatboxChain) $("fundAddr").value = CatboxChain.cfg.address;
 bootWallet();

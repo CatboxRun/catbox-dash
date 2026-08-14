@@ -216,7 +216,7 @@ body:not([data-lang="en"]) .swap-head h2 { font-size: 18px; }
 }
 .lobby-tabs {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: 6px;
   margin: 0 0 10px;
 }
@@ -255,8 +255,12 @@ body:not([data-lang="en"]) .swap-head h2 { font-size: 18px; }
   .lobby-pane.hidden {
     display: block !important;
   }
+  .pane-play { grid-column: 1; grid-row: 1; }
+  .pane-pool { grid-column: 2; grid-row: 1; }
+  .pane-rules { grid-column: 1 / -1; grid-row: 2; }
   .pane-more {
     grid-column: 1 / -1;
+    grid-row: 3;
     display: grid !important;
     grid-template-columns: 1fr 1fr;
     gap: 12px;
@@ -365,6 +369,17 @@ h1 { font-size: 16px; line-height: 1.6; margin: 0 0 14px; }
 .rules { padding: 0; margin: 0 0 16px; list-style: none; }
 .rules li { color: var(--ink); margin: 8px 0; padding-left: 14px; position: relative; }
 .rules li::before { content: ">"; position: absolute; left: 0; color: var(--gold); }
+.pane-rules { min-width: 0; }
+.rules-card {
+  border: 3px solid var(--gold);
+  background: #0b1220;
+  padding: 14px;
+  box-shadow: 4px 4px 0 #000;
+}
+.rules-card h2 { margin: 0 0 10px; font-size: 16px; line-height: 1.4; }
+.rules.full { margin: 0; }
+.rules.full li { margin: 10px 0; line-height: 1.55; color: var(--ink); }
+.public-fund { display: none !important; }
 
 .play-lead { font-size: 8px; color: var(--dim); margin: 0 0 10px; line-height: 1.7; }
 .rules-fold {
@@ -455,6 +470,15 @@ h1 { font-size: 16px; line-height: 1.6; margin: 0 0 14px; }
 .split.burn { border-color: #d94b3a; }
 .split.invite { border-color: var(--gold); }
 .split i { display: block; color: var(--ink); margin-top: 4px; font-style: normal; }
+.split-note, .split-live {
+  display: block;
+  margin-top: 6px;
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--dim);
+  font-weight: 600;
+}
+.split-live { color: var(--gold-hi); }
 .stat.burn-stat { border-color: #d94b3a; }
 .stat.invite-stat { border-color: var(--gold); }
 .stat.burn-stat .stat-k { color: #ff8a7a; }
@@ -784,6 +808,7 @@ button.primary, button.ghost {
   .ctas { grid-template-columns: 1fr 1fr; }
   .cta { min-height: 0; padding: 8px; }
   .lede, .rules-fold, .hero-arcade, .auto-card { display: none; }
+  .pane-rules, .rules-card, .rules.full { display: block; }
   .kicker { margin-bottom: 4px; }
   h1 { font-size: 11px; margin-bottom: 6px; }
   .hint { display: none; }

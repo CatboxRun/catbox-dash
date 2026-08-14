@@ -31,7 +31,7 @@
       href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@500;700&family=Noto+Sans+SC:wght@500;700&family=Noto+Sans+JP:wght@500;700&family=Noto+Sans+KR:wght@500;700&family=Noto+Sans+Thai:wght@500;700&family=Press+Start+2P&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="./styles.css?v=26" />
+    <link rel="stylesheet" href="./styles.css?v=27" />
   </head>
   <body>
     <div class="crt">
@@ -69,6 +69,7 @@
         <nav class="lobby-tabs" id="lobbyTabs">
           <button type="button" class="lobby-tab on" data-tab="play" data-i18n="tabPlay">PLAY</button>
           <button type="button" class="lobby-tab" data-tab="pool" data-i18n="tabPool">DAILY POOL</button>
+          <button type="button" class="lobby-tab" data-tab="rules" data-i18n="tabRules">RULES</button>
           <button type="button" class="lobby-tab" data-tab="more" data-i18n="tabMore">INVITE</button>
         </nav>
 
@@ -88,26 +89,38 @@
             <p class="play-now" data-i18n="playNow">PICK A TICKET</p>
             <p class="reward-line" data-i18n="inviteBoost">Invite +2% LIM each. 10 friends = 120% if you grab 100%. Cap 200%.</p>
             <div class="tickets" id="tickets"></div>
-            <details class="rules-fold">
-              <summary data-i18n="rulesToggle">RULES</summary>
-              <ul class="rules">
-                <li data-i18n="rule1">Keep grabbed LIM. 100% grab = break even, nothing burned that run.</li>
-                <li data-i18n="rule2">Miss some → leftover: daily 50% / invite 20% / burn 30% to dead.</li>
-                <li data-i18n="rule3">Each invite +2% LIM on that run. 10 friends → 120% of ticket if you full-grab. Cap 200%.</li>
-                <li data-i18n="rule4">Daily claim 00:00 Beijing, yesterday only. After 100% coins, keep running — new score ×2 until crash.</li>
-              </ul>
-            </details>
+          </div>
+
+          <div class="lobby-pane pane-rules hidden" data-pane="rules">
+            <article class="rules-card">
+              <p class="kicker" data-i18n="rulesToggle">RULES</p>
+              <h2 data-i18n="rulesTitle">HOW A RUN WORKS</h2>
+              <ol class="rules full">
+                <li data-i18n="rulePlay">Pay a ticket. Coins on the track are slices of that LIM. What you grab, you keep. The run ends only when you hit a red pipe, a searchlight, or a gap.</li>
+                <li data-i18n="ruleFull">Grab 100% of the ticket → break even this run, nothing burned. After 100%, keep running: new score ×2 until you crash. Speed ramps so 110% payout is hard.</li>
+                <li data-i18n="ruleInvitePay">Each invited friend who plays: +2% LIM on your run. 10 friends + full grab = 120% of the ticket. Cap 200%.</li>
+                <li data-i18n="ruleLeft">Missed LIM is leftover. Split is fixed on-chain: daily 50% / invite 20% / burn 30% to dead.</li>
+                <li data-i18n="ruleDaily">Daily board: 50% of all leftover. Of that daily pool, 40% is split equally to every player who ran that day. The rest of the daily pool follows the day's scores. Claim yesterday at 00:00 Beijing.</li>
+                <li data-i18n="ruleInviteBoard">Invite board: 20% of leftover, split equally among the top 200 inviters.</li>
+                <li data-i18n="ruleFree">New wallets get 2 free SCOUT runs when the contract is funded.</li>
+                <li data-i18n="ruleCap">Static site + BSC pull-claims. 10,000 players is fine. Nobody is looped on-chain.</li>
+              </ol>
+            </article>
           </div>
 
           <div class="lobby-pane pane-pool hidden" data-pane="pool">
             <div class="split-row two-plus-burn">
               <div class="split week">
                 <img src="./assets/icon-trophy.png?v=1" alt="" />
-                <b>50%</b><span data-i18n="weekBoard">DAILY</span><i id="weekPoolAmt">0</i>
+                <b>50%</b><span data-i18n="weekBoard">DAILY · 50%</span><i id="weekPoolAmt">0</i>
+                <small class="split-note" data-i18n="daySplitNote">Of that 50%: 40% equal to everyone who played that day · 60% by score</small>
+                <small id="daySplitLive" class="split-live hidden"></small>
               </div>
               <div class="split invite">
                 <img src="./assets/icon-invite.png?v=1" alt="" />
-                <b>20%</b><span data-i18n="inviteBoard">INVITE</span><i id="invitePoolAmt">0</i>
+                <b>20%</b><span data-i18n="inviteBoard">INVITE · 20%</span><i id="invitePoolAmt">0</i>
+                <small class="split-note" data-i18n="inviteTopNote">Equal split among the top 200 inviters</small>
+                <small id="inviteTopLive" class="split-live hidden"></small>
               </div>
               <div class="split burn">
                 <img src="./assets/icon-burn.png?v=1" alt="" />
@@ -134,16 +147,6 @@
           </div>
 
           <div class="lobby-pane pane-more hidden" data-pane="more">
-            <section class="fund-box public-fund">
-              <p class="stat-k" data-i18n="fundPublicTitle">FUND ADDRESS</p>
-              <p class="fund-amt" id="freePoolAmt">0 LIM</p>
-              <p class="fund-hint" data-i18n="fundPublicHint">Send LIM here. It pays new-wallet free SCOUT runs and extra invite-bonus LIM.</p>
-              <div class="invite-link-row">
-                <input id="fundAddr" readonly value="" />
-                <button class="ghost" id="copyFund" type="button" data-i18n="copyAddr">COPY ADDR</button>
-              </div>
-            </section>
-
             <div class="invite-bar">
               <img class="invite-ico" src="./assets/icon-invite.png?v=1" alt="" />
               <div class="invite-copy">
@@ -359,9 +362,9 @@
 
     <script src="./config.js?v=26"></script>
     <script src="https://cdn.jsdelivr.net/npm/ethers@6.13.5/dist/ethers.umd.min.js"></script>
-    <script src="./chain.js?v=26"></script>
-    <script src="./i18n.js?v=26"></script>
-    <script src="./game.js?v=26"></script>
+    <script src="./chain.js?v=27"></script>
+    <script src="./i18n.js?v=27"></script>
+    <script src="./game.js?v=27"></script>
     <script src="./bgm.js?v=26"></script>
   </body>
 </html>

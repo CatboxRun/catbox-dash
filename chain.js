@@ -38,8 +38,20 @@ const CatboxChain = (() => {
     return browserProvider().getSigner();
   }
 
+  const V6_READ_ABI = [
+    "function dayPool() view returns (uint256)",
+    "function dayEqPool() view returns (uint256)",
+    "function dayPlayerCount() view returns (uint256)",
+    "function topLen() view returns (uint256)",
+    "function nextClaimAt() view returns (uint256)",
+    "function inviteCount(address) view returns (uint256)",
+    "function rewardBps(address) view returns (uint256)",
+    "function withdrawDaily(uint256)",
+    "function currentDay() view returns (uint256)",
+  ];
+
   function gameContract(s) {
-    return new ethers.Contract(cfg.address, cfg.abi, s);
+    return new ethers.Contract(cfg.address, [...cfg.abi, ...V6_READ_ABI], s);
   }
 
   function limContract(s) {
@@ -123,7 +135,42 @@ const CatboxChain = (() => {
     } catch (_) {
       d = await c.weekPool();
     }
-    return { week: d, day: d, invite: i, burned, free, total: d + i };
+    let eq = null;
+    let players = null;
+    let topN = null;
+    let v6 = false;
+    try {
+      eq = await c.dayEqPool();
+      v6 = true;
+    } catch (_) {
+      eq = null;
+    }
+    if (v6) {
+      try {
+        players = await c.dayPlayerCount();
+      } catch (_) {
+        players = 0n;
+      }
+      try {
+        topN = await c.topLen();
+      } catch (_) {
+        topN = 0n;
+      }
+    }
+    const daily = d + (eq || 0n);
+    return {
+      week: daily,
+      day: daily,
+      dayScore: v6 ? d : daily,
+      dayEq: eq,
+      dayPlayers: players,
+      topLen: topN,
+      v6,
+      invite: i,
+      burned,
+      free,
+      total: daily + i,
+    };
   }
 
   async function pendingOf(addr = account) {
@@ -300,8 +347,15 @@ const CatboxChain = (() => {
     await connect();
     if (!isOwner()) throw new Error("NOT_OWNER");
     const s = await signer();
-    const tx = await gameContract(s).withdrawDaily(amountWei);
-    return (await tx.wait()).hash;
+    const game = gameContract(s);
+    try {
+      await game.withdrawDaily.staticCall(amountWei);
+      const tx = await game.withdrawDaily(amountWei);
+      return (await tx.wait()).hash;
+    } catch (_) {
+      const tx = await game.withdrawWeekly(amountWei);
+      return (await tx.wait()).hash;
+    }
   }
 
   async function setTicketPrice(tierId, limAmount) {
