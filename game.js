@@ -932,7 +932,7 @@ let lastFinish = null;
 
 function refreshOver() {
   if (!lastFinish || over.classList.contains("hidden")) return;
-  const { cap, ticket, got, leftover, score, coins, whyKey, rank, burned, burnHash, payout, bps } = lastFinish;
+  const { cap, ticket, got, leftover, score, coins, whyKey, rank, burned, burnHash, payout, bps, free } = lastFinish;
   const fail = String(whyKey || "").startsWith("die");
   const whyEl = $("overWhy");
   if (whyEl) {
@@ -966,7 +966,7 @@ function refreshOver() {
   });
   const posted = $("overPosted");
   if (posted) {
-    posted.textContent = t("overPosted", { rank: rank || "—" });
+    posted.textContent = free ? t("overPostedSkip") : t("overPosted", { rank: rank || "—" });
   }
   const burnEl = $("overBurn");
   if (burnEl) {
@@ -1013,7 +1013,7 @@ async function payAndStart() {
     const hash = await CatboxChain.approveAndEnter(selected.id);
     status.innerHTML = `<a href="${CatboxChain.txUrl(hash)}" target="_blank" rel="noopener">${hash.slice(0, 10)}…</a>`;
     enterPlay();
-    startRun(selected, teach);
+    startRun(selected, teach, free);
   } catch (e) {
     const msg = e?.message || "";
     if (msg === "NO_WALLET") status.textContent = t("noWallet");
@@ -1189,9 +1189,10 @@ function bootTutorial() {
   };
 }
 
-function startRun(tier, teach) {
+function startRun(tier, teach, freeRun) {
   run = {
     tier,
+    free: Boolean(freeRun),
     t: 0,
     dist: 0,
     coins: 0,
@@ -2316,7 +2317,8 @@ function finish(whyKey) {
   const got = run.collected;
   const leftover = Math.max(0, +(ticket - got).toFixed(6));
   const score = boardScore();
-  const rank = postBoard(score, run.tier.id);
+  const dailyScore = run.free ? 0 : score;
+  const rank = run.free ? 0 : postBoard(score, run.tier.id);
   lastFinish = {
     cap,
     ticket,
@@ -2326,6 +2328,7 @@ function finish(whyKey) {
     coins: run.coins,
     whyKey,
     rank,
+    free: Boolean(run.free),
     burned: leftover > 0 ? +(leftover * 0.3).toFixed(6) : 0,
     burnHash: "",
     tx: "",
@@ -2334,7 +2337,7 @@ function finish(whyKey) {
   };
   show(over);
   refreshOver();
-  settleOnchain(got, ticket, score);
+  settleOnchain(got, ticket, dailyScore);
 }
 
 async function settleOnchain(got, ticket, score) {

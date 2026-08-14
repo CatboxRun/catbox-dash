@@ -75,6 +75,7 @@ contract CatboxDash {
         uint256 paid;
         uint64 startedAt;
         bool settled;
+        bool free;
     }
     mapping(uint256 => Run) public runs;
     mapping(address => uint256) public activeRun;
@@ -192,7 +193,7 @@ contract CatboxDash {
         if (ref != address(0)) _addInvite(ref, 10);
 
         runId = nextRunId++;
-        runs[runId] = Run(msg.sender, price, uint64(block.timestamp), false);
+        runs[runId] = Run(msg.sender, price, uint64(block.timestamp), false, free);
         activeRun[msg.sender] = runId;
         ticketFloat += price;
         emit RunStarted(runId, msg.sender, ref, price);
@@ -287,8 +288,10 @@ contract CatboxDash {
         uint256 leftover = r.paid - collected;
         uint256 burned = 0;
         if (payout > 0) _push(r.player, payout);
-        _markPlayed(r.player);
-        if (score > 0) _addDay(r.player, score);
+        if (!r.free) {
+            _markPlayed(r.player);
+            if (score > 0) _addDay(r.player, score);
+        }
         if (leftover > 0) {
             uint256 toInvite = leftover * 20 / 100;
             uint256 toDay = leftover * 50 / 100;
