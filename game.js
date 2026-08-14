@@ -385,6 +385,21 @@ function bootSwap() {
   });
   $("swapFrom").onchange = () => {
     $("swapStatus")?.classList.remove("ok");
+    syncSwapPair("from");
+    refreshSwap();
+  };
+  $("swapTo").onchange = () => {
+    $("swapStatus")?.classList.remove("ok");
+    syncSwapPair("to");
+    refreshSwap();
+  };
+  $("swapFlip").onclick = () => {
+    $("swapStatus")?.classList.remove("ok");
+    const from = $("swapFrom").value;
+    const to = $("swapTo").value;
+    $("swapFrom").value = to;
+    $("swapTo").value = from;
+    syncSwapPair("from");
     refreshSwap();
   };
   $("swapAmt").oninput = () => {
@@ -395,10 +410,28 @@ function bootSwap() {
   $("swapGo").onclick = doSwap;
 }
 
+function syncSwapPair(changed) {
+  const fromEl = $("swapFrom");
+  const toEl = $("swapTo");
+  if (!fromEl || !toEl) return;
+  if (changed === "from") {
+    if (fromEl.value === "LIM") {
+      if (toEl.value === "LIM") toEl.value = "USDT";
+    } else {
+      toEl.value = "LIM";
+    }
+  } else if (toEl.value === "LIM") {
+    if (fromEl.value === "LIM") fromEl.value = "USDT";
+  } else {
+    fromEl.value = "LIM";
+  }
+}
+
 async function refreshSwap() {
   const modal = $("swapModal");
   if (!modal || modal.classList.contains("hidden")) return;
   const from = $("swapFrom").value;
+  const to = $("swapTo")?.value || "LIM";
   const raw = $("swapAmt").value;
   const status = $("swapStatus");
   try {
@@ -412,7 +445,7 @@ async function refreshSwap() {
       $("swapOut").value = "0";
       return;
     }
-    const q = await CatboxChain.quoteLim(from, ethers.parseUnits(String(raw), 18));
+    const q = await CatboxChain.quoteSwap(from, to, ethers.parseUnits(String(raw), 18));
     if (!q.path || q.out === 0n) {
       $("swapOut").value = "0";
       if (status && !status.classList.contains("ok")) status.textContent = t("swapNoLiq");
@@ -544,13 +577,22 @@ async function doSwap() {
   const status = $("swapStatus");
   const raw = $("swapAmt").value;
   if (!raw || Number(raw) <= 0) return;
+  const from = $("swapFrom").value;
+  const to = $("swapTo")?.value || "LIM";
   const expect = $("swapOut")?.value;
   status.classList.remove("ok");
   try {
     status.textContent = t("swapping");
-    const hash = await CatboxChain.swapToLim($("swapFrom").value, ethers.parseUnits(String(raw), 18));
+    const hash = await CatboxChain.swapExact(from, to, ethers.parseUnits(String(raw), 18));
     const n = expect && expect !== "0" ? expect : "";
-    const msg = n ? t("swapOkAmt", { n }) : t("swapOk");
+    const selling = from === "LIM";
+    const msg = selling
+      ? n
+        ? t("swapSellOkAmt", { n, sym: to })
+        : t("swapSellOk", { sym: to })
+      : n
+        ? t("swapOkAmt", { n })
+        : t("swapOk");
     try {
       await refreshWalletUi();
       await refreshSwap();

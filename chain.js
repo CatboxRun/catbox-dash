@@ -446,10 +446,11 @@ const CatboxChain = (() => {
   const CL_QUOTER = "0xd0737C9762912dD34c3271197E362Aa736Df0926";
   const MIXED_QUOTER = "0x2dCbF7B985c8C5C931818e4E107bAe8aaC8dAB7C";
   const PERMIT2 = "0x31c2F6fcFf4F8759b3Bd5Bf0e1084A055615C768";
+  const MSG_SENDER = "0x0000000000000000000000000000000000000001";
   const ADDRESS_THIS = "0x0000000000000000000000000000000000000002";
   const CONTRACT_BALANCE = 1n << 255n;
-  const CMD = { V2_SWAP_EXACT_IN: 0x08, WRAP_ETH: 0x0b, INFI_SWAP: 0x10 };
-  const ACT = { CL_SWAP_EXACT_IN_SINGLE: 0x06, SETTLE: 0x0b, SETTLE_ALL: 0x0c, TAKE_ALL: 0x0f };
+  const CMD = { V2_SWAP_EXACT_IN: 0x08, WRAP_ETH: 0x0b, UNWRAP_WETH: 0x0c, INFI_SWAP: 0x10 };
+  const ACT = { CL_SWAP_EXACT_IN_SINGLE: 0x06, SETTLE: 0x0b, SETTLE_ALL: 0x0c, TAKE: 0x0e, TAKE_ALL: 0x0f };
   const POOL_TUPLE =
     "tuple(address currency0,address currency1,address hooks,address poolManager,uint24 fee,bytes32 parameters)";
   const QUOTE_ABI = [
@@ -508,13 +509,23 @@ const CatboxChain = (() => {
     );
   }
 
-  function encodeInfiFromUser(pool, amountIn, minOut) {
+  function encodeInfiFromUser(pool, tokenIn, tokenOut, amountIn, minOut) {
     const coder = ethers.AbiCoder.defaultAbiCoder();
-    const zeroForOne = sameAddr(USDT, pool.currency0);
+    const zeroForOne = sameAddr(tokenIn, pool.currency0);
     return encodePlan([
       { act: ACT.CL_SWAP_EXACT_IN_SINGLE, data: clSwapData(pool, amountIn, minOut, zeroForOne) },
-      { act: ACT.SETTLE_ALL, data: coder.encode(["address", "uint256"], [USDT, ethers.MaxUint256]) },
-      { act: ACT.TAKE_ALL, data: coder.encode(["address", "uint256"], [cfg.lim, minOut]) },
+      { act: ACT.SETTLE_ALL, data: coder.encode(["address", "uint256"], [tokenIn, ethers.MaxUint256]) },
+      { act: ACT.TAKE_ALL, data: coder.encode(["address", "uint256"], [tokenOut, minOut]) },
+    ]);
+  }
+
+  function encodeInfiTakeToRouter(pool, tokenIn, tokenOut, amountIn, minOut) {
+    const coder = ethers.AbiCoder.defaultAbiCoder();
+    const zeroForOne = sameAddr(tokenIn, pool.currency0);
+    return encodePlan([
+      { act: ACT.CL_SWAP_EXACT_IN_SINGLE, data: clSwapData(pool, amountIn, minOut, zeroForOne) },
+      { act: ACT.SETTLE_ALL, data: coder.encode(["address", "uint256"], [tokenIn, ethers.MaxUint256]) },
+      { act: ACT.TAKE, data: coder.encode(["address", "address", "uint256"], [tokenOut, ADDRESS_THIS, 0]) },
     ]);
   }
 
@@ -535,13 +546,13 @@ const CatboxChain = (() => {
     );
   }
 
-  async function quoteUsdtToLim(amountIn, p) {
+  async function quoteInfi(tokenIn, amountIn, p) {
     const pool = limPool();
     if (!pool) return 0n;
     const q = new ethers.Contract(CL_QUOTER, QUOTE_ABI, p);
     const r = await q.quoteExactInputSingle.staticCall({
       poolKey: pool,
-      zeroForOne: sameAddr(USDT, pool.currency0),
+      zeroForOne: sameAddr(tokenIn, pool.currency0),
       exactAmount: amountIn,
       hookData: "0x",
     });
@@ -561,27 +572,55 @@ const CatboxChain = (() => {
     return r[0];
   }
 
-  async function quoteV2Usdt(amountIn, p) {
+  async function quoteLimToBnb(amountIn, p) {
+    const pool = limPool();
+    if (!pool) return 0n;
     const q = new ethers.Contract(MIXED_QUOTER, MIXED_ABI, p);
-    const r = await q.quoteExactInputSingleV2.staticCall({ tokenIn: WBNB, tokenOut: USDT, amountIn });
+    try {
+      const r = await q.quoteMixedExactInput.staticCall(
+        [cfg.lim, USDT, WBNB],
+        "0x0402",
+        [mixedInfiParam(pool), "0x"],
+        amountIn,
+      );
+      if (r[0] > 0n) return r[0];
+    } catch (_) {}
+    const usdtOut = await quoteInfi(cfg.lim, amountIn, p);
+    if (usdtOut === 0n) return 0n;
+    return quoteV2(USDT, WBNB, usdtOut, p);
+  }
+
+  async function quoteV2(tokenIn, tokenOut, amountIn, p) {
+    const q = new ethers.Contract(MIXED_QUOTER, MIXED_ABI, p);
+    const r = await q.quoteExactInputSingleV2.staticCall({ tokenIn, tokenOut, amountIn });
     return r[0];
   }
 
-  async function quoteLim(fromSym, amountIn) {
-    if (!amountIn || amountIn === 0n || amountIn > U128) return { out: 0n, path: null };
+  async function quoteSwap(fromSym, toSym, amountIn) {
+    if (!amountIn || amountIn === 0n || amountIn > U128 || fromSym === toSym) return { out: 0n, path: null };
     const pool = limPool();
     if (!pool) return { out: 0n, path: null };
     const p = await readProvider();
     try {
-      if (fromSym === "USDT") {
-        const out = await quoteUsdtToLim(amountIn, p);
-        if (out > 0n) return { out, path: "infinity", via: "usdt", pool, kind: "CL", zeroForOne: false };
-      } else {
+      if (fromSym === "USDT" && toSym === "LIM") {
+        const out = await quoteInfi(USDT, amountIn, p);
+        if (out > 0n) return { out, path: "infinity", via: "usdt", pool, kind: "CL" };
+      } else if (fromSym === "BNB" && toSym === "LIM") {
         const out = await quoteBnbToLim(amountIn, p);
-        if (out > 0n) return { out, path: "infinity", via: "bnb-v2", pool, kind: "CL", zeroForOne: false };
+        if (out > 0n) return { out, path: "infinity", via: "bnb-v2", pool, kind: "CL" };
+      } else if (fromSym === "LIM" && toSym === "USDT") {
+        const out = await quoteInfi(cfg.lim, amountIn, p);
+        if (out > 0n) return { out, path: "infinity", via: "usdt", pool, kind: "CL" };
+      } else if (fromSym === "LIM" && toSym === "BNB") {
+        const out = await quoteLimToBnb(amountIn, p);
+        if (out > 0n) return { out, path: "infinity", via: "bnb-v2", pool, kind: "CL" };
       }
     } catch (_) {}
     return { out: 0n, path: null };
+  }
+
+  async function quoteLim(fromSym, amountIn) {
+    return quoteSwap(fromSym, "LIM", amountIn);
   }
 
   async function tokenBalance(sym, addr = account) {
@@ -608,9 +647,9 @@ const CatboxChain = (() => {
     }
   }
 
-  async function swapToLim(fromSym, amountIn) {
+  async function swapExact(fromSym, toSym, amountIn) {
     await connect();
-    const quoted = await quoteLim(fromSym, amountIn);
+    const quoted = await quoteSwap(fromSym, toSym, amountIn);
     if (!quoted.path || quoted.out === 0n) throw new Error("NO_LIQ");
     const pool = quoted.pool || limPool();
     if (!pool?.currency0) throw new Error("NO_LIQ");
@@ -622,12 +661,12 @@ const CatboxChain = (() => {
     const coder = ethers.AbiCoder.defaultAbiCoder();
     let commands;
     let inputs;
-    if (fromSym !== "BNB") {
+    if (fromSym === "USDT" && toSym === "LIM") {
       await ensurePermit2(USDT, amountIn, s);
       commands = cmds(CMD.INFI_SWAP);
-      inputs = [encodeInfiFromUser(pool, amountIn, minOut)];
-    } else {
-      const usdtOut = await quoteV2Usdt(amountIn, p);
+      inputs = [encodeInfiFromUser(pool, USDT, cfg.lim, amountIn, minOut)];
+    } else if (fromSym === "BNB" && toSym === "LIM") {
+      const usdtOut = await quoteV2(WBNB, USDT, amountIn, p);
       if (usdtOut === 0n) throw new Error("NO_LIQ");
       const minUsdt = (usdtOut * 99n) / 100n;
       commands = cmds(CMD.WRAP_ETH, CMD.V2_SWAP_EXACT_IN, CMD.INFI_SWAP);
@@ -636,11 +675,32 @@ const CatboxChain = (() => {
         coder.encode(["address", "uint256", "uint256", "address[]", "bool"], [ADDRESS_THIS, amountIn, minUsdt, [WBNB, USDT], false]),
         encodeInfiFromRouterCredit(pool, minOut),
       ];
+    } else if (fromSym === "LIM" && toSym === "USDT") {
+      await ensurePermit2(cfg.lim, amountIn, s);
+      commands = cmds(CMD.INFI_SWAP);
+      inputs = [encodeInfiFromUser(pool, cfg.lim, USDT, amountIn, minOut)];
+    } else if (fromSym === "LIM" && toSym === "BNB") {
+      const usdtOut = await quoteInfi(cfg.lim, amountIn, p);
+      if (usdtOut === 0n) throw new Error("NO_LIQ");
+      const minUsdt = (usdtOut * 99n) / 100n;
+      await ensurePermit2(cfg.lim, amountIn, s);
+      commands = cmds(CMD.INFI_SWAP, CMD.V2_SWAP_EXACT_IN, CMD.UNWRAP_WETH);
+      inputs = [
+        encodeInfiTakeToRouter(pool, cfg.lim, USDT, amountIn, minUsdt),
+        coder.encode(["address", "uint256", "uint256", "address[]", "bool"], [ADDRESS_THIS, CONTRACT_BALANCE, minOut, [USDT, WBNB], false]),
+        coder.encode(["address", "uint256"], [MSG_SENDER, minOut]),
+      ];
+    } else {
+      throw new Error("NO_LIQ");
     }
     const tx = await ur.execute(commands, inputs, deadline, {
       value: fromSym === "BNB" ? amountIn : 0n,
     });
     return (await tx.wait()).hash;
+  }
+
+  async function swapToLim(fromSym, amountIn) {
+    return swapExact(fromSym, "LIM", amountIn);
   }
 
   function toRows(map, youAddr) {
@@ -743,7 +803,9 @@ const CatboxChain = (() => {
     txUrl,
     addrUrl,
     quoteLim,
+    quoteSwap,
     swapToLim,
+    swapExact,
     tokenBalance,
     fetchLeaderboards,
     fetchBurns,
