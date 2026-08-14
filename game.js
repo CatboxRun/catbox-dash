@@ -429,6 +429,9 @@ const canvas = $("cv");
 const ctx = canvas.getContext("2d");
 ctx.imageSmoothingEnabled = false;
 
+const BASE_GROUND = 400;
+const PLAYER_SX = 160;
+
 const imgCoin = new Image();
 imgCoin.src = "./assets/coin.png?v=2";
 const imgCat = new Image();
@@ -701,9 +704,11 @@ function startRun(tier) {
     coyote: 0,
     y: 340,
     vy: 0,
-    ground: 400,
+    ground: BASE_GROUND,
+    scroll: 0,
+    terrain: [{ kind: "flat", x0: -480, x1: 1000, y: BASE_GROUND }],
+    nextTerrain: 1000,
     objects: [],
-    spawn: 28,
     lastHazard: -999,
     night: false,
     popped: [],
@@ -739,41 +744,162 @@ function spawnCoin(run, x, y) {
   run.objects.push({ kind: "coin", x, y, hit: false, amount, gold });
 }
 
-function spawn(run) {
+function hash11(n) {
+  const s = Math.sin(n * 127.1 + 311.7) * 43758.5453;
+  return s - Math.floor(s);
+}
+
+function groundAt(run, wx) {
+  let y = BASE_GROUND;
+  for (let i = 0; i < run.terrain.length; i++) {
+    const s = run.terrain[i];
+    if (wx >= s.x0 && wx < s.x1) {
+      if (s.kind === "hill" || s.kind === "bump") {
+        const t = (wx - s.x0) / Math.max(1, s.x1 - s.x0);
+        const h = (1 - Math.cos(t * Math.PI * 2)) * 0.5;
+        y = s.y - s.peak * h;
+      } else {
+        y = s.y;
+      }
+      break;
+    }
+  }
+  return Math.round(y * 0.5) * 2;
+}
+
+function isGapAt(run, wx) {
+  for (let i = 0; i < run.terrain.length; i++) {
+    const s = run.terrain[i];
+    if (s.kind === "gap" && wx >= s.x0 + 12 && wx < s.x1 - 12) return true;
+  }
+  return false;
+}
+
+function spawnCoinW(run, wx, wy) {
+  spawnCoin(run, wx - run.scroll, wy);
+}
+
+function coinArc(run, x0, x1) {
+  const n = 4 + Math.floor(Math.random() * 3);
+  for (let i = 0; i < n; i++) {
+    const t = (i + 0.5) / n;
+    const wx = x0 + t * (x1 - x0);
+    const gy = groundAt(run, wx);
+    const lift = Math.sin(t * Math.PI) * (46 + Math.random() * 30);
+    spawnCoinW(run, wx, gy - 30 - lift);
+  }
+}
+
+function pushFlat(run, x0, x1) {
+  run.terrain.push({ kind: "flat", x0, x1, y: BASE_GROUND });
+}
+
+function ensureTerrain(run) {
+  const need = run.scroll + canvas.width + 160;
+  while (run.nextTerrain < need) addTerrainChunk(run);
+  if (run.terrain.length > 20) {
+    const cut = run.scroll - 240;
+    run.terrain = run.terrain.filter((s) => s.x1 > cut);
+  }
+}
+
+function addTerrainChunk(run) {
   const p = progress(run);
-  const x = canvas.width + 40;
-  const roll = Math.random();
+  let x = run.nextTerrain;
+  const bag = run.bagI < run.bag.length;
+  if (!bag) {
+    pushFlat(run, x, x + 480);
+    run.nextTerrain = x + 480;
+    return;
+  }
+
   const sinceHazard = run.t - run.lastHazard;
   const minGap = 108 - p * 22;
+  const roll = Math.random();
+  const pad = 32 + Math.floor(Math.random() * 28);
+  pushFlat(run, x, x + pad);
+  x += pad;
 
-  if (run.bagI < run.bag.length && (roll < 0.72 || p < 0.12 || sinceHazard < minGap)) {
-    const low = Math.random() < 0.32;
-    const mid = low ? 368 + Math.random() * 18 : 252 + Math.random() * 52;
-    spawnCoin(run, x, mid);
-    if (roll > 0.55) spawnCoin(run, x + 50, low ? mid - 56 : mid - 40);
-    if (roll > 0.88) spawnCoin(run, x + 96, low ? 370 : mid + 18);
+  const wantSafe = p < 0.1 || roll < 0.58 || sinceHazard < minGap;
+
+  if (wantSafe) {
+    const flavor = Math.random();
+    if (flavor < 0.4 && p > 0.02) {
+      const w = 260 + Math.floor(Math.random() * 150);
+      const peak = 30 + Math.floor(Math.random() * 38);
+      run.terrain.push({ kind: "hill", x0: x, x1: x + w, y: BASE_GROUND, peak });
+      coinArc(run, x, x + w);
+      x += w;
+    } else if (flavor < 0.58 && p > 0.12) {
+      const w = 84 + Math.floor(Math.random() * 32);
+      const peak = 18 + Math.floor(Math.random() * 12);
+      run.terrain.push({ kind: "bump", x0: x, x1: x + w, y: BASE_GROUND, peak });
+      spawnCoinW(run, x + w * 0.5, BASE_GROUND - peak - 48);
+      spawnCoinW(run, x + w * 0.26, BASE_GROUND - peak * 0.55 - 36);
+      spawnCoinW(run, x + w * 0.74, BASE_GROUND - peak * 0.55 - 36);
+      x += w;
+    } else {
+      const w = 140 + Math.floor(Math.random() * 80);
+      pushFlat(run, x, x + w);
+      const low = Math.random() < 0.32;
+      const mid = low ? BASE_GROUND - 32 + Math.random() * 18 : BASE_GROUND - 148 + Math.random() * 52;
+      spawnCoinW(run, x + 40, mid);
+      if (Math.random() > 0.4) spawnCoinW(run, x + 90, low ? mid - 56 : mid - 40);
+      if (Math.random() > 0.75) spawnCoinW(run, x + 136, low ? BASE_GROUND - 30 : mid + 18);
+      x += w;
+    }
+    run.nextTerrain = x;
     return;
   }
 
-  if (p < 0.3 || roll < 0.82) {
-    run.objects.push({ kind: "light", x, w: 70 + p * 24, phase: 0, slow: 0.02 + p * 0.016 });
+  if (p < 0.3 || roll < 0.8) {
+    const w = 128 + Math.floor(p * 24);
+    pushFlat(run, x, x + w);
+    run.objects.push({
+      kind: "light",
+      x: x + 24 - run.scroll,
+      w: 70 + p * 24,
+      phase: 0,
+      slow: 0.02 + p * 0.016,
+    });
     run.lastHazard = run.t;
-    return;
-  }
-
-  if (p < 0.5 || roll < 0.92) {
-    run.objects.push({ kind: "beam", x, y: run.ground - 40, w: 20, h: 40 });
+    x += w;
+  } else if (p < 0.5 || roll < 0.91) {
+    const w = 108;
+    pushFlat(run, x, x + w);
+    const style = Math.random() < 0.42 ? "brick" : "pipe";
+    const h = style === "brick" ? 26 : 46 + Math.floor(Math.random() * 22);
+    const bw = style === "brick" ? 32 : 28;
+    const wx = x + 40;
+    run.objects.push({
+      kind: "beam",
+      x: wx - run.scroll,
+      y: BASE_GROUND - h,
+      w: bw,
+      h,
+      style,
+    });
+    if (Math.random() > 0.32) {
+      spawnCoinW(run, wx + 54, BASE_GROUND - h - 52);
+      spawnCoinW(run, wx + 94, BASE_GROUND - h - 28);
+    }
     run.lastHazard = run.t;
-    return;
+    x += w;
+  } else {
+    const gw = 52 + p * 18;
+    const ap = 72;
+    pushFlat(run, x, x + ap);
+    run.terrain.push({ kind: "gap", x0: x + ap, x1: x + ap + gw, y: BASE_GROUND });
+    pushFlat(run, x + ap + gw, x + ap + gw + ap);
+    run.lastHazard = run.t;
+    x += ap + gw + ap;
   }
-
-  run.objects.push({ kind: "gap", x, w: 52 + p * 18 });
-  run.lastHazard = run.t;
+  run.nextTerrain = x;
 }
 
 function jump() {
   if (!run || run.dead) return;
-  const onFloor = run.y >= run.ground - 1 || run.coyote > 0;
+  const onFloor = run.y >= run.ground - 2 || run.coyote > 0;
   if (onFloor && run.jumps === 0) {
     run.vy = -12.4;
     run.jumps = 1;
@@ -840,36 +966,53 @@ function tick() {
   if (tier.id === 3 && p > 0.35) run.night = true;
   run.t += 1;
   run.dist += spd * 0.35;
-  run.spawn -= 1;
-  if (run.spawn <= 0) {
-    if (run.bagI < run.bag.length) {
-      spawn(run);
-      run.spawn = 70 - p * 28 + Math.random() * 18;
-    } else {
-      run.spawn = 40;
-    }
-  }
+  run.scroll += spd;
+  ensureTerrain(run);
 
-  const onFloor = run.y >= run.ground - 1;
-  if (onFloor) run.coyote = 8;
-  else if (run.coyote > 0) run.coyote -= 1;
+  const px = PLAYER_SX;
+  const pwx = run.scroll + px;
+  const gy = groundAt(run, pwx);
+  const overGap = isGapAt(run, pwx);
+  run.ground = gy;
 
-  run.vy += 0.48;
-  run.y += run.vy;
-  if (run.y > run.ground) {
-    run.y = run.ground;
+  const stick =
+    !overGap &&
+    run.jumps === 0 &&
+    run.vy >= 0 &&
+    run.y >= gy - 8 &&
+    run.y <= gy + 16;
+
+  if (stick) {
+    run.y = gy;
     run.vy = 0;
-    run.jumps = 0;
+    run.coyote = 8;
+  } else {
+    if (!overGap && run.y >= gy - 1) run.coyote = 8;
+    else if (run.coyote > 0) run.coyote -= 1;
+    run.vy += 0.48;
+    run.y += run.vy;
+    if (!overGap && run.y > gy) {
+      run.y = gy;
+      run.vy = 0;
+      run.jumps = 0;
+    }
   }
   if (run.invuln > 0) run.invuln -= 1;
 
-  const px = 160;
   const py = run.y;
   const hb = { x: px - 14, y: py - 20, w: 28, h: 32 };
+
+  if (overGap && py >= gy - 2) {
+    finish("dieGap");
+    return;
+  }
 
   for (const o of run.objects) {
     o.x -= spd;
     if (o.kind === "light") o.phase += o.slow || 0.02;
+    if (o.kind === "beam") {
+      o.y = groundAt(run, run.scroll + o.x + o.w / 2) - o.h;
+    }
 
     if (o.kind === "coin" && !o.hit && dist(px, py, o.x, o.y) < (o.gold ? 42 : 34)) {
       o.hit = true;
@@ -898,14 +1041,12 @@ function tick() {
     }
     if (o.kind === "light") {
       const on = Math.sin(o.phase) > 0.62;
-      if (on && aabb(hb.x, hb.y, hb.w, hb.h, o.x, 40, o.w, 260)) {
+      const lgy = groundAt(run, run.scroll + o.x + o.w / 2);
+      const lh = Math.max(90, lgy - 92);
+      if (on && aabb(hb.x, hb.y, hb.w, hb.h, o.x, 40, o.w, lh)) {
         finish("dieLight");
         return;
       }
-    }
-    if (o.kind === "gap" && py >= run.ground - 2 && px > o.x + 10 && px < o.x + o.w - 10) {
-      finish("dieGap");
-      return;
     }
   }
   run.objects = run.objects.filter((o) => o.x > -120 && !(o.kind === "coin" && o.hit));
@@ -936,62 +1077,303 @@ function aabb(x, y, w, h, x2, y2, w2, h2) {
   return x < x2 + w2 && x + w > x2 && y < y2 + h2 && y + h > y2;
 }
 
+function worldPal(night, veil) {
+  if (night) {
+    return {
+      skyTop: "#070b14",
+      skyMid: "#0c1828",
+      skyHor: "#152238",
+      far: "#0a1624",
+      mid: "#102030",
+      near: "#163044",
+      bush: "#152838",
+      bushHi: "#3a5048",
+      cloud: "#1a2838",
+      dirt: "#121c28",
+      dirtDk: "#0b1218",
+      grass: "#3a4a38",
+      lip: "#a88438",
+      pit: "#05080c",
+      pit2: "#0a1018",
+    };
+  }
+  return {
+    skyTop: veil ? "#2a4a6c" : "#3a6a94",
+    skyMid: veil ? "#1e3a58" : "#2a5080",
+    skyHor: veil ? "#8a7048" : "#c4a05a",
+    far: "#1a3a58",
+    mid: "#245070",
+    near: "#2c5a78",
+    bush: "#2a5a48",
+    bushHi: "#e6b84c",
+    cloud: "#d6e6ff",
+    dirt: "#2a4a63",
+    dirtDk: "#1a3348",
+    grass: "#3d7a58",
+    lip: "#e6b84c",
+    pit: "#070b12",
+    pit2: "#0a1018",
+  };
+}
+
+function fillHill(x, baseY, w, h, color) {
+  ctx.fillStyle = color;
+  for (let i = 0; i < h; i += 3) {
+    const t = i / h;
+    const half = (w / 2) * Math.sqrt(Math.max(0, 1 - t * t));
+    ctx.fillRect(
+      Math.round(x + w / 2 - half),
+      Math.round(baseY - i - 3),
+      Math.max(2, Math.round(half * 2)),
+      4,
+    );
+  }
+}
+
+function drawPixelCloud(x, y, s, color) {
+  ctx.fillStyle = color;
+  ctx.fillRect(x, y, 26 * s, 10 * s);
+  ctx.fillRect(x + 8 * s, y - 6 * s, 16 * s, 10 * s);
+  ctx.fillRect(x + 18 * s, y - 2 * s, 12 * s, 8 * s);
+  ctx.fillRect(x - 4 * s, y + 2 * s, 10 * s, 6 * s);
+}
+
+function drawBush(x, y, pal) {
+  ctx.fillStyle = pal.bush;
+  ctx.fillRect(x, y - 12, 28, 12);
+  ctx.fillRect(x + 6, y - 20, 16, 10);
+  ctx.fillRect(x + 14, y - 16, 18, 10);
+  ctx.fillStyle = pal.bushHi;
+  ctx.fillRect(x + 8, y - 16, 4, 4);
+}
+
+function drawPipe(o, night) {
+  const x = Math.round(o.x);
+  const y = Math.round(o.y);
+  const w = o.w;
+  const h = o.h;
+  const body = night ? "#1a3048" : "#2a5580";
+  const bodyDk = night ? "#0e1c2c" : "#152238";
+  const capH = 10;
+  ctx.fillStyle = body;
+  ctx.fillRect(x, y + capH - 2, w, h - capH + 2);
+  ctx.fillStyle = bodyDk;
+  ctx.fillRect(x, y + capH - 2, 4, h - capH + 2);
+  ctx.fillStyle = "#e6b84c";
+  ctx.fillRect(x + w - 5, y + capH, 3, Math.max(4, h - capH - 2));
+  ctx.fillStyle = "#d94b3a";
+  ctx.fillRect(x + 2, y + capH + 6, w - 4, 5);
+  ctx.fillStyle = "#e6b84c";
+  ctx.fillRect(x - 4, y, w + 8, capH);
+  ctx.fillStyle = "#c49a4a";
+  ctx.fillRect(x - 4, y + capH - 3, w + 8, 3);
+  ctx.fillStyle = "#152238";
+  ctx.fillRect(x - 4, y, w + 8, 2);
+}
+
+function drawBrick(o, night) {
+  const x = Math.round(o.x);
+  const y = Math.round(o.y);
+  ctx.fillStyle = night ? "#8a7038" : "#e6b84c";
+  ctx.fillRect(x, y, o.w, o.h);
+  ctx.fillStyle = "#152238";
+  ctx.fillRect(x, y, o.w, 2);
+  ctx.fillRect(x, y, 2, o.h);
+  ctx.fillRect(x + o.w - 2, y, 2, o.h);
+  ctx.fillRect(x, y + o.h - 2, o.w, 2);
+  ctx.fillStyle = night ? "#3a3018" : "#c49a4a";
+  ctx.fillRect(x + 4, y + 12, o.w - 8, 2);
+  ctx.fillRect(x + o.w / 2 - 1, y + 2, 2, o.h - 4);
+  ctx.fillStyle = "#ffe08a";
+  ctx.fillRect(x + 4, y + 4, 4, 4);
+}
+
+function drawSky(pal, night, W, H) {
+  const g = ctx.createLinearGradient(0, 0, 0, H);
+  g.addColorStop(0, pal.skyTop);
+  g.addColorStop(0.55, pal.skyMid);
+  g.addColorStop(1, pal.skyHor);
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, W, H);
+  if (night) {
+    for (let i = 0; i < 42; i++) {
+      const sx = (((i * 97 - run.scroll * 0.04) % W) + W) % W;
+      const sy = 16 + (i * 37) % 168;
+      ctx.fillStyle = i % 6 === 0 ? "#e6b84c" : "#d6e6ff";
+      const sz = i % 7 === 0 ? 2 : 1;
+      ctx.fillRect(sx, sy, sz, sz);
+    }
+    ctx.fillStyle = "#e6b84c";
+    ctx.fillRect(736, 44, 28, 28);
+    ctx.fillStyle = pal.skyTop;
+    ctx.fillRect(746, 48, 20, 20);
+  } else {
+    ctx.fillStyle = "#e6b84c";
+    ctx.fillRect(780, 36, 22, 22);
+    ctx.fillStyle = "#ffe08a";
+    ctx.fillRect(786, 42, 8, 8);
+    ctx.fillStyle = "rgba(230, 184, 76, 0.35)";
+    ctx.fillRect(774, 30, 6, 2);
+    ctx.fillRect(802, 30, 6, 2);
+    ctx.fillRect(788, 22, 2, 6);
+  }
+}
+
+function drawParallax(pal, night, W) {
+  const farOff = ((run.scroll * 0.12) % 220 + 220) % 220;
+  for (let x = -200; x < W + 220; x += 180) {
+    fillHill(x - farOff, 318, 210, 86, pal.far);
+  }
+  if (night) {
+    const span = 64;
+    const off = run.scroll * 0.18;
+    const base = Math.floor(off / span);
+    for (let i = -2; i < 18; i++) {
+      const id = base + i;
+      const sx = id * span - off;
+      const hh = 18 + hash11(id * 13) * 36;
+      ctx.fillStyle = "#0a1420";
+      ctx.fillRect(sx, 292 - hh, 16, hh);
+      ctx.fillStyle = "#e6b84c";
+      if (hash11(id + 3) > 0.42) ctx.fillRect(sx + 3, 292 - hh + 6, 3, 3);
+      if (hash11(id + 7) > 0.5) ctx.fillRect(sx + 9, 292 - hh + 14, 3, 3);
+    }
+  }
+  const midOff = ((run.scroll * 0.28) % 260 + 260) % 260;
+  for (let x = -240; x < W + 260; x += 200) {
+    fillHill(x - midOff, 368, 240, 72, pal.mid);
+    fillHill(x - midOff + 90, 358, 150, 54, pal.near);
+  }
+  const cSpan = W + 180;
+  const cOff = run.scroll * 0.08;
+  for (let i = 0; i < 5; i++) {
+    const cx = (((i * 210 - cOff) % cSpan) + cSpan) % cSpan - 50;
+    drawPixelCloud(cx, 40 + (i % 3) * 28, i % 2 ? 2 : 1.5, pal.cloud);
+  }
+  const bOff = run.scroll * 0.52;
+  const bSpan = 80;
+  const bBase = Math.floor(bOff / bSpan);
+  for (let i = -1; i < 14; i++) {
+    const id = bBase + i;
+    if (hash11(id) < 0.52) continue;
+    drawBush(id * bSpan - bOff, 406, pal);
+  }
+}
+
+function drawGround(pal, W, H) {
+  const step = 4;
+  const vis = (sx) => groundAt(run, run.scroll + sx) + 6;
+  let sx = 0;
+  while (sx <= W) {
+    if (isGapAt(run, run.scroll + sx)) {
+      const g0 = sx;
+      while (sx <= W && isGapAt(run, run.scroll + sx)) sx += step;
+      ctx.fillStyle = pal.pit;
+      ctx.fillRect(g0, BASE_GROUND + 6, sx - g0, H - (BASE_GROUND + 6));
+      ctx.fillStyle = pal.pit2;
+      ctx.fillRect(g0 + 4, BASE_GROUND + 28, sx - g0 - 8, H - (BASE_GROUND + 28));
+      ctx.fillStyle = pal.lip;
+      ctx.fillRect(g0, BASE_GROUND + 4, 3, 14);
+      ctx.fillRect(sx - 3, BASE_GROUND + 4, 3, 14);
+      continue;
+    }
+    let e = sx;
+    while (e <= W && !isGapAt(run, run.scroll + e)) e += step;
+    const x1 = Math.min(e, W);
+    ctx.beginPath();
+    ctx.moveTo(sx, H);
+    for (let x = sx; x <= x1; x += step) ctx.lineTo(x, vis(x));
+    ctx.lineTo(x1, H);
+    ctx.closePath();
+    ctx.fillStyle = pal.dirt;
+    ctx.fill();
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(sx, H);
+    for (let x = sx; x <= x1; x += step) ctx.lineTo(x, vis(x));
+    ctx.lineTo(x1, H);
+    ctx.closePath();
+    ctx.clip();
+    ctx.fillStyle = pal.dirtDk;
+    const tOff = -((run.scroll) % 16);
+    for (let tx = tOff; tx < W; tx += 16) ctx.fillRect(tx, 0, 1, H);
+    for (let ty = 280; ty < H; ty += 16) ctx.fillRect(0, ty, W, 1);
+    ctx.restore();
+    ctx.strokeStyle = pal.grass;
+    ctx.lineWidth = 5;
+    ctx.beginPath();
+    for (let x = sx; x <= x1; x += step) {
+      const y = vis(x);
+      if (x === sx) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+    ctx.strokeStyle = pal.lip;
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    for (let x = sx; x <= x1; x += step) {
+      const y = vis(x) - 3;
+      if (x === sx) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+    for (let x = sx + 8; x < x1; x += 48) {
+      const wx = run.scroll + x;
+      if (hash11(Math.floor(wx / 48)) < 0.55) continue;
+      const gy = vis(x);
+      ctx.fillStyle = pal.grass;
+      ctx.fillRect(x, gy - 8, 3, 8);
+      ctx.fillRect(x + 4, gy - 6, 2, 6);
+    }
+    sx = e;
+  }
+}
+
 function draw() {
   const W = canvas.width;
   const H = canvas.height;
   const night = run.night;
   const veil = run.invuln > 0;
+  const pal = worldPal(night, veil);
   ctx.imageSmoothingEnabled = false;
-  ctx.fillStyle = night ? "#0a1524" : veil ? "#1a334c" : "#152238";
-  ctx.fillRect(0, 0, W, H);
-
-  ctx.fillStyle = night ? "#0e1c2c" : "#1c3348";
-  for (let i = 0; i < 24; i++) {
-    const gx = ((i * 48 - (run.t * 2) % 48) );
-    ctx.fillRect(gx, 0, 2, H);
-  }
-
-  const floorY = run.ground + 24;
-  ctx.fillStyle = night ? "#0f2233" : "#2a4a63";
-  ctx.fillRect(0, floorY, W, H - floorY);
-  ctx.fillStyle = "#0b1520";
-  for (let x = -((run.t * 3) % 16); x < W; x += 16) ctx.fillRect(x, floorY, 8, 4);
+  drawSky(pal, night, W, H);
+  drawParallax(pal, night, W);
+  drawGround(pal, W, H);
 
   for (const o of run.objects) {
-    if (o.kind === "gap") {
-      ctx.fillStyle = "#070b12";
-      ctx.fillRect(o.x, floorY - 2, o.w, 90);
-    }
     if (o.kind === "coin" && !o.hit && imgCoin.complete) {
       const s = o.gold ? 52 : 32;
+      if (night) {
+        ctx.fillStyle = "rgba(230, 184, 76, 0.28)";
+        ctx.fillRect(o.x - s * 0.4, o.y - s * 0.4, s * 0.8, s * 0.8);
+      }
       ctx.drawImage(imgCoin, o.x - s / 2, o.y - s / 2, s, s);
     }
     if (o.kind === "beam") {
-      ctx.fillStyle = "#d94b3a";
-      ctx.fillRect(o.x, o.y, o.w, o.h);
-      ctx.fillStyle = "#7a1f16";
-      ctx.fillRect(o.x, o.y + o.h - 6, o.w, 6);
+      if (o.style === "brick") drawBrick(o, night);
+      else drawPipe(o, night);
     }
     if (o.kind === "light") {
       const on = Math.sin(o.phase) > 0.62;
+      const lgy = groundAt(run, run.scroll + o.x + o.w / 2);
       ctx.fillStyle = "#5d738c";
       ctx.fillRect(o.x + o.w / 2 - 8, 24, 16, 8);
       if (on) {
-        ctx.fillStyle = "rgba(255, 210, 80, 0.38)";
+        ctx.fillStyle = night ? "rgba(255, 210, 80, 0.48)" : "rgba(255, 210, 80, 0.38)";
         ctx.beginPath();
         ctx.moveTo(o.x + o.w / 2, 32);
-        ctx.lineTo(o.x + o.w, 300);
-        ctx.lineTo(o.x, 300);
+        ctx.lineTo(o.x + o.w, lgy - 36);
+        ctx.lineTo(o.x, lgy - 36);
         ctx.fill();
       } else {
         ctx.fillStyle = "rgba(93, 115, 140, 0.18)";
-        ctx.fillRect(o.x + o.w / 2 - 2, 32, 4, 180);
+        ctx.fillRect(o.x + o.w / 2 - 2, 32, 4, Math.max(40, lgy - 80));
       }
     }
   }
 
   ctx.save();
-  ctx.translate(160, run.y + (run.y >= run.ground - 1 ? Math.sin(run.t * 0.35) * 2 : 0));
+  ctx.translate(PLAYER_SX, run.y + (run.y >= run.ground - 1 ? Math.sin(run.t * 0.35) * 2 : 0));
   if (imgCat.complete && imgCat.naturalWidth) {
     ctx.drawImage(imgCat, -24, -30, 48, 48);
   } else {

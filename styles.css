@@ -484,12 +484,16 @@ button.primary, button.ghost {
 }
 .bar { height: 10px; background: #0b1220; border: 3px solid var(--line); margin-bottom: 8px; }
 .bar i { display: block; height: 100%; width: 0; background: var(--gold); }
-.stage { position: relative; background: #152238; }
+.stage {
+  position: relative;
+  background: linear-gradient(180deg, #3a6a94 0%, #2a5080 52%, #152238 100%);
+  box-shadow: inset 0 0 0 2px #0b1520, 0 0 0 3px var(--gold);
+}
 #cv {
   width: 100%;
   height: auto;
   display: block;
-  background: #152238;
+  background: #2a5080;
   image-rendering: pixelated;
   touch-action: none;
 }
