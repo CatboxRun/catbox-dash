@@ -130,9 +130,21 @@ const CatboxChain = (() => {
     "https://1rpc.io/bnb",
   ];
 
+  function withTimeout(promise, ms) {
+    let t;
+    return Promise.race([
+      promise.finally(() => clearTimeout(t)),
+      new Promise((_, rej) => {
+        t = setTimeout(() => rej(new Error("TIMEOUT")), ms);
+      }),
+    ]);
+  }
+
   const LOG_RPCS = [
+    "https://bsc.rpc.blxrbdn.com",
     "https://bsc-rpc.publicnode.com",
     "https://bsc.publicnode.com",
+    "https://1rpc.io/bnb",
   ];
   let logsProvider = null;
   let logsOkAt = 0;
@@ -142,12 +154,12 @@ const CatboxChain = (() => {
   }
 
   async function logsReadProvider() {
-    if (logsProvider && Date.now() - logsOkAt < 30000) return logsProvider;
+    if (logsProvider && Date.now() - logsOkAt < 15000) return logsProvider;
     for (const url of LOG_RPCS) {
       try {
         const p = makePublic(url);
-        const n = await p.getBlockNumber();
-        await p.getLogs({ address: cfg.address, fromBlock: n, toBlock: n });
+        const n = await withTimeout(p.getBlockNumber(), 5000);
+        await withTimeout(p.getLogs({ address: cfg.address, fromBlock: n, toBlock: n }), 5000);
         logsProvider = p;
         logsOkAt = Date.now();
         return p;
@@ -983,27 +995,32 @@ const CatboxChain = (() => {
     const p = await logsReadProvider();
     const iface = gameContract(p).interface;
     const topic = iface.getEvent(eventName).topicHash;
-    const latest = await p.getBlockNumber();
-    const chunk = 1200;
+    const latest = await withTimeout(p.getBlockNumber(), 5000);
+    const chunk = 3000;
     const out = [];
+    let fails = 0;
     for (let i = 0; i < maxChunks; i++) {
       const toBlock = latest - i * chunk;
       if (toBlock < 0) break;
       const fromBlock = Math.max(0, toBlock - chunk + 1);
       let got = null;
-      for (let attempt = 0; attempt < 3 && !got; attempt++) {
+      for (let attempt = 0; attempt < 2 && !got; attempt++) {
         try {
-          got = await p.getLogs({
-            address: cfg.address,
-            topics: [topic],
-            fromBlock,
-            toBlock,
-          });
+          got = await withTimeout(
+            p.getLogs({
+              address: cfg.address,
+              topics: [topic],
+              fromBlock,
+              toBlock,
+            }),
+            8000,
+          );
         } catch (_) {
-          await sleep(300 * (attempt + 1));
+          await sleep(200 * (attempt + 1));
         }
       }
       if (got) {
+        fails = 0;
         for (const log of got) {
           try {
             const parsed = iface.parseLog(log);
@@ -1014,8 +1031,15 @@ const CatboxChain = (() => {
             });
           } catch (_) {}
         }
+      } else {
+        fails += 1;
+        if (fails >= 3) {
+          logsProvider = null;
+          logsOkAt = 0;
+          break;
+        }
       }
-      await sleep(120);
+      await sleep(80);
     }
     return out;
   }
@@ -1093,12 +1117,15 @@ const CatboxChain = (() => {
     const spans = [4000, 25000, 120000];
     for (const span of spans) {
       try {
-        const logs = await p.getLogs({
-          address: cfg.address,
-          topics: [topic, idTopic],
-          fromBlock: Math.max(0, latest - span),
-          toBlock: latest,
-        });
+        const logs = await withTimeout(
+          p.getLogs({
+            address: cfg.address,
+            topics: [topic, idTopic],
+            fromBlock: Math.max(0, latest - span),
+            toBlock: latest,
+          }),
+          8000,
+        );
         if (logs && logs.length) {
           const log = logs[logs.length - 1];
           const parsed = iface.parseLog(log);
@@ -1128,28 +1155,63 @@ const CatboxChain = (() => {
   }
 
   async function fetchBurns() {
-    const byId = new Map();
+    const byHash = new Map();
     try {
-      const settledLogs = await fetchRawLogs("RunSettled", 24);
-      for (const log of settledLogs) {
-        const id = Number(log.args.runId);
-        const row = burnRowFromSettled(id, log.args.player, log.args.burned, log.transactionHash);
-        if (row) byId.set(id, row);
+      const burnedLogs = await fetchRawLogs("Burned", 24);
+      for (const log of burnedLogs) {
+        const amt = asAmt(log.args.amount);
+        if (amt <= 0n) continue;
+        const player = log.args.player;
+        if (!player || player === ethers.ZeroAddress) continue;
+        const hash = log.transactionHash || "";
+        const key = hash || `${log.blockNumber}-${player}-${amt.toString()}`;
+        if (byHash.has(key)) continue;
+        byHash.set(key, {
+          player: ethers.getAddress(player),
+          tag: short(player),
+          amount: amt,
+          hash,
+          blockNumber: Number(log.blockNumber) || 0,
+        });
       }
-    } catch (_) {}
+    } catch (_) {
+      logsProvider = null;
+      logsOkAt = 0;
+    }
+
+    if (!byHash.size) {
+      try {
+        const settledLogs = await fetchRawLogs("RunSettled", 24);
+        for (const log of settledLogs) {
+          const row = burnRowFromSettled(
+            Number(log.args.runId),
+            log.args.player,
+            log.args.burned,
+            log.transactionHash,
+          );
+          if (!row) continue;
+          row.blockNumber = Number(log.blockNumber) || 0;
+          byHash.set(log.transactionHash || `run-${row.runId}`, row);
+        }
+      } catch (_) {}
+    }
+
+    if (byHash.size) {
+      return [...byHash.values()]
+        .sort((a, b) => (b.blockNumber || 0) - (a.blockNumber || 0) || (b.runId || 0) - (a.runId || 0))
+        .slice(0, 30);
+    }
 
     try {
       const c = gameContract(await publicReadProvider());
       const p = await logsReadProvider();
       const iface = gameContract(p).interface;
-      const latest = await p.getBlockNumber();
+      const latest = await withTimeout(p.getBlockNumber(), 5000);
       const n = Number(await c.nextRunId());
       if (Number.isFinite(n) && n > 1) {
         const missing = [];
         const from = Math.max(1, n - 80);
-        for (let id = n - 1; id >= from && missing.length < 24; id--) {
-          if (!byId.has(id)) missing.push(id);
-        }
+        for (let id = n - 1; id >= from && missing.length < 24; id--) missing.push(id);
         const batch = 6;
         for (let i = 0; i < missing.length; i += batch) {
           const chunk = missing.slice(i, i + batch);
@@ -1160,14 +1222,14 @@ const CatboxChain = (() => {
             const rec = found[j];
             if (!rec) return;
             const row = burnRowFromSettled(id, rec.player, rec.burned, rec.hash);
-            if (row) byId.set(id, row);
+            if (row) byHash.set(row.hash || `run-${id}`, row);
           });
         }
       }
     } catch (_) {}
 
-    return [...byId.values()]
-      .sort((a, b) => (b.runId || 0) - (a.runId || 0))
+    return [...byHash.values()]
+      .sort((a, b) => (b.runId || 0) - (a.runId || 0) || (b.blockNumber || 0) - (a.blockNumber || 0))
       .slice(0, 30);
   }
 

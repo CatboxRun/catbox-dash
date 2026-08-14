@@ -218,7 +218,7 @@ async function refreshWalletUi() {
   const dead = $("deadLink");
   if (dead && window.CatboxChain?.cfg?.dead) {
     dead.href = CatboxChain.addrUrl(CatboxChain.cfg.dead);
-    dead.textContent = CatboxChain.short(CatboxChain.cfg.dead);
+    dead.textContent = CatboxChain.cfg.dead;
   }
   if (!btn) return;
   if (!window.ethereum) {

@@ -462,7 +462,7 @@ h1 { font-size: 16px; line-height: 1.6; margin: 0 0 14px; }
 .rules-fold summary::before { content: "> "; }
 .rules-fold[open] summary::before { content: "v "; }
 .rules-fold .rules { margin: 8px 0 0; }
-.dead-line { font-size: 8px; margin: 0 0 8px; }
+.dead-line { font-size: 8px; margin: 0 0 8px; word-break: break-all; }
 .dead-line a { color: #ff8a7a; }
 .board-list a { color: #8ec0ff; font-size: inherit; }
 .board-list li.empty { color: var(--dim); border: 0; justify-content: flex-start; }
