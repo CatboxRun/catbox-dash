@@ -251,6 +251,18 @@ body:not([data-lang="en"]) .swap-head h2 { font-size: 18px; }
   background: linear-gradient(180deg, var(--gold-hi), var(--gold));
   border-color: #000;
 }
+.meme-line {
+  margin: 16px 0 4px;
+  text-align: center;
+  color: var(--gold-hi);
+  font-size: 8px;
+  letter-spacing: 0.5px;
+  line-height: 1.5;
+}
+body:not([data-lang="en"]) .meme-line {
+  font-size: 13px;
+  letter-spacing: 0;
+}
 .reward-line {
   margin: 0 0 8px;
   color: var(--gold-hi);
