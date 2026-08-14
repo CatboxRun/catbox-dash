@@ -198,9 +198,9 @@ const I18N = {
     copyAddr: "COPY ADDR",
     tiers: {
       0: { name: "SCOUT", blurb: "Two free 1 LIM runs. Warm up. Keep what you catch.", meta: "Daily board" },
-      1: { name: "RUNNER", blurb: "Standard density. 1.5× daily score.", meta: "Daily board" },
-      2: { name: "PHANTOM", blurb: "Ranked. 2× daily score.", meta: "Daily board" },
-      3: { name: "VAULT", blurb: "Elite night later. 3× daily score.", meta: "Daily board" },
+      1: { name: "RUNNER", blurb: "More LIM on the track. 1.5× daily score.", meta: "Daily board" },
+      2: { name: "PHANTOM", blurb: "Bigger ticket. 2× daily score.", meta: "Daily board" },
+      3: { name: "VAULT", blurb: "Most LIM on the track. 3× daily score.", meta: "Daily board" },
     },
   },
   zh: {
@@ -390,9 +390,9 @@ const I18N = {
     copyAddr: "复制地址",
     tiers: {
       0: { name: "侦察", blurb: "新用户免费 2 局。热身开打，捡到的归你。", meta: "日榜" },
-      1: { name: "冲刺", blurb: "标准密度。日榜 1.5×。", meta: "日榜" },
-      2: { name: "幻影", blurb: "高压局。日榜 2×。", meta: "日榜" },
-      3: { name: "金库", blurb: "后期夜间高压。日榜 3×。", meta: "日榜" },
+      1: { name: "冲刺", blurb: "赛道 LIM 更多。日榜 1.5×。", meta: "日榜" },
+      2: { name: "幻影", blurb: "门票更大。日榜 2×。", meta: "日榜" },
+      3: { name: "金库", blurb: "门槛最高。日榜 3×。", meta: "日榜" },
     },
   },
   ja: {
@@ -481,9 +481,9 @@ const I18N = {
     copyAddr: "アドレスコピー",
     tiers: {
       0: { name: "スカウト", blurb: "ウォーミングアップ。", meta: "日次ボード" },
-      1: { name: "ランナー", blurb: "標準密度。スコア 1.5×。", meta: "日次ボード" },
-      2: { name: "ファントム", blurb: "ランク戦。スコア 2×。", meta: "日次ボード" },
-      3: { name: "ヴォルト", blurb: "後半ナイト。スコア 3×。", meta: "日次ボード" },
+      1: { name: "ランナー", blurb: "トラックの LIM が増える。スコア 1.5×。", meta: "日次ボード" },
+      2: { name: "ファントム", blurb: "チケットが大きい。スコア 2×。", meta: "日次ボード" },
+      3: { name: "ヴォルト", blurb: "LIM が一番多い。スコア 3×。", meta: "日次ボード" },
     },
   },
   ko: {
@@ -572,9 +572,9 @@ const I18N = {
     copyAddr: "주소 복사",
     tiers: {
       0: { name: "스카우트", blurb: "워밍업. 티켓 코인을 줍기.", meta: "일간 보드" },
-      1: { name: "러너", blurb: "표준 밀도. 점수 1.5×.", meta: "일간 보드" },
-      2: { name: "팬텀", blurb: "랭크. 점수 2×.", meta: "일간 보드" },
-      3: { name: "볼트", blurb: "후반 나이트. 점수 3×.", meta: "일간 보드" },
+      1: { name: "러너", blurb: "트랙에 LIM이 더 많다. 점수 1.5×.", meta: "일간 보드" },
+      2: { name: "팬텀", blurb: "티켓이 더 크다. 점수 2×.", meta: "일간 보드" },
+      3: { name: "볼트", blurb: "LIM이 가장 많다. 점수 3×.", meta: "일간 보드" },
     },
   },
   vi: {
@@ -663,9 +663,9 @@ const I18N = {
     copyAddr: "CHÉP ĐỊA CHỈ",
     tiers: {
       0: { name: "SCOUT", blurb: "Khởi động, nhặt coin vé.", meta: "Bảng ngày" },
-      1: { name: "RUNNER", blurb: "Mật độ chuẩn. Điểm 1.5×.", meta: "Bảng ngày" },
-      2: { name: "PHANTOM", blurb: "Xếp hạng. Điểm 2×.", meta: "Bảng ngày" },
-      3: { name: "VAULT", blurb: "Đêm về sau. Điểm 3×.", meta: "Bảng ngày" },
+      1: { name: "RUNNER", blurb: "Nhiều LIM hơn trên đường. Điểm 1.5×.", meta: "Bảng ngày" },
+      2: { name: "PHANTOM", blurb: "Vé lớn hơn. Điểm 2×.", meta: "Bảng ngày" },
+      3: { name: "VAULT", blurb: "Nhiều LIM nhất. Điểm 3×.", meta: "Bảng ngày" },
     },
   },
   th: {
@@ -754,9 +754,9 @@ const I18N = {
     copyAddr: "คัดลอกที่อยู่",
     tiers: {
       0: { name: "SCOUT", blurb: "วอร์มอัพ เก็บเหรียญตั๋ว", meta: "บอร์ดรายวัน" },
-      1: { name: "RUNNER", blurb: "ความหนาแน่นปกติ คะแนน 1.5×", meta: "บอร์ดรายวัน" },
-      2: { name: "PHANTOM", blurb: "แรงก์ คะแนน 2×", meta: "บอร์ดรายวัน" },
-      3: { name: "VAULT", blurb: "กลางคืนช่วงท้าย คะแนน 3×", meta: "บอร์ดรายวัน" },
+      1: { name: "RUNNER", blurb: "LIM บนลู่มากขึ้น คะแนน 1.5×", meta: "บอร์ดรายวัน" },
+      2: { name: "PHANTOM", blurb: "ตั๋วใหญ่กว่า คะแนน 2×", meta: "บอร์ดรายวัน" },
+      3: { name: "VAULT", blurb: "LIM มากที่สุด คะแนน 3×", meta: "บอร์ดรายวัน" },
     },
   },
   ru: {
@@ -845,9 +845,9 @@ const I18N = {
     copyAddr: "КОПИРОВАТЬ",
     tiers: {
       0: { name: "РАЗВЕДКА", blurb: "Разминка. Собирайте монеты билета.", meta: "Дневной борд" },
-      1: { name: "СПРИНТ", blurb: "Обычная плотность. Счёт 1.5×.", meta: "Дневной борд" },
-      2: { name: "ФАНТОМ", blurb: "Рейтинг. Счёт 2×.", meta: "Дневной борд" },
-      3: { name: "ХРАНИЛИЩЕ", blurb: "Ночь позже. Счёт 3×.", meta: "Дневной борд" },
+      1: { name: "СПРИНТ", blurb: "Больше LIM на трассе. Счёт 1.5×.", meta: "Дневной борд" },
+      2: { name: "ФАНТОМ", blurb: "Билет больше. Счёт 2×.", meta: "Дневной борд" },
+      3: { name: "ХРАНИЛИЩЕ", blurb: "Больше всего LIM. Счёт 3×.", meta: "Дневной борд" },
     },
   },
 };

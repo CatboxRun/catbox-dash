@@ -1,8 +1,8 @@
 const TIERS = [
   { id: 0, name: "SCOUT", cost: 1, mult: 1, speed: 2.55, speedMax: 4.6, peakAt: 96 },
-  { id: 1, name: "RUNNER", cost: 3, mult: 1.5, speed: 2.75, speedMax: 5.2, peakAt: 86 },
-  { id: 2, name: "PHANTOM", cost: 6, mult: 2, speed: 2.95, speedMax: 5.8, peakAt: 78 },
-  { id: 3, name: "VAULT", cost: 10, mult: 3, speed: 3.15, speedMax: 6.4, peakAt: 70 },
+  { id: 1, name: "RUNNER", cost: 3, mult: 1.5, speed: 2.55, speedMax: 4.6, peakAt: 96 },
+  { id: 2, name: "PHANTOM", cost: 6, mult: 2, speed: 2.55, speedMax: 4.6, peakAt: 96 },
+  { id: 3, name: "VAULT", cost: 10, mult: 3, speed: 2.55, speedMax: 4.6, peakAt: 96 },
 ];
 
 function playerTag() {
@@ -1346,7 +1346,7 @@ function startRun(tier, teach, freeRun) {
     bag: splitTicket(tier.cost),
     bagI: 0,
     dead: false,
-    invuln: tier.id >= 2 ? 120 : 80,
+    invuln: 80,
     jumps: 0,
     coyote: 0,
     y: 340,
