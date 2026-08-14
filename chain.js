@@ -268,12 +268,19 @@ const CatboxChain = (() => {
     }
   }
 
-  function sgtNextMidnight() {
+  function sgtClaimWindow() {
     const DAY = 86400;
-    const BJ_OFFSET = 8 * 3600;
+    const BJ = 8 * 3600;
+    const WINDOW = 3600;
     const now = Math.floor(Date.now() / 1000);
-    const bj = now + BJ_OFFSET;
-    return BigInt((Math.floor(bj / DAY) + 1) * DAY - BJ_OFFSET);
+    const todayStart = Math.floor((now + BJ) / DAY) * DAY - BJ;
+    const open = now >= todayStart && now < todayStart + WINDOW;
+    const nextOpen = open || now < todayStart ? todayStart : todayStart + DAY;
+    return { open, nextOpen, closesAt: todayStart + WINDOW };
+  }
+
+  function sgtNextMidnight() {
+    return BigInt(sgtClaimWindow().nextOpen);
   }
 
   async function nextClaimAt() {
@@ -892,6 +899,7 @@ const CatboxChain = (() => {
     inviteCountOf,
     rewardBpsOf,
     nextClaimAt,
+    claimWindow: sgtClaimWindow,
     claim,
     referrer,
     limBalance,

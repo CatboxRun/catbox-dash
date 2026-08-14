@@ -278,21 +278,24 @@ async function refreshClaimUi() {
     }
   };
   if (!acc || !chainReady) {
-    paintWait();
+    const win = window.CatboxChain?.claimWindow?.();
+    if (win?.open) paintWait(t("claimOpen"));
+    else paintWait(win ? nextLabel(win.nextOpen) : t("claimWhen"));
     return;
   }
   try {
-    const [p, next, v6] = await Promise.all([
-      CatboxChain.pendingOf(acc),
-      CatboxChain.nextClaimAt(),
-      CatboxChain.isV6(),
-    ]);
-    const dailySettled = v6 ? p.wk : 0n;
-    const inviteSettled = v6 ? p.inv : 0n;
-    const settled = dailySettled + inviteSettled;
+    const win = CatboxChain.claimWindow();
+    if (!win.open) {
+      paintWait(nextLabel(win.nextOpen));
+      return;
+    }
+    const p = await CatboxChain.pendingOf(acc);
+    const dailySettled = p.wk || 0n;
+    const inviteSettled = p.inv || 0n;
+    const settled = (p.total != null ? p.total : dailySettled + inviteSettled);
     const text = `${CatboxChain.formatLim(settled)} LIM`;
     if (amt) amt.textContent = settled > 0n ? `${t("claimPending")} ${text}` : t("claimNone");
-    if (when) when.textContent = settled > 0n ? t("claimReady") : nextLabel(next);
+    if (when) when.textContent = settled > 0n ? t("claimReady") : t("claimOpen");
     if (btn) btn.disabled = settled === 0n;
     if (dailyBtn) {
       dailyBtn.disabled = dailySettled === 0n;
@@ -521,9 +524,9 @@ const TG_URL = "https://t.me/Liminal_Official";
 const SITE_URL = "https://catboxrun.github.io/catbox-dash/";
 const X_TWEET = [
   "🐱 CATBOX DASH · 100,000 LIM AIRDROP",
-  "🎮 Play to get it. Jump for LIM coins — keep what you catch.",
+  "🎮 Jump for LIM coins. Keep what you catch.",
   "",
-  "✨ Two free 1 LIM SCOUT runs for new wallets.",
+  "✨ New wallets play two SCOUT runs free.",
   "🔒 Every transfer, private by default.",
   "",
   "@LiminalFi",
@@ -564,13 +567,13 @@ function paintShareCtas() {
     const title = a.querySelector(".cta-t");
     const body = a.querySelector(".cta-s");
     if (title) title.textContent = tgOn ? t("tgClaimedBtn") : t("tgBtn");
-    if (body) body.textContent = t("tgBody");
+    if (body) body.textContent = t(tgOn ? "tgClaimedBody" : "tgBody");
   });
   document.querySelectorAll("a.cta.x").forEach((a) => {
     const title = a.querySelector(".cta-t");
     const body = a.querySelector(".cta-s");
     if (title) title.textContent = xOn ? t("xClaimedBtn") : t("xBtn");
-    if (body) body.textContent = t("xBody");
+    if (body) body.textContent = t(xOn ? "xClaimedBody" : "xBody");
   });
 }
 
