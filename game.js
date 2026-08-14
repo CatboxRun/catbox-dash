@@ -1,7 +1,7 @@
 const TIERS = [
-  { id: 0, name: "SCOUT", cost: 10, mult: 1, speed: 3.6, speedMax: 5.6, peakAt: 90 },
-  { id: 1, name: "RUNNER", cost: 10, mult: 1.5, speed: 3.8, speedMax: 6.6, peakAt: 75 },
-  { id: 2, name: "PHANTOM", cost: 10, mult: 2, speed: 4.0, speedMax: 7.6, peakAt: 60 },
+  { id: 0, name: "SCOUT", cost: 1, mult: 1, speed: 3.6, speedMax: 5.6, peakAt: 90 },
+  { id: 1, name: "RUNNER", cost: 3, mult: 1.5, speed: 3.8, speedMax: 6.6, peakAt: 75 },
+  { id: 2, name: "PHANTOM", cost: 6, mult: 2, speed: 4.0, speedMax: 7.6, peakAt: 60 },
   { id: 3, name: "VAULT", cost: 10, mult: 3, speed: 4.2, speedMax: 8.4, peakAt: 50 },
 ];
 
@@ -123,9 +123,16 @@ async function syncOnchainPool() {
     if ($("weekPoolAmt")) $("weekPoolAmt").textContent = `${CatboxChain.formatLim(pool.week)} LIM`;
     if ($("invitePoolAmt")) $("invitePoolAmt").textContent = `${CatboxChain.formatLim(pool.invite)} LIM`;
     if ($("burnedAmt")) $("burnedAmt").textContent = `${CatboxChain.formatLim(pool.burned)} LIM`;
-    const price = await CatboxChain.ticketPrice();
-    const n = Number(ethers.formatUnits(price, 18));
-    if (n > 0) TIERS.forEach((tier) => { tier.cost = n; });
+    const prices = await Promise.all(TIERS.map((tier) => CatboxChain.ticketPrice(tier.id)));
+    let changed = false;
+    TIERS.forEach((tier, i) => {
+      const n = Number(ethers.formatUnits(prices[i], 18));
+      if (n > 0 && tier.cost !== n) {
+        tier.cost = n;
+        changed = true;
+      }
+    });
+    if (changed && typeof renderTickets === "function") renderTickets();
   } catch (_) {}
 }
 
@@ -383,9 +390,10 @@ async function bootWallet() {
   };
   $("setTicketBtn").onclick = async () => {
     try {
+      const tierId = Number($("ticketTier")?.value || 0);
       const n = Number($("ticketInput").value);
       if (!n || n <= 0) return;
-      await CatboxChain.setTicketPrice(n);
+      await CatboxChain.setTicketPrice(tierId, n);
       await syncOnchainPool();
       renderTickets();
     } catch (_) {
@@ -630,7 +638,7 @@ async function payAndStart() {
       return;
     }
     status.textContent = t("approve");
-    const hash = await CatboxChain.approveAndEnter();
+    const hash = await CatboxChain.approveAndEnter(selected.id);
     status.innerHTML = `<a href="${CatboxChain.txUrl(hash)}" target="_blank" rel="noopener">${hash.slice(0, 10)}…</a>`;
     enterPlay();
     startRun(selected);
