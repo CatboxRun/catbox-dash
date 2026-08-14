@@ -24,45 +24,15 @@ const art = out.contracts["CatboxDash.sol"].CatboxDash;
 const abi = art.abi;
 const bytecode = "0x" + art.evm.bytecode.object;
 const factory = "0x4e59b44847b379578588920cA78FbF26c0B4956C";
-const salt = id("LIMINAL.CATBOX.DASH.V5");
+const salt = id("LIMINAL.CATBOX.DASH.V6");
 const address = getCreate2Address(factory, salt, keccak256(bytecode));
 
 writeFileSync(new URL("./abi.json", import.meta.url), JSON.stringify(abi, null, 2));
 writeFileSync(
-  new URL("../config.js", import.meta.url),
-  `window.CATBOX_CHAIN = ${JSON.stringify(
-    {
-      chainId: 56,
-      chainName: "BNB Smart Chain",
-      rpc: "https://bsc-dataseed.binance.org",
-      explorer: "https://bscscan.com",
-      lim: "0x1D6430FDFC63ea481fE157017B47530663C96001",
-      infinity: {
-        kind: "CL",
-        currency0: "0x1D6430FDFC63ea481fE157017B47530663C96001",
-        currency1: "0x55d398326f99059fF775485246999027B3197955",
-        hooks: "0x0000000000000000000000000000000000000000",
-        poolManager: "0xa0FfB9c1CE1Fe56963B0321B32E7A0302114058b",
-        fee: 46184,
-        tickSpacing: 1,
-        parameters: "0x0000000000000000000000000000000000000000000000000000000000010000",
-        payToken: "0x55d398326f99059fF775485246999027B3197955",
-      },
-      owner: "0x252B70B928B0cEF1326305cB6eb065852d0F76Eb",
-      vault: "0x252B70B928B0cEF1326305cB6eb065852d0F76Eb",
-      dead: "0x000000000000000000000000000000000000dEaD",
-      ticket: "1",
-      tickets: ["1", "3", "6", "10"],
-      factory,
-      salt,
-      address,
-      bytecode,
-      abi,
-    },
-    null,
-    2,
-  )};\n`,
+  new URL("./v6.json", import.meta.url),
+  JSON.stringify({ address, salt, bytecodeLength: (bytecode.length - 2) / 2, bytecode, abi }, null, 2),
 );
+console.log("V6 compiled locally — NOT written to config.js (Pages stays on V5)");
 console.log("address", address);
 console.log("salt", salt);
 console.log("bytecode bytes", (bytecode.length - 2) / 2);

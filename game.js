@@ -227,6 +227,7 @@ async function refreshWalletUi() {
   refreshInviteUi();
   refreshClaimUi();
   await refreshFreeUi();
+  paintTgCtas();
 }
 
 async function refreshClaimUi() {
@@ -262,30 +263,40 @@ async function refreshClaimUi() {
   }
 }
 
+function assumedFreeUi() {
+  return { used: 0, left: 2, pool: 0n, eligible: true };
+}
+
+function paintFreeUi(st) {
+  const el = $("freeLeft");
+  const prev = window._freeStatus;
+  window._freeStatus = st;
+  if (!el) return;
+  if (st.left <= 0) el.textContent = "";
+  else el.textContent = t("freeLeft", { n: st.left });
+  const changed = !prev || prev.left !== st.left || prev.eligible !== st.eligible;
+  if (changed && typeof renderTickets === "function") renderTickets();
+}
+
 async function refreshFreeUi() {
   const el = $("freeLeft");
   const acc = window.CatboxChain?.account;
   if (!el) return;
   if (!acc || !chainReady) {
-    window._freeStatus = null;
-    el.textContent = "";
+    paintFreeUi(assumedFreeUi());
     return;
   }
   try {
     const st = await CatboxChain.freeStatus(acc);
-    const prev = window._freeStatus;
-    window._freeStatus = st;
     if (st.used > 0) {
       try { localStorage.setItem(TUTORIAL_KEY, "1"); } catch (_) {}
     }
-    if (st.left <= 0) el.textContent = "";
-    else if (st.eligible) el.textContent = t("freeLeft", { n: st.left });
-    else el.textContent = "";
-    const changed = !prev || prev.left !== st.left || prev.eligible !== st.eligible;
-    if (changed && typeof renderTickets === "function") renderTickets();
+    try {
+      if (await CatboxChain.hasTgBonus(acc)) markTgLocal(acc);
+    } catch (_) {}
+    paintFreeUi(st);
   } catch (_) {
-    window._freeStatus = null;
-    el.textContent = "";
+    paintFreeUi(assumedFreeUi());
   }
 }
 
@@ -372,8 +383,12 @@ function bootSwap() {
   modal.addEventListener("click", (e) => {
     if (e.target === modal) modal.classList.add("hidden");
   });
-  $("swapFrom").onchange = refreshSwap;
+  $("swapFrom").onchange = () => {
+    $("swapStatus")?.classList.remove("ok");
+    refreshSwap();
+  };
   $("swapAmt").oninput = () => {
+    $("swapStatus")?.classList.remove("ok");
     clearTimeout(quoteTimer);
     quoteTimer = setTimeout(refreshSwap, 280);
   };
@@ -400,28 +415,116 @@ async function refreshSwap() {
     const q = await CatboxChain.quoteLim(from, ethers.parseUnits(String(raw), 18));
     if (!q.path || q.out === 0n) {
       $("swapOut").value = "0";
-      status.textContent = t("swapNoLiq");
+      if (status && !status.classList.contains("ok")) status.textContent = t("swapNoLiq");
       return;
     }
-    status.textContent = "";
+    if (status && !status.classList.contains("ok")) status.textContent = "";
     $("swapOut").value = CatboxChain.formatLim(q.out);
   } catch (_) {
     $("swapOut").value = "0";
-    if (status) status.textContent = t("swapNoLiq");
+    if (status && !status.classList.contains("ok")) status.textContent = t("swapNoLiq");
   }
+}
+
+let toastTimer = 0;
+function showToast(msg) {
+  const el = $("toast");
+  if (!el || !msg) return;
+  el.textContent = msg;
+  el.classList.remove("hidden");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.add("hidden"), 6000);
+}
+
+const TG_URL = "https://t.me/Liminal_Official";
+
+function tgFreeKey(addr) {
+  return `catbox-tg-free-${String(addr).toLowerCase()}`;
+}
+
+function tgClaimedLocal(addr) {
+  if (!addr) return false;
+  try {
+    return localStorage.getItem(tgFreeKey(addr)) === "1";
+  } catch (_) {
+    return false;
+  }
+}
+
+function markTgLocal(addr) {
+  if (!addr) return;
+  try {
+    localStorage.setItem(tgFreeKey(addr), "1");
+  } catch (_) {}
+}
+
+function paintTgCtas() {
+  const acc = window.CatboxChain?.account;
+  const claimed = Boolean(acc && tgClaimedLocal(acc));
+  document.querySelectorAll("a.cta.tg").forEach((a) => {
+    const title = a.querySelector(".cta-t");
+    const body = a.querySelector(".cta-s");
+    if (title) title.textContent = claimed ? t("tgClaimedBtn") : t("tgBtn");
+    if (body) body.textContent = t("tgBody");
+  });
+}
+
+async function claimTgExtra() {
+  const chain = window.CatboxChain;
+  if (!chain) throw new Error("NO_WALLET");
+  if (!window.ethereum) throw new Error("NO_WALLET");
+  if (!chain.account) await chain.connect();
+  const addr = chain.account;
+  if (!addr) throw new Error("NO_WALLET");
+  let onchain = false;
+  try {
+    onchain = await chain.claimTgBonus();
+  } catch (_) {
+    onchain = false;
+  }
+  markTgLocal(addr);
+  paintTgCtas();
+  try {
+    await refreshFreeUi();
+  } catch (_) {}
+  if (onchain) showToast(t("tgClaimedOn"));
+  else showToast(t("tgClaimedSaved"));
+}
+
+function bootTg() {
+  document.querySelectorAll("a.cta.tg").forEach((a) => {
+    a.addEventListener("click", async (e) => {
+      e.preventDefault();
+      try {
+        await claimTgExtra();
+      } catch (_) {
+        showToast(t("connectFirst"));
+      }
+      window.open(TG_URL, "_blank", "noopener,noreferrer");
+    });
+  });
 }
 
 async function doSwap() {
   const status = $("swapStatus");
   const raw = $("swapAmt").value;
   if (!raw || Number(raw) <= 0) return;
+  const expect = $("swapOut")?.value;
+  status.classList.remove("ok");
   try {
     status.textContent = t("swapping");
     const hash = await CatboxChain.swapToLim($("swapFrom").value, ethers.parseUnits(String(raw), 18));
-    status.innerHTML = `<a href="${CatboxChain.txUrl(hash)}" target="_blank" rel="noopener">${hash.slice(0, 10)}…</a>`;
-    await refreshWalletUi();
-    await refreshSwap();
+    const n = expect && expect !== "0" ? expect : "";
+    const msg = n ? t("swapOkAmt", { n }) : t("swapOk");
+    try {
+      await refreshWalletUi();
+      await refreshSwap();
+    } catch (_) {}
+    status.classList.add("ok");
+    status.innerHTML = `${msg}<br><a href="${CatboxChain.txUrl(hash)}" target="_blank" rel="noopener">${hash.slice(0, 10)}…</a>`;
+    showToast(msg);
   } catch (e) {
+    status.classList.remove("ok");
     status.textContent = e?.message === "NO_LIQ" ? t("swapNoLiq") : t("txFail");
   }
 }
@@ -540,6 +643,7 @@ async function bootWallet() {
     } catch (_) {}
   };
   bootSwap();
+  bootTg();
   $("claimBtn") && ($("claimBtn").onclick = doClaim);
   startLiveClock();
   try { CatboxChain.referrer(); } catch (_) {}
@@ -771,7 +875,10 @@ async function enterPlay() {
 }
 
 function scoutIsFree(tier) {
-  return tier && tier.id === 0 && window._freeStatus?.eligible;
+  if (!tier || tier.id !== 0) return false;
+  const st = window._freeStatus;
+  if (!st) return true;
+  return Number(st.left) > 0;
 }
 
 function renderTickets() {
@@ -788,7 +895,7 @@ function renderTickets() {
     <button class="ticket t${tier.id}" data-id="${tier.id}">
       <img class="ticket-mascot" src="./assets/hero-cat.png?v=1" alt="" />
       <img class="ticket-coin" src="${glyphs[tier.id]}" alt="" />
-      ${free ? `<span class="free-badge">${t("freeScout")} · ${window._freeStatus.left}</span>` : ""}
+      ${free ? `<span class="free-badge">${t("freeScout")} · ${window._freeStatus?.left ?? 2}</span>` : ""}
       <div class="cost"><img src="./assets/icon-ticket.png?v=1" alt="" />${free ? t("freeScout") + " · " : ""}${tier.cost} LIM</div>
       <h3>${copy.name}</h3>
       <p>${copy.blurb}</p>
@@ -970,8 +1077,8 @@ function shouldTeach(tier) {
   if (!tier || tier.id !== 0) return false;
   if (isTutorialDone()) return false;
   const st = window._freeStatus;
-  if (!st?.eligible) return false;
-  if (Number(st.used) > 0) return false;
+  if (st && Number(st.left) <= 0) return false;
+  if (Number(st?.used) > 0) return false;
   return true;
 }
 

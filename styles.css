@@ -241,6 +241,14 @@ body:not([data-lang="en"]) .swap-head h2 { font-size: 18px; }
   color: var(--gold-hi);
   font-size: 12px;
 }
+.free-offer {
+  margin: 0 0 8px;
+  color: var(--gold-hi);
+  font-size: 15px;
+  font-weight: 800;
+  line-height: 1.45;
+  text-align: center;
+}
 .lobby-pane.hidden { display: none !important; }
 
 @media (min-width: 901px) {
@@ -313,6 +321,32 @@ body:not([data-lang="en"]) .swap-head h2 { font-size: 18px; }
 }
 .tx-line { font-size: 8px; color: var(--gold); min-height: 1.6em; margin: 8px 0 0; }
 .tx-line a { color: #8ec0ff; }
+#swapStatus.ok {
+  font-size: 16px;
+  font-weight: 800;
+  line-height: 1.45;
+  color: var(--gold-hi);
+  padding: 10px 8px;
+  border: 3px solid var(--gold);
+  background: #0b1220;
+}
+.toast {
+  position: fixed;
+  top: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 80;
+  max-width: min(92vw, 420px);
+  padding: 14px 20px;
+  font-size: 16px;
+  font-weight: 800;
+  line-height: 1.4;
+  text-align: center;
+  color: #1a1204;
+  background: linear-gradient(180deg, var(--gold-hi), var(--gold));
+  border: 3px solid #000;
+  box-shadow: 6px 6px 0 #000;
+}
 body[data-lang="zh"] { font-family: "Noto Sans SC", "Press Start 2P", sans-serif; }
 body[data-lang="ja"] { font-family: "Noto Sans JP", "Press Start 2P", sans-serif; }
 body[data-lang="ko"] { font-family: "Noto Sans KR", "Press Start 2P", sans-serif; }
@@ -597,7 +631,7 @@ h1 { font-size: 16px; line-height: 1.6; margin: 0 0 14px; }
 }
 .wallet-line #freeLeft { color: var(--gold); white-space: nowrap; }
 
-.ctas { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 16px; }
+.ctas { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 16px; }
 .cta {
   display: flex;
   flex-direction: column;
@@ -609,6 +643,7 @@ h1 { font-size: 16px; line-height: 1.6; margin: 0 0 14px; }
   min-height: 88px;
 }
 .cta.x { border-color: #4a5a70; }
+.cta.tg { border-color: #2a9bd6; }
 .cta.portal { border-color: #2f6b8a; }
 .cta:hover { border-color: var(--gold); }
 .cta-k { font-size: 11px; color: var(--gold); }

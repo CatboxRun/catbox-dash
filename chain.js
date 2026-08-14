@@ -48,6 +48,8 @@ const CatboxChain = (() => {
     "function rewardBps(address) view returns (uint256)",
     "function withdrawDaily(uint256)",
     "function currentDay() view returns (uint256)",
+    "function tgClaimed(address) view returns (bool)",
+    "function claimTgBonus()",
   ];
 
   function gameContract(s) {
@@ -254,12 +256,51 @@ const CatboxChain = (() => {
     return c.activeRun(addr);
   }
 
+  function assumedFree() {
+    return { used: 0, left: 2, pool: 0n, eligible: true };
+  }
+
   async function freeStatus(addr = account) {
-    const empty = { used: 0, left: 2, pool: 0n, eligible: false };
-    if (!addr) return empty;
-    const c = gameContract(await readProvider());
-    const s = await c.freeStatus(addr);
-    return { used: Number(s[0]), left: Number(s[1]), pool: s[2], eligible: Boolean(s[3]) };
+    if (!addr) return assumedFree();
+    try {
+      const c = gameContract(await readProvider());
+      const s = await c.freeStatus(addr);
+      const used = Number(s[0]);
+      const left = Number(s[1]);
+      const pool = s[2];
+      const eligible = Boolean(s[3]) || (left > 0 && pool > 0n);
+      return { used, left, pool, eligible };
+    } catch (_) {
+      return assumedFree();
+    }
+  }
+
+  async function hasTgBonus(addr = account) {
+    if (!addr) return false;
+    try {
+      const c = gameContract(await readProvider());
+      return Boolean(await c.tgClaimed(addr));
+    } catch (_) {
+      return false;
+    }
+  }
+
+  async function claimTgBonus() {
+    await connect();
+    const s = await signer();
+    const game = gameContract(s);
+    try {
+      if (await game.tgClaimed.staticCall(account)) return true;
+    } catch (_) {
+      return false;
+    }
+    try {
+      const tx = await game.claimTgBonus();
+      await tx.wait();
+      return true;
+    } catch (_) {
+      return false;
+    }
   }
 
   async function fundFreePool(limAmount) {
@@ -288,8 +329,12 @@ const CatboxChain = (() => {
     const price = await game.ticketPrice(tierId);
     let useFree = false;
     if (Number(tierId) === 0) {
-      const st = await game.freeStatus(account);
-      useFree = Boolean(st[3]);
+      try {
+        const st = await freeStatus(account);
+        useFree = Boolean(st.eligible) || Number(st.left) > 0;
+      } catch (_) {
+        useFree = true;
+      }
     }
     if (!useFree) {
       const bal = await lim.balanceOf(account);
@@ -668,6 +713,8 @@ const CatboxChain = (() => {
     activeRun,
     approveAndEnter,
     freeStatus,
+    hasTgBonus,
+    claimTgBonus,
     fundFreePool,
     settleRun,
     withdrawWeekly,
