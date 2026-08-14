@@ -879,19 +879,44 @@ const CatboxChain = (() => {
   }
 
   async function fetchLeaderboards() {
-    const settled = await fetchRawLogs("RunSettled");
-    const started = await fetchRawLogs("RunStarted");
-    const week = {};
-    const invite = {};
-    for (const e of settled) {
-      const player = e.args.player;
-      week[player] = (week[player] || 0n) + eventScore(e);
+    const c = gameContract(await publicReadProvider());
+    const n = Number(await c.nextRunId());
+    const from = Math.max(1, n - 80);
+    const ids = [];
+    for (let i = n - 1; i >= from; i--) ids.push(i);
+    const players = new Set();
+    const batch = 8;
+    for (let i = 0; i < ids.length; i += batch) {
+      const chunk = ids.slice(i, i + batch);
+      const runs = await Promise.all(chunk.map((id) => c.runs(id)));
+      for (const r of runs) {
+        const player = r.player || r[0];
+        if (player && player !== ethers.ZeroAddress) players.add(ethers.getAddress(player));
+      }
     }
-    for (const e of started) {
-      const player = e.args.player;
-      if (week[player] == null) week[player] = 0n;
-      const ref = e.args.referrer;
-      if (ref && ref !== ethers.ZeroAddress) invite[ref] = (invite[ref] || 0n) + 10n;
+    const addrs = [...players];
+    const refs = new Set();
+    const week = {};
+    for (let i = 0; i < addrs.length; i += batch) {
+      const chunk = addrs.slice(i, i + batch);
+      const [pts, refList] = await Promise.all([
+        Promise.all(chunk.map((a) => c.weekPts(a).catch(() => 0n))),
+        Promise.all(chunk.map((a) => c.refOf(a).catch(() => ethers.ZeroAddress))),
+      ]);
+      chunk.forEach((a, j) => {
+        week[a] = pts[j] || 0n;
+        const ref = refList[j];
+        if (ref && ref !== ethers.ZeroAddress) refs.add(ethers.getAddress(ref));
+      });
+    }
+    const invite = {};
+    const refAddrs = [...refs];
+    for (let i = 0; i < refAddrs.length; i += batch) {
+      const chunk = refAddrs.slice(i, i + batch);
+      const pts = await Promise.all(chunk.map((a) => c.invitePts(a).catch(() => 0n)));
+      chunk.forEach((a, j) => {
+        invite[a] = pts[j] || 0n;
+      });
     }
     return {
       week: toRows(week, account),
@@ -900,17 +925,33 @@ const CatboxChain = (() => {
   }
 
   async function fetchBurns() {
-    const logs = await fetchRawLogs("Burned");
-    return logs
-      .slice()
-      .reverse()
-      .slice(0, 8)
-      .map((e) => ({
-        player: e.args.player,
-        tag: short(e.args.player),
-        amount: e.args.amount,
-        hash: e.transactionHash,
-      }));
+    try {
+      const p = await logsReadProvider();
+      const iface = gameContract(p).interface;
+      const topic = iface.getEvent("Burned").topicHash;
+      const latest = await p.getBlockNumber();
+      const logs = await p.getLogs({
+        address: cfg.address,
+        topics: [topic],
+        fromBlock: Math.max(0, latest - 800),
+        toBlock: latest,
+      });
+      return logs
+        .slice()
+        .reverse()
+        .slice(0, 8)
+        .map((log) => {
+          const parsed = iface.parseLog(log);
+          return {
+            player: parsed.args.player,
+            tag: short(parsed.args.player),
+            amount: parsed.args.amount,
+            hash: log.transactionHash,
+          };
+        });
+    } catch (_) {
+      return [];
+    }
   }
 
   return {
