@@ -1,8 +1,8 @@
 const TIERS = [
-  { id: 0, name: "SCOUT", cost: 1, mult: 1, speed: 3.4, speedMax: 7.2, peakAt: 62 },
-  { id: 1, name: "RUNNER", cost: 3, mult: 1.5, speed: 3.7, speedMax: 8.4, peakAt: 52 },
-  { id: 2, name: "PHANTOM", cost: 6, mult: 2, speed: 4.0, speedMax: 9.6, peakAt: 44 },
-  { id: 3, name: "VAULT", cost: 10, mult: 3, speed: 4.3, speedMax: 10.8, peakAt: 36 },
+  { id: 0, name: "SCOUT", cost: 1, mult: 1, speed: 2.55, speedMax: 4.6, peakAt: 96 },
+  { id: 1, name: "RUNNER", cost: 3, mult: 1.5, speed: 2.75, speedMax: 5.2, peakAt: 86 },
+  { id: 2, name: "PHANTOM", cost: 6, mult: 2, speed: 2.95, speedMax: 5.8, peakAt: 78 },
+  { id: 3, name: "VAULT", cost: 10, mult: 3, speed: 3.15, speedMax: 6.4, peakAt: 70 },
 ];
 
 function playerTag() {
@@ -1179,15 +1179,14 @@ function shuffle(arr) {
 function splitTicket(cost) {
   const pieces = [];
   let remain = cost;
-  const min = cost * 0.0001;
+  const min = cost * 0.012;
   let guard = 0;
-  while (remain > min && guard++ < 88) {
+  while (remain > min && guard++ < 20) {
     const r = Math.random();
     let pct;
-    if (r < 0.08) pct = 0.03 + Math.random() * 0.02;
-    else if (r < 0.24) pct = 0.012 + Math.random() * 0.016;
-    else if (r < 0.5) pct = 0.005 + Math.random() * 0.008;
-    else pct = 0.0002 + Math.random() * 0.003;
+    if (r < 0.2) pct = 0.09 + Math.random() * 0.05;
+    else if (r < 0.55) pct = 0.045 + Math.random() * 0.035;
+    else pct = 0.022 + Math.random() * 0.02;
     let v = cost * pct;
     if (v > remain) v = remain;
     v = +v.toFixed(6);
@@ -1346,7 +1345,7 @@ function startRun(tier, teach, freeRun) {
     bag: splitTicket(tier.cost),
     bagI: 0,
     dead: false,
-    invuln: tier.id >= 2 ? 90 : 50,
+    invuln: tier.id >= 2 ? 120 : 80,
     jumps: 0,
     coyote: 0,
     y: 340,
@@ -1397,18 +1396,17 @@ function startRun(tier, teach, freeRun) {
 
 function progress(run) {
   const sec = run.t / 60;
-  if (sec < 4) return 0;
-  return Math.min(1, (sec - 4) / run.tier.peakAt);
+  if (sec < 8) return 0;
+  return Math.min(1, (sec - 8) / run.tier.peakAt);
 }
 
 function currentSpeed(run) {
   const p = progress(run);
   const grab = run.tier.cost > 0 ? run.collected / run.tier.cost : 0;
-  let haste = p * p;
-  if (grab > 0.5) haste += (grab - 0.5) * 0.6;
-  if (grab > 0.9) haste += (grab - 0.9) * 2.4;
-  if (run.overtime) haste += 0.4;
-  haste = Math.min(1.4, haste);
+  let haste = p * p * 0.72;
+  if (grab > 0.7) haste += (grab - 0.7) * 0.25;
+  if (run.overtime) haste += 0.18;
+  haste = Math.min(0.82, haste);
   return run.tier.speed + (run.tier.speedMax - run.tier.speed) * haste;
 }
 
@@ -1418,8 +1416,8 @@ function addRaw(n) {
 
 function reachableCoinY(run, wx) {
   const gy = groundAt(run, wx);
-  const maxLift = isGapAt(run, wx) ? 92 : 118;
-  const minLift = 26;
+  const maxLift = isGapAt(run, wx) ? 72 : 78;
+  const minLift = 22;
   return gy - (minLift + Math.random() * (maxLift - minLift));
 }
 
@@ -1487,7 +1485,7 @@ function spawnCoinW(run, wx, wy) {
 }
 
 function coinArc(run, x0, x1) {
-  const n = 3 + Math.floor(Math.random() * 2);
+  const n = 2;
   for (let i = 0; i < n; i++) {
     const t = (i + 0.5) / n;
     const wx = x0 + t * (x1 - x0);
@@ -1513,46 +1511,43 @@ function addTerrainChunk(run) {
   let x = run.nextTerrain;
   const bag = !run.overtime && run.collected + 1e-9 < run.tier.cost && run.bagI < run.bag.length;
   if (!bag) {
-    addHazardChunk(run, x, Math.min(1, progress(run) + 0.22 + (run.overtime ? 0.2 : 0)), false);
+    addHazardChunk(run, x, Math.min(1, progress(run) + 0.08 + (run.overtime ? 0.08 : 0)), false);
     return;
   }
 
   const sinceHazard = run.t - run.lastHazard;
   const grab = run.collected / run.tier.cost;
-  const idle = run.t - (run.lastJumpT || 0) > 140;
-  const minGap = Math.max(28, 64 - p * 26 - grab * 16);
+  const idle = run.t - (run.lastJumpT || 0) > 240;
+  const minGap = Math.max(48, 108 - p * 18 - grab * 8);
   const roll = Math.random();
-  const pad = 24 + Math.floor(Math.random() * 20);
+  const pad = 36 + Math.floor(Math.random() * 28);
   pushFlat(run, x, x + pad);
   x += pad;
 
-  const safeChance = Math.max(0.08, 0.32 - p * 0.22 - grab * 0.12);
-  const wantSafe = !idle && (p < 0.05 || roll < safeChance || sinceHazard < minGap);
+  const safeChance = Math.max(0.18, 0.52 - p * 0.16 - grab * 0.06);
+  const wantSafe = !idle && (p < 0.08 || roll < safeChance || sinceHazard < minGap);
 
   if (wantSafe) {
     const flavor = Math.random();
     if (flavor < 0.4 && p > 0.02) {
-      const w = 260 + Math.floor(Math.random() * 150);
-      const peak = 30 + Math.floor(Math.random() * 38);
+      const w = 300 + Math.floor(Math.random() * 160);
+      const peak = 22 + Math.floor(Math.random() * 28);
       run.terrain.push({ kind: "hill", x0: x, x1: x + w, y: BASE_GROUND, peak });
       coinArc(run, x, x + w);
       x += w;
-    } else if (flavor < 0.58 && p > 0.12) {
+    } else if (flavor < 0.58 && p > 0.18) {
       const w = 84 + Math.floor(Math.random() * 32);
-      const peak = 18 + Math.floor(Math.random() * 12);
+      const peak = 16 + Math.floor(Math.random() * 10);
       run.terrain.push({ kind: "bump", x0: x, x1: x + w, y: BASE_GROUND, peak });
-      spawnCoinW(run, x + w * 0.5, BASE_GROUND - peak - 48);
-      spawnCoinW(run, x + w * 0.26, BASE_GROUND - peak * 0.55 - 36);
-      spawnCoinW(run, x + w * 0.74, BASE_GROUND - peak * 0.55 - 36);
+      spawnCoinW(run, x + w * 0.5, BASE_GROUND - peak - 42);
+      if (Math.random() > 0.45) spawnCoinW(run, x + w * 0.72, BASE_GROUND - peak * 0.5 - 28);
       x += w;
     } else {
-      const w = 140 + Math.floor(Math.random() * 80);
+      const w = 180 + Math.floor(Math.random() * 90);
       pushFlat(run, x, x + w);
-      const low = Math.random() < 0.32;
-      const mid = low ? BASE_GROUND - 32 + Math.random() * 18 : BASE_GROUND - 148 + Math.random() * 52;
-      spawnCoinW(run, x + 40, mid);
-      if (Math.random() > 0.4) spawnCoinW(run, x + 90, low ? mid - 56 : mid - 40);
-      if (Math.random() > 0.75) spawnCoinW(run, x + 136, low ? BASE_GROUND - 30 : mid + 18);
+      const mid = BASE_GROUND - 28 + Math.random() * 22;
+      spawnCoinW(run, x + 48, mid);
+      if (Math.random() > 0.55) spawnCoinW(run, x + 120, mid - 18);
       x += w;
     }
     run.nextTerrain = x;
@@ -1564,47 +1559,47 @@ function addTerrainChunk(run) {
 
 function addHazardChunk(run, x, p, withCoins) {
   const roll = Math.random();
-  const pad = 28 + Math.floor(Math.random() * 28);
+  const pad = 40 + Math.floor(Math.random() * 36);
   pushFlat(run, x, x + pad);
   x += pad;
 
-  const nearLight = Math.abs(x - (run.lastLightWx || -99999)) < 280;
-  const nearGap = Math.abs(x - (run.lastGapWx || -99999)) < 300;
-  const idle = run.t - (run.lastJumpT || 0) > 140;
+  const nearLight = Math.abs(x - (run.lastLightWx || -99999)) < 360;
+  const nearGap = Math.abs(x - (run.lastGapWx || -99999)) < 380;
+  const idle = run.t - (run.lastJumpT || 0) > 240;
 
   let kind;
-  if (idle && !nearLight && p > 0.03) kind = "gap";
-  else if (nearGap) kind = roll < 0.5 ? "pipe" : "light";
-  else if (nearLight) kind = roll < 0.45 ? "pipe" : "gap";
-  else if (p < 0.1) kind = roll < 0.62 ? "light" : "pipe";
-  else if (roll < 0.32) kind = "light";
-  else if (roll < 0.6) kind = "pipe";
+  if (idle && !nearLight && p > 0.08) kind = "gap";
+  else if (nearGap) kind = roll < 0.62 ? "pipe" : "light";
+  else if (nearLight) kind = roll < 0.55 ? "pipe" : "gap";
+  else if (p < 0.16) kind = roll < 0.55 ? "light" : "pipe";
+  else if (roll < 0.28) kind = "light";
+  else if (roll < 0.72) kind = "pipe";
   else kind = "gap";
 
   if (kind === "light" && nearGap) kind = "pipe";
   if (kind === "gap" && nearLight) kind = "pipe";
 
   if (kind === "light") {
-    const w = 128 + Math.floor(p * 24);
+    const w = 148 + Math.floor(p * 16);
     pushFlat(run, x, x + w);
     run.objects.push({
       kind: "light",
       x: x + 24 - run.scroll,
-      w: 70 + p * 24,
+      w: 58 + p * 16,
       phase: 0,
-      slow: 0.018 + p * 0.01,
+      slow: 0.012 + p * 0.006,
       armed: false,
     });
-    if (withCoins) spawnCoinW(run, x + 58, BASE_GROUND - 28);
+    if (withCoins) spawnCoinW(run, x + 58, BASE_GROUND - 26);
     run.lastHazard = run.t;
     run.lastLightWx = x + 24 + (70 + p * 24) / 2;
     x += w;
   } else if (kind === "pipe") {
-    const duo = Math.random() < 0.3 && p > 0.2;
-    const w = duo ? 176 : 108;
+    const duo = Math.random() < 0.12 && p > 0.45;
+    const w = duo ? 196 : 124;
     pushFlat(run, x, x + w);
     const style = Math.random() < 0.42 ? "brick" : "pipe";
-    const h = style === "brick" ? 26 : 44 + Math.floor(Math.random() * 18);
+    const h = style === "brick" ? 22 : 32 + Math.floor(Math.random() * 12);
     const bw = style === "brick" ? 32 : 28;
     const spots = duo ? [x + 36, x + 108] : [x + 40];
     for (const wx of spots) {
@@ -1624,8 +1619,8 @@ function addHazardChunk(run, x, p, withCoins) {
     run.lastHazard = run.t;
     x += w;
   } else {
-    const gw = 54 + p * 20;
-    const ap = 72;
+    const gw = 42 + p * 10;
+    const ap = 88;
     pushFlat(run, x, x + ap);
     run.terrain.push({ kind: "gap", x0: x + ap, x1: x + ap + gw, y: BASE_GROUND });
     pushFlat(run, x + ap + gw, x + ap + gw + ap);
@@ -1796,7 +1791,7 @@ function tick() {
   for (const o of run.objects) {
     o.x -= spd;
     if (o.kind === "light") {
-      if (!o.armed && o.x < 560) {
+      if (!o.armed && o.x < 420) {
         o.armed = true;
         o.phase = 0.82;
       }
@@ -1809,16 +1804,16 @@ function tick() {
     if (o.kind === "coin" && !o.hit) {
       o.bob = (o.bob || 0) + 0.14;
       const mag = dist(px, py, o.x, o.y);
-      if (mag < 40 && mag > 2) {
-        o.x += (px - o.x) * 0.1;
-        o.y += (py - o.y) * 0.1;
+      if (mag < 56 && mag > 2) {
+        o.x += (px - o.x) * 0.16;
+        o.y += (py - o.y) * 0.16;
         o.baseY = o.y;
       } else if (o.baseY != null) {
         o.y = o.baseY + Math.sin(o.bob) * 4;
       }
     }
 
-    if (o.kind === "coin" && !o.hit && dist(px, py, o.x, o.y) < (o.gold ? 40 : 32)) {
+    if (o.kind === "coin" && !o.hit && dist(px, py, o.x, o.y) < (o.gold ? 48 : 40)) {
       o.hit = true;
       run.coins += 1;
       run.combo += 1;
@@ -1857,7 +1852,7 @@ function tick() {
       }
     }
     if (o.kind === "light") {
-      const on = Math.sin(o.phase) > 0.62;
+      const on = Math.sin(o.phase) > 0.72;
       const lgy = groundAt(run, run.scroll + o.x + o.w / 2);
       const lh = Math.max(90, lgy - 92);
       if (on && aabb(hb.x, hb.y, hb.w, hb.h, o.x, 40, o.w, lh)) {
