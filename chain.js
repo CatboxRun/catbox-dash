@@ -991,10 +991,11 @@ const CatboxChain = (() => {
     }
   }
 
-  async function fetchRawLogs(eventName, maxChunks = 24) {
+  async function fetchEventLogs(eventNames, maxChunks = 24) {
+    const names = Array.isArray(eventNames) ? eventNames : [eventNames];
     const p = await logsReadProvider();
     const iface = gameContract(p).interface;
-    const topic = iface.getEvent(eventName).topicHash;
+    const topic0 = names.map((n) => iface.getEvent(n).topicHash);
     const latest = await withTimeout(p.getBlockNumber(), 5000);
     const chunk = 3000;
     const out = [];
@@ -1009,7 +1010,7 @@ const CatboxChain = (() => {
           got = await withTimeout(
             p.getLogs({
               address: cfg.address,
-              topics: [topic],
+              topics: [topic0.length === 1 ? topic0[0] : topic0],
               fromBlock,
               toBlock,
             }),
@@ -1025,6 +1026,7 @@ const CatboxChain = (() => {
           try {
             const parsed = iface.parseLog(log);
             out.push({
+              name: parsed.name,
               args: parsed.args,
               blockNumber: log.blockNumber,
               transactionHash: log.transactionHash,
@@ -1042,6 +1044,10 @@ const CatboxChain = (() => {
       await sleep(80);
     }
     return out;
+  }
+
+  async function fetchRawLogs(eventName, maxChunks = 24) {
+    return fetchEventLogs(eventName, maxChunks);
   }
 
   function toRows(map, youAddr) {
@@ -1132,6 +1138,7 @@ const CatboxChain = (() => {
           return {
             burned: asAmt(parsed.args.burned),
             leftover: asAmt(parsed.args.leftover),
+            collected: asAmt(parsed.args.collected),
             hash: log.transactionHash,
             player: parsed.args.player,
           };
@@ -1233,6 +1240,209 @@ const CatboxChain = (() => {
       .slice(0, 30);
   }
 
+  const TIER_NAMES = ["SCOUT", "RUNNER", "PHANTOM", "VAULT"];
+
+  function tierOfPaid(paid, prices) {
+    const n = Number(ethers.formatUnits(paid || 0n, 18));
+    let best = 0;
+    let bestDiff = Infinity;
+    (prices || []).forEach((p, i) => {
+      const d = Math.abs(Number(ethers.formatUnits(p, 18)) - n);
+      if (d < bestDiff) {
+        bestDiff = d;
+        best = i;
+      }
+    });
+    return { id: best, name: TIER_NAMES[best] || `T${best}`, lim: n };
+  }
+
+  function displayPayout(collected, paid, bps) {
+    if (collected == null) return null;
+    const got = asAmt(collected);
+    const ticket = asAmt(paid);
+    const raw = (got * BigInt(bps || 10500)) / 10000n;
+    const cap = ticket * 2n;
+    return raw > cap ? cap : raw;
+  }
+
+  async function fetchOwnerRuns(onProgress) {
+    const c = gameContract(await publicReadProvider());
+    const n = Number(await c.nextRunId());
+    const ids = [];
+    for (let i = n - 1; i >= 1; i--) ids.push(i);
+    if (onProgress) onProgress({ phase: "runs", done: 0, total: ids.length });
+
+    let prices = [
+      ethers.parseUnits("1", 18),
+      ethers.parseUnits("3", 18),
+      ethers.parseUnits("6", 18),
+      ethers.parseUnits("10", 18),
+    ];
+    try {
+      prices = await Promise.all([0, 1, 2, 3].map((i) => c.ticketPrice(i)));
+    } catch (_) {}
+
+    const batch = 8;
+    const rows = [];
+    for (let i = 0; i < ids.length; i += batch) {
+      const chunk = ids.slice(i, i + batch);
+      const runs = await Promise.all(chunk.map((id) => c.runs(id)));
+      chunk.forEach((id, j) => {
+        const parsed = parseStoredRun(id, runs[j]);
+        if (!parsed.player || parsed.player === ethers.ZeroAddress) return;
+        const player = ethers.getAddress(parsed.player);
+        const tier = tierOfPaid(parsed.paid, prices);
+        rows.push({
+          id,
+          player,
+          paid: parsed.paid,
+          ticketLim: tier.lim,
+          tierId: tier.id,
+          tierName: tier.name,
+          startedAt: parsed.startedAt,
+          settled: parsed.settled,
+          free: parsed.free,
+          collected: null,
+          leftover: null,
+          burned: null,
+          score: null,
+          payout: null,
+          rewardBps: 10500,
+          invites: 0,
+          plays: 0,
+          weekPts: 0n,
+          invitePts: 0n,
+          referrer: ethers.ZeroAddress,
+          tx: null,
+        });
+      });
+      if (onProgress) onProgress({ phase: "runs", done: Math.min(i + batch, ids.length), total: ids.length });
+    }
+
+    const byId = new Map(rows.map((r) => [r.id, r]));
+    if (onProgress) onProgress({ phase: "logs", done: 0, total: rows.length });
+    try {
+      const ev = await fetchEventLogs(["RunStarted", "RunSettled", "FreeEnter", "Burned"], 28);
+      for (const log of ev) {
+        if (log.name === "RunStarted") {
+          const row = byId.get(Number(log.args.runId));
+          if (!row) continue;
+          const ref = log.args.referrer;
+          if (ref && ref !== ethers.ZeroAddress) row.referrer = ethers.getAddress(ref);
+          if (log.args.paid != null) row.paid = log.args.paid;
+        } else if (log.name === "RunSettled") {
+          const row = byId.get(Number(log.args.runId));
+          if (!row) continue;
+          row.collected = asAmt(log.args.collected);
+          row.leftover = asAmt(log.args.leftover);
+          row.score = log.args.score;
+          row.burned = asAmt(log.args.burned);
+          row.tx = log.transactionHash;
+          row.settled = true;
+        } else if (log.name === "FreeEnter") {
+          const row = byId.get(Number(log.args.runId));
+          if (row) row.free = true;
+        }
+      }
+    } catch (_) {
+      logsProvider = null;
+      logsOkAt = 0;
+    }
+
+    const missing = rows.filter((r) => r.settled && r.collected == null).slice(0, 24);
+    if (missing.length) {
+      try {
+        const p = await logsReadProvider();
+        const iface = gameContract(p).interface;
+        const latest = await withTimeout(p.getBlockNumber(), 5000);
+        const found = await Promise.all(
+          missing.map((row) => fetchRunSettledById(p, iface, row.id, latest).catch(() => null)),
+        );
+        missing.forEach((row, j) => {
+          const rec = found[j];
+          if (!rec) return;
+          if (rec.collected != null) row.collected = rec.collected;
+          if (rec.burned != null) row.burned = rec.burned;
+          if (rec.leftover != null) row.leftover = rec.leftover;
+          if (rec.hash) row.tx = rec.hash;
+          if (rec.player) row.player = ethers.getAddress(rec.player);
+        });
+      } catch (_) {}
+    }
+
+    const playN = {};
+    const invitees = {};
+    for (const row of rows) {
+      playN[row.player] = (playN[row.player] || 0) + 1;
+      if (row.referrer && row.referrer !== ethers.ZeroAddress) {
+        if (!invitees[row.referrer]) invitees[row.referrer] = new Set();
+        invitees[row.referrer].add(row.player);
+      }
+    }
+
+    const players = [...new Set(rows.map((r) => r.player))];
+    const week = {};
+    const refs = {};
+    const invPts = {};
+    for (let i = 0; i < players.length; i += batch) {
+      const chunk = players.slice(i, i + batch);
+      const [pts, refList, inv] = await Promise.all([
+        Promise.all(chunk.map((a) => c.weekPts(a).catch(() => 0n))),
+        Promise.all(chunk.map((a) => c.refOf(a).catch(() => ethers.ZeroAddress))),
+        Promise.all(chunk.map((a) => c.invitePts(a).catch(() => 0n))),
+      ]);
+      chunk.forEach((a, j) => {
+        week[a] = pts[j] || 0n;
+        invPts[a] = inv[j] || 0n;
+        const ref = refList[j];
+        refs[a] = ref && ref !== ethers.ZeroAddress ? ethers.getAddress(ref) : ethers.ZeroAddress;
+      });
+    }
+
+    for (const row of rows) {
+      row.weekPts = week[row.player] || 0n;
+      row.invitePts = invPts[row.player] || 0n;
+      if (!row.referrer || row.referrer === ethers.ZeroAddress) {
+        row.referrer = refs[row.player] || ethers.ZeroAddress;
+      }
+      row.plays = playN[row.player] || 0;
+      row.invites = invitees[row.player] ? invitees[row.player].size : 0;
+      row.rewardBps = rewardBpsFromParts(row.invites, row.plays);
+      row.payout = displayPayout(row.collected, row.paid, row.rewardBps);
+    }
+
+    let burnedTotal = 0n;
+    let weekPool = 0n;
+    let invitePool = 0n;
+    let freePool = 0n;
+    try {
+      const pool = await poolBalance();
+      burnedTotal = pool.burned;
+      weekPool = pool.week;
+      invitePool = pool.invite;
+      freePool = pool.free;
+    } catch (_) {
+      try {
+        burnedTotal = await c.burnedTotal();
+      } catch (_) {}
+    }
+
+    const unique = new Set(rows.map((r) => r.player.toLowerCase()));
+    return {
+      nextRunId: n,
+      runs: rows,
+      burnedTotal,
+      weekPool,
+      invitePool,
+      freePool,
+      totalRuns: rows.length,
+      uniqueWallets: unique.size,
+      freeCount: rows.filter((r) => r.free === true).length,
+      paidCount: rows.filter((r) => r.free === false).length,
+      unknownPay: rows.filter((r) => r.free == null).length,
+    };
+  }
+
   return {
     cfg,
     get account() {
@@ -1279,6 +1489,7 @@ const CatboxChain = (() => {
     tokenBalance,
     fetchLeaderboards,
     fetchBurns,
+    fetchOwnerRuns,
     formatLim(v) {
       return Number(ethers.formatUnits(v, 18)).toFixed(4);
     },

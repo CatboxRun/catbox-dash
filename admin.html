@@ -30,7 +30,7 @@
       href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@500;700&family=Press+Start+2P&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="./styles.css?v=37" />
+    <link rel="stylesheet" href="./styles.css?v=42" />
     <style>
       .admin-page { max-width: 1180px; }
       .admin-page .sub { word-break: break-word; }
@@ -109,7 +109,7 @@
         width: 100%;
         border-collapse: collapse;
         font-size: 12px;
-        min-width: 980px;
+        min-width: 1480px;
       }
       table.runs th,
       table.runs td {
@@ -189,18 +189,23 @@
                 <th data-key="tierId">档位 / 门票</th>
                 <th data-key="free">付费</th>
                 <th data-key="collected">捡到</th>
+                <th data-key="payout">结算</th>
+                <th data-key="rewardBps">奖励%</th>
                 <th data-key="leftover">剩余</th>
                 <th data-key="burned">销毁</th>
                 <th data-key="score">分数</th>
-                <th data-key="weekPts">周积分</th>
+                <th data-key="weekPts">日积分</th>
+                <th data-key="invites">邀请</th>
+                <th data-key="plays">局数</th>
                 <th data-key="settled">已结算</th>
                 <th data-key="startedAt">时间</th>
                 <th data-key="referrer">推荐人</th>
+                <th data-key="tx">哈希</th>
               </tr>
             </thead>
             <tbody id="rows">
               <tr>
-                <td colspan="12" class="empty">等待扫描…</td>
+                <td colspan="17" class="empty">等待扫描…</td>
               </tr>
             </tbody>
           </table>
@@ -210,7 +215,7 @@
 
     <script src="./config.js?v=26"></script>
     <script src="https://cdn.jsdelivr.net/npm/ethers@6.13.5/dist/ethers.umd.min.js"></script>
-    <script src="./chain.js?v=47"></script>
-    <script src="./admin.js?v=1"></script>
+    <script src="./chain.js?v=51"></script>
+    <script src="./admin.js?v=2"></script>
   </body>
 </html>

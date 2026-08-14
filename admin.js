@@ -87,6 +87,10 @@ function cmp(a, b, key) {
     collected: 1,
     leftover: 1,
     burned: 1,
+    payout: 1,
+    rewardBps: 1,
+    invites: 1,
+    plays: 1,
     score: 1,
     weekPts: 1,
     startedAt: 1,
@@ -135,6 +139,9 @@ function renderChips(summary) {
     ["局数", s.totalRuns ?? allRows.length],
     ["独立钱包", s.uniqueWallets ?? "—"],
     ["付费 / 免费", paidBit],
+    ["日奖池", s.weekPool != null ? `${lim(s.weekPool)} LIM` : "—"],
+    ["邀请池", s.invitePool != null ? `${lim(s.invitePool)} LIM` : "—"],
+    ["免费池", s.freePool != null ? `${lim(s.freePool)} LIM` : "—"],
     ["累计销毁", s.burnedTotal != null ? `${lim(s.burnedTotal)} LIM` : "—"],
   ]
     .map(([k, v]) => `<div class="chip"><span>${k}</span><b>${v}</b></div>`)
@@ -147,11 +154,24 @@ function addrCell(addr) {
   return `<span class="addr"><a href="${href}" target="_blank" rel="noopener noreferrer">${addr}</a><button type="button" class="copy" data-copy="${addr}">复制</button></span>`;
 }
 
+function fmtBps(bps) {
+  const n = Number(bps || 10500);
+  if (!Number.isFinite(n)) return "—";
+  return `${(n / 100).toFixed(1)}%`;
+}
+
+function txCell(hash) {
+  if (!hash) return "—";
+  const href = CatboxChain.txUrl(hash);
+  const shortHash = `${hash.slice(0, 10)}…${hash.slice(-6)}`;
+  return `<a href="${href}" target="_blank" rel="noopener noreferrer">${shortHash}</a>`;
+}
+
 function renderTable() {
   const rows = visibleRows();
   const body = $("rows");
   if (!rows.length) {
-    body.innerHTML = `<tr><td colspan="12" class="empty">${allRows.length ? "无匹配地址" : "暂无对局"}</td></tr>`;
+    body.innerHTML = `<tr><td colspan="17" class="empty">${allRows.length ? "无匹配地址" : "暂无对局"}</td></tr>`;
     return;
   }
   body.innerHTML = rows
@@ -167,13 +187,18 @@ function renderTable() {
         <td>${r.tierName || "—"} · ${Number(r.ticketLim || 0)} LIM</td>
         <td>${pay}</td>
         <td>${lim(r.collected)}</td>
+        <td>${lim(r.payout)}</td>
+        <td>${fmtBps(r.rewardBps)}</td>
         <td>${lim(r.leftover)}</td>
         <td>${lim(r.burned)}</td>
         <td>${score}</td>
         <td>${fmtPts(r.weekPts)}</td>
+        <td>${r.invites ?? 0}</td>
+        <td>${r.plays ?? 0}</td>
         <td>${settled}</td>
         <td>${fmtTime(r.startedAt)}</td>
         <td>${addrCell(r.referrer)}</td>
+        <td>${txCell(r.tx)}</td>
       </tr>`;
     })
     .join("");
@@ -197,250 +222,9 @@ function paintWalletBtn() {
   $("gateConnect").textContent = acc ? CatboxChain.short(acc) : "连接钱包";
 }
 
-const TIER_NAMES = ["SCOUT", "RUNNER", "PHANTOM", "VAULT"];
-const READ_RPCS = [
-  "https://bsc-dataseed.binance.org",
-  "https://bsc-dataseed1.binance.org",
-  "https://bsc-rpc.publicnode.com",
-  "https://1rpc.io/bnb",
-];
-const LOG_RPCS = ["https://bsc-rpc.publicnode.com", "https://bsc.publicnode.com"];
-
-function sleep(ms) {
-  return new Promise((r) => setTimeout(r, ms));
-}
-
-function makePublic(url) {
-  return new ethers.JsonRpcProvider(url, CatboxChain.cfg.chainId, {
-    staticNetwork: true,
-    batchMaxCount: 1,
-  });
-}
-
-async function pickProvider(urls) {
-  for (const url of urls) {
-    try {
-      const p = makePublic(url);
-      await p.getBlockNumber();
-      return p;
-    } catch (_) {}
-  }
-  return makePublic(urls[0]);
-}
-
-function gameAt(provider) {
-  const cfg = CatboxChain.cfg;
-  return new ethers.Contract(cfg.address, cfg.abi, provider);
-}
-
-function parseRun(id, r) {
-  const player = r.player || r[0];
-  const paid = r.paid != null ? r.paid : r[1];
-  const startedAt = r.startedAt != null ? r.startedAt : r[2];
-  const settled = Boolean(r.settled != null ? r.settled : r[3]);
-  let free = null;
-  if (r.free != null) free = Boolean(r.free);
-  else if (r.length > 4 && r[4] != null) free = Boolean(r[4]);
-  return { id, player, paid: paid ?? 0n, startedAt: Number(startedAt || 0), settled, free };
-}
-
-function tierOfPaid(paid, prices) {
-  const n = Number(ethers.formatUnits(paid || 0n, 18));
-  let best = 0;
-  let bestDiff = Infinity;
-  (prices || []).forEach((p, i) => {
-    const d = Math.abs(Number(ethers.formatUnits(p, 18)) - n);
-    if (d < bestDiff) {
-      bestDiff = d;
-      best = i;
-    }
-  });
-  return { id: best, name: TIER_NAMES[best] || `T${best}`, lim: n };
-}
-
-async function fetchRunEventLogs(provider, needStartIds) {
-  const cfg = CatboxChain.cfg;
-  const need = new Set(needStartIds);
-  const iface = gameAt(provider).interface;
-  const topicsOr = [
-    iface.getEvent("RunStarted").topicHash,
-    iface.getEvent("RunSettled").topicHash,
-  ];
-  try {
-    topicsOr.push(iface.getEvent("FreeEnter").topicHash);
-  } catch (_) {}
-  const latest = await provider.getBlockNumber();
-  const started = [];
-  const settled = [];
-  const frees = [];
-  const ingest = (got) => {
-    for (const log of got || []) {
-      try {
-        const parsed = iface.parseLog(log);
-        const rec = { args: parsed.args, blockNumber: log.blockNumber, transactionHash: log.transactionHash };
-        if (parsed.name === "RunStarted") {
-          started.push(rec);
-          need.delete(Number(parsed.args.runId));
-        } else if (parsed.name === "RunSettled") settled.push(rec);
-        else if (parsed.name === "FreeEnter") frees.push(rec);
-      } catch (_) {}
-    }
-  };
-  try {
-    const all = await provider.getLogs({
-      address: cfg.address,
-      topics: [topicsOr],
-      fromBlock: 0,
-      toBlock: latest,
-    });
-    ingest(all);
-    if (need.size === 0) return { started, settled, frees, covered: true };
-  } catch (_) {}
-  const chunk = 1200;
-  const maxChunks = 120;
-  for (let i = 0; i < maxChunks; i++) {
-    const toBlock = latest - i * chunk;
-    if (toBlock < 0) break;
-    const fromBlock = Math.max(0, toBlock - chunk + 1);
-    let got = null;
-    for (let attempt = 0; attempt < 3 && !got; attempt++) {
-      try {
-        got = await provider.getLogs({
-          address: cfg.address,
-          topics: [topicsOr],
-          fromBlock,
-          toBlock,
-        });
-      } catch (_) {
-        await sleep(300 * (attempt + 1));
-      }
-    }
-    ingest(got);
-    if (need.size === 0) break;
-    await sleep(120);
-  }
-  return { started, settled, frees, covered: need.size === 0 };
-}
-
 async function fetchAllRuns(onProgress) {
   if (!CatboxChain.account || !CatboxChain.isOwner()) throw new Error("NOT_OWNER");
-  const read = await pickProvider([CatboxChain.cfg.rpc, ...READ_RPCS]);
-  const c = gameAt(read);
-  const n = Number(await c.nextRunId());
-  const ids = [];
-  for (let i = n - 1; i >= 1; i--) ids.push(i);
-  if (onProgress) onProgress({ phase: "runs", done: 0, total: ids.length });
-
-  let prices = [
-    ethers.parseUnits("1", 18),
-    ethers.parseUnits("3", 18),
-    ethers.parseUnits("6", 18),
-    ethers.parseUnits("10", 18),
-  ];
-  try {
-    prices = await Promise.all([0, 1, 2, 3].map((i) => c.ticketPrice(i)));
-  } catch (_) {}
-
-  const batch = 8;
-  const rows = [];
-  for (let i = 0; i < ids.length; i += batch) {
-    const chunk = ids.slice(i, i + batch);
-    const runs = await Promise.all(chunk.map((id) => c.runs(id)));
-    chunk.forEach((id, j) => {
-      const parsed = parseRun(id, runs[j]);
-      if (!parsed.player || parsed.player === ethers.ZeroAddress) return;
-      const player = ethers.getAddress(parsed.player);
-      const tier = tierOfPaid(parsed.paid, prices);
-      rows.push({
-        id,
-        player,
-        paid: parsed.paid,
-        ticketLim: tier.lim,
-        tierId: tier.id,
-        tierName: tier.name,
-        startedAt: parsed.startedAt,
-        settled: parsed.settled,
-        free: parsed.free,
-        collected: null,
-        leftover: null,
-        burned: null,
-        score: null,
-        weekPts: 0n,
-        referrer: ethers.ZeroAddress,
-        tx: null,
-      });
-    });
-    if (onProgress) onProgress({ phase: "runs", done: Math.min(i + batch, ids.length), total: ids.length });
-  }
-
-  const byId = new Map(rows.map((r) => [r.id, r]));
-  if (onProgress) onProgress({ phase: "logs", done: 0, total: rows.length });
-  try {
-    const logsP = await pickProvider(LOG_RPCS);
-    const ev = await fetchRunEventLogs(logsP, rows.map((r) => r.id));
-    for (const log of ev.started) {
-      const row = byId.get(Number(log.args.runId));
-      if (!row) continue;
-      const ref = log.args.referrer;
-      if (ref && ref !== ethers.ZeroAddress) row.referrer = ethers.getAddress(ref);
-      if (log.args.paid != null) row.paid = log.args.paid;
-    }
-    for (const log of ev.settled) {
-      const row = byId.get(Number(log.args.runId));
-      if (!row) continue;
-      row.collected = log.args.collected;
-      row.leftover = log.args.leftover;
-      row.score = log.args.score;
-      row.burned = log.args.burned;
-      row.tx = log.transactionHash;
-      row.settled = true;
-    }
-    const freeIds = new Set(ev.frees.map((l) => Number(l.args.runId)));
-    for (const row of rows) {
-      if (row.free != null) continue;
-      if (freeIds.has(row.id)) row.free = true;
-      else if (ev.covered) row.free = false;
-    }
-  } catch (_) {}
-
-  const players = [...new Set(rows.map((r) => r.player))];
-  const week = {};
-  const refs = {};
-  for (let i = 0; i < players.length; i += batch) {
-    const chunk = players.slice(i, i + batch);
-    const [pts, refList] = await Promise.all([
-      Promise.all(chunk.map((a) => c.weekPts(a).catch(() => 0n))),
-      Promise.all(chunk.map((a) => c.refOf(a).catch(() => ethers.ZeroAddress))),
-    ]);
-    chunk.forEach((a, j) => {
-      week[a] = pts[j] || 0n;
-      const ref = refList[j];
-      refs[a] = ref && ref !== ethers.ZeroAddress ? ethers.getAddress(ref) : ethers.ZeroAddress;
-    });
-  }
-  for (const row of rows) {
-    row.weekPts = week[row.player] || 0n;
-    if (!row.referrer || row.referrer === ethers.ZeroAddress) {
-      row.referrer = refs[row.player] || ethers.ZeroAddress;
-    }
-  }
-
-  let burnedTotal = 0n;
-  try {
-    burnedTotal = await c.burnedTotal();
-  } catch (_) {}
-
-  const unique = new Set(rows.map((r) => r.player.toLowerCase()));
-  return {
-    nextRunId: n,
-    runs: rows,
-    burnedTotal,
-    totalRuns: rows.length,
-    uniqueWallets: unique.size,
-    freeCount: rows.filter((r) => r.free === true).length,
-    paidCount: rows.filter((r) => r.free === false).length,
-    unknownPay: rows.filter((r) => r.free == null).length,
-  };
+  return CatboxChain.fetchOwnerRuns(onProgress);
 }
 
 function paintGate() {
