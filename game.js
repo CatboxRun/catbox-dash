@@ -59,10 +59,14 @@ function renderList(id, rows, emptyKey) {
     el.innerHTML = `<li class="empty">${t(emptyKey || "emptyBoard")}</li>`;
     return;
   }
+  const explorer = window.CatboxChain?.cfg?.explorer || "https://bscscan.com";
   el.innerHTML = rows
-    .slice(0, 6)
+    .slice(0, 20)
     .map((r, i) => {
-      const name = r.you ? `${r.tag} · ${t("you")}` : r.tag;
+      const tag = r.addr
+        ? `<a href="${explorer}/address/${r.addr}" target="_blank" rel="noopener">${r.tag}</a>`
+        : r.tag;
+      const name = r.you ? `${tag} · ${t("you")}` : tag;
       return `<li class="${r.you ? "you" : ""}"><span class="tag">${i + 1}. ${name}</span><span>${rowPts(r)}</span></li>`;
     })
     .join("");
@@ -689,8 +693,16 @@ async function deployContract() {
   }
 }
 
+function withTimeout(promise, ms) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), ms)),
+  ]);
+}
+
 async function bootWallet() {
   if (!window.CatboxChain) return;
+  startLiveClock();
   $("walletBtn").onclick = async () => {
     try {
       $("walletBtn").textContent = t("connecting");
@@ -703,8 +715,8 @@ async function bootWallet() {
   window.addEventListener("catbox-wallet", () => refreshWalletUi());
   if (window.ethereum) {
     try {
-      const accs = await window.ethereum.request({ method: "eth_accounts" });
-      if (accs[0]) await CatboxChain.connect();
+      const accs = await withTimeout(window.ethereum.request({ method: "eth_accounts" }), 2500);
+      if (accs[0]) await withTimeout(CatboxChain.connect(), 8000);
     } catch (_) {}
   }
   await refreshWalletUi();
@@ -768,7 +780,6 @@ async function bootWallet() {
   $("claimBtn") && ($("claimBtn").onclick = doClaim);
   $("claimDailyBtn") && ($("claimDailyBtn").onclick = doClaim);
   $("claimInviteBtn") && ($("claimInviteBtn").onclick = doClaim);
-  startLiveClock();
   try { CatboxChain.referrer(); } catch (_) {}
 }
 

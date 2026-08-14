@@ -106,7 +106,7 @@ const CatboxChain = (() => {
   }
 
   async function isDeployed() {
-    const p = new ethers.JsonRpcProvider(cfg.rpc, cfg.chainId);
+    const p = await publicReadProvider();
     const code = await p.getCode(cfg.address);
     return code && code !== "0x";
   }
@@ -120,14 +120,54 @@ const CatboxChain = (() => {
     return tx.hash;
   }
 
-  async function readProvider() {
-    if (window.ethereum) {
+  const RPCS = [
+    cfg.rpc,
+    "https://bsc-dataseed1.binance.org",
+    "https://bsc-dataseed2.binance.org",
+    "https://bsc-rpc.publicnode.com",
+    "https://1rpc.io/bnb",
+  ];
+
+  let publicProvider = null;
+  let publicRpc = "";
+  let publicOkAt = 0;
+
+  function makePublic(url) {
+    return new ethers.JsonRpcProvider(url, cfg.chainId, {
+      staticNetwork: true,
+      batchMaxCount: 1,
+    });
+  }
+
+  async function publicReadProvider() {
+    if (publicProvider && Date.now() - publicOkAt < 20000) return publicProvider;
+    if (publicProvider) {
       try {
-        await ensureBsc();
-        return browserProvider();
+        await publicProvider.getBlockNumber();
+        publicOkAt = Date.now();
+        return publicProvider;
+      } catch (_) {
+        publicProvider = null;
+      }
+    }
+    const urls = publicRpc ? [publicRpc, ...RPCS.filter((u) => u !== publicRpc)] : RPCS;
+    for (const url of urls) {
+      try {
+        const p = makePublic(url);
+        await p.getBlockNumber();
+        publicProvider = p;
+        publicRpc = url;
+        publicOkAt = Date.now();
+        return p;
       } catch (_) {}
     }
-    return new ethers.JsonRpcProvider(cfg.rpc, cfg.chainId);
+    publicProvider = makePublic(cfg.rpc);
+    publicRpc = cfg.rpc;
+    return publicProvider;
+  }
+
+  async function readProvider() {
+    return publicReadProvider();
   }
 
   async function ticketPrice(tierId = 0) {
@@ -752,7 +792,7 @@ const CatboxChain = (() => {
     }
   }
 
-  function toRows(map, youAddr, keepZero) {
+  function toRows(map, youAddr) {
     return Object.entries(map)
       .map(([addr, pts]) => ({
         tag: short(addr),
@@ -760,54 +800,68 @@ const CatboxChain = (() => {
         pts: asPts(pts),
         you: youAddr && addr.toLowerCase() === youAddr.toLowerCase(),
       }))
-      .filter((r) => keepZero || r.pts > 0)
       .sort((a, b) => b.pts - a.pts)
-      .slice(0, 8);
+      .slice(0, 20);
   }
 
-  async function queryLogs(c, filter, latest) {
-    const spans = [50000, 8000, 2000];
-    for (const span of spans) {
-      try {
-        return await c.queryFilter(filter, Math.max(0, latest - span));
-      } catch (_) {}
+  async function queryLogs(c, filter, latest, lookback) {
+    const span = lookback || 20000;
+    const chunk = 2000;
+    const from = Math.max(0, latest - span);
+    const ranges = [];
+    for (let start = from; start <= latest; start += chunk) {
+      ranges.push([start, Math.min(latest, start + chunk - 1)]);
     }
-    return [];
+    const out = [];
+    const limit = 4;
+    for (let i = 0; i < ranges.length; i += limit) {
+      const batch = ranges.slice(i, i + limit);
+      const parts = await Promise.all(
+        batch.map(async ([a, b]) => {
+          try {
+            return await c.queryFilter(filter, a, b);
+          } catch (_) {
+            return [];
+          }
+        }),
+      );
+      for (const part of parts) out.push(...part);
+    }
+    return out;
   }
 
   async function fetchLeaderboards() {
-    const p = await readProvider();
+    const p = await publicReadProvider();
     const c = gameContract(p);
     const latest = await p.getBlockNumber();
-    const dayBlocks = 30000;
+    const dayBlocks = 28800;
     const [started, settled] = await Promise.all([
-      queryLogs(c, c.filters.RunStarted(), latest),
-      queryLogs(c, c.filters.RunSettled(), latest),
+      queryLogs(c, c.filters.RunStarted(), latest, dayBlocks),
+      queryLogs(c, c.filters.RunSettled(), latest, dayBlocks),
     ]);
     const week = {};
     const invite = {};
-    const dayFrom = Math.max(0, latest - dayBlocks);
     for (const e of settled) {
-      if (e.blockNumber < dayFrom) continue;
-      const add = eventScore(e);
       const player = e.args.player;
-      week[player] = (week[player] || 0n) + add;
+      week[player] = (week[player] || 0n) + eventScore(e);
     }
     for (const e of started) {
+      const player = e.args.player;
+      if (week[player] == null) week[player] = 0n;
       const ref = e.args.referrer;
       if (ref && ref !== ethers.ZeroAddress) invite[ref] = (invite[ref] || 0n) + 10n;
     }
     return {
-      week: toRows(week, account, true),
+      week: toRows(week, account),
       invite: toRows(invite, account),
     };
   }
 
   async function fetchBurns() {
-    const p = await readProvider();
+    const p = await publicReadProvider();
     const c = gameContract(p);
     const latest = await p.getBlockNumber();
-    const logs = await queryLogs(c, c.filters.Burned(), latest);
+    const logs = await queryLogs(c, c.filters.Burned(), latest, 20000);
     return logs
       .slice()
       .reverse()
