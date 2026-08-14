@@ -385,7 +385,7 @@ async function refreshInviteUi() {
       link.value = t("connectFirst");
     }
   }
-  let bps = 10000;
+  let bps = 10500;
   if (acc && window.CatboxChain && chainReady) {
     try {
       if (ptsEl) {
@@ -393,6 +393,7 @@ async function refreshInviteUi() {
         ptsEl.textContent = String(pts);
       }
       bps = Number(await CatboxChain.rewardBpsOf(acc));
+      if (!bps || bps < 10500) bps = 10500;
     } catch (_) {
       if (ptsEl) ptsEl.textContent = "0";
     }
@@ -1093,7 +1094,7 @@ function refreshOver() {
   const weekAmt = leftover * 0.5;
   const invAmt = leftover * 0.2;
   const burnShown = typeof burned === "number" ? burned : burnAmt;
-  const pct = Math.round((bps || window._rewardBps || 10000) / 100);
+  const pct = Math.round((bps || window._rewardBps || 10500) / 100);
   const paid = payout != null ? payout : Math.min(got * pct / 100, ticket * 2);
   $("overResult").innerHTML = t(cap ? "resultFull" : "resultPart", {
     coins,
@@ -1385,7 +1386,7 @@ function startRun(tier, teach, freeRun) {
   $("hudTier").textContent = `${tierText(tier.id).name} · ${tier.cost} LIM`;
   $("rebateBar").style.width = "0%";
   $("hudRebate").textContent = `0.00/${tier.cost} LIM`;
-  if ($("hudBonus")) $("hudBonus").textContent = `${Math.round((window._rewardBps || 10000) / 100)}%`;
+  if ($("hudBonus")) $("hudBonus").textContent = `${Math.round((window._rewardBps || 10500) / 100)}%`;
   $("runNote")?.classList.add("hidden");
   $("hudScore")?.parentElement?.classList.remove("x2");
   show(game);
@@ -2466,8 +2467,8 @@ function finish(whyKey) {
     burned: leftover > 0 ? +(leftover * 0.3).toFixed(6) : 0,
     burnHash: "",
     tx: "",
-    bps: window._rewardBps || 10000,
-    payout: Math.min(got * ((window._rewardBps || 10000) / 10000), ticket * 2),
+    bps: window._rewardBps || 10500,
+    payout: Math.min(got * ((window._rewardBps || 10500) / 10000), ticket * 2),
   };
   show(over);
   refreshOver();

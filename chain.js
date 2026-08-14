@@ -284,12 +284,13 @@ const CatboxChain = (() => {
   }
 
   async function rewardBpsOf(addr = account) {
-    if (!addr) return 10000n;
+    if (!addr) return 10500n;
     try {
       const c = gameContract(await readProvider());
-      return await c.rewardBps(addr);
+      const v = await c.rewardBps(addr);
+      return v >= 10500n ? v : 10500n;
     } catch (_) {
-      return 10000n;
+      return 10500n;
     }
   }
 

@@ -12,7 +12,7 @@ interface IERC20 {
 /// Leftover: daily board 50% / invite board 20% / burn 30%.
 /// Daily 50%: 100% equal among that day's paid players (snapshot/pull at SGT 00:00). No score weight.
 /// Invite 20%: equal among top 200 inviters (O(200) list + equal accumulator). Same day-boundary as daily.
-/// Coin payout: collected * (100% + 5% per invited friend), cap 200% of ticket.
+/// Coin payout: collected * (105% + 5% per invited friend), cap 200% of ticket.
 /// Both boards: Singapore 00:00 rollover (UTC+8 / BJ_OFFSET). Yesterday only — today's leftover is not claimable until then.
 /// Free: 2× SCOUT (tier 0, 1 LIM) per address. No free VAULT.
 /// TG/X extras are local/social on live V5. Free runs: board score 0, skipped from _markPlayed / prize share. Extra over collected from freePool.
@@ -25,7 +25,7 @@ contract CatboxDash {
     uint256 public constant TIER_COUNT = 4;
     uint256 public constant DAY = 1 days;
     uint256 public constant BJ_OFFSET = 8 hours;
-    uint256 public constant BASE_BPS = 10000;
+    uint256 public constant BASE_BPS = 10500;
     uint256 public constant INVITE_BPS = 500;
     uint256 public constant MAX_BPS = 20000;
     uint256 public constant TOP_CAP = 200;
