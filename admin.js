@@ -1,6 +1,6 @@
 /* global ethers, CatboxChain */
 
-const OWNER_HINT = "连接钱包后查看链上对局。TokenPocket / MetaMask 均可。";
+const OWNER_HINT = "用 owner 钱包连接后查看对局。TokenPocket / MetaMask 均可。";
 const ZERO = "0x0000000000000000000000000000000000000000";
 
 const $ = (id) => document.getElementById(id);
@@ -235,7 +235,10 @@ function paintGate() {
     show($("gate"), true);
     show($("board"), false);
     show($("denied"), false);
-    $("gateHint").textContent = window.ethereum ? OWNER_HINT : "请用 TokenPocket 或 MetaMask 打开此页。";
+    const who = CatboxChain.cfg?.owner ? CatboxChain.short(CatboxChain.cfg.owner) : "";
+    $("gateHint").textContent = window.ethereum
+      ? `${OWNER_HINT}${who ? ` Owner：${who}` : ""}`
+      : "请用 TokenPocket 或 MetaMask 打开此页。";
     return false;
   }
   if (!owner) {
@@ -258,9 +261,14 @@ async function loadRuns() {
   setStatus("正在扫描全部对局…");
   try {
     const data = await fetchAllRuns((p) => {
-      if (p.phase === "runs") setStatus(`读取对局 ${p.done}/${p.total}…`);
+      if (p.phase === "partial" && p.data) {
+        allRows = p.data.runs || [];
+        renderChips(p.data);
+        paintSortHeaders();
+        renderTable();
+        setStatus(`已列出 ${p.data.totalRuns} 局，正在补齐结算…`);
+      } else if (p.phase === "runs") setStatus(`读取对局 ${p.done}/${p.total}…`);
       else if (p.phase === "logs") setStatus("补齐结算 / 推荐人日志…");
-      else if (p.phase === "done") setStatus(`已加载 ${p.total} 局`);
     });
     allRows = data.runs || [];
     renderChips(data);
@@ -268,7 +276,12 @@ async function loadRuns() {
     renderTable();
     setStatus(`共 ${data.totalRuns} 局 · ${data.uniqueWallets} 个钱包`);
   } catch (e) {
-    const msg = e?.message === "NOT_OWNER" ? "无权限" : e?.message === "NO_WALLET" ? "请先连接钱包" : "读取失败，请重试";
+    const msg =
+      e?.message === "NOT_OWNER"
+        ? "无权限：请切换到 owner 钱包"
+        : e?.message === "NO_WALLET"
+          ? "请先连接钱包"
+          : `读取失败：${e?.shortMessage || e?.message || "请重试"}`;
     setStatus(msg);
     if (e?.message === "NOT_OWNER") {
       show($("denied"), true);
