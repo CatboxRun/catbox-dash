@@ -1536,6 +1536,8 @@ function startRun(tier, teach, freeRun) {
     lastLightWx: -9999,
     lastGapWx: -9999,
     lastCoinWx: -9999,
+    ledges: [],
+    sawLight: false,
     night: false,
     popped: [],
     flash: 0,
@@ -1677,6 +1679,36 @@ function isGapAt(run, wx) {
   return false;
 }
 
+function landingLedge(run, wx, py, vy) {
+  if (!run.ledges || !run.ledges.length || vy < -1) return null;
+  let best = null;
+  for (let i = 0; i < run.ledges.length; i++) {
+    const L = run.ledges[i];
+    if (wx < L.x0 + 4 || wx >= L.x1 - 4) continue;
+    if (py <= L.y + 12 && py >= L.y - 36) {
+      if (best == null || L.y < best) best = L.y;
+    }
+  }
+  return best;
+}
+
+function pushLedge(run, x0, x1, y) {
+  if (!run.ledges) run.ledges = [];
+  run.ledges.push({ x0, x1, y });
+}
+
+function spawnShelfAt(run, x) {
+  const w = 188 + Math.floor(Math.random() * 72);
+  const pad = 32;
+  pushFlat(run, x, x + pad + w + pad);
+  const x0 = x + pad;
+  const x1 = x + pad + w;
+  const ly = BASE_GROUND - 86;
+  pushLedge(run, x0, x1, ly);
+  spawnCoinW(run, x0 + w * 0.48, ly - 38);
+  return x + pad + w + pad;
+}
+
 function spawnCoinW(run, wx, wy) {
   if (run.lastCoinWx != null && wx - run.lastCoinWx < 240) return;
   spawnCoin(run, wx - run.scroll, wy);
@@ -1697,6 +1729,7 @@ function ensureTerrain(run) {
   if (run.terrain.length > 20) {
     const cut = run.scroll - 240;
     run.terrain = run.terrain.filter((s) => s.x1 > cut);
+    if (run.ledges) run.ledges = run.ledges.filter((L) => L.x1 > cut);
   }
 }
 
@@ -1718,23 +1751,30 @@ function addTerrainChunk(run) {
   pushFlat(run, x, x + pad);
   x += pad;
 
+  if (!run.tutorial && !run.sawLight && run.t > 168 && bag) {
+    addHazardChunk(run, x, Math.max(p, 0.06), true, "light");
+    return;
+  }
+
   const safeChance = Math.max(0.18, 0.52 - p * 0.16 - grab * 0.06);
   const wantSafe = !idle && (p < 0.08 || roll < safeChance || sinceHazard < minGap);
 
   if (wantSafe) {
     const flavor = Math.random();
-    if (flavor < 0.4 && p > 0.02) {
+    if (flavor < 0.28 && p > 0.02) {
       const w = 340 + Math.floor(Math.random() * 180);
       const peak = 22 + Math.floor(Math.random() * 28);
       run.terrain.push({ kind: "hill", x0: x, x1: x + w, y: BASE_GROUND, peak });
       coinArc(run, x, x + w);
       x += w;
-    } else if (flavor < 0.58 && p > 0.18) {
+    } else if (flavor < 0.42 && p > 0.18) {
       const w = 120 + Math.floor(Math.random() * 40);
       const peak = 16 + Math.floor(Math.random() * 10);
       run.terrain.push({ kind: "bump", x0: x, x1: x + w, y: BASE_GROUND, peak });
       spawnCoinW(run, x + w * 0.5, BASE_GROUND - peak - 42);
       x += w;
+    } else if (flavor < 0.72) {
+      x = spawnShelfAt(run, x);
     } else {
       const w = 240 + Math.floor(Math.random() * 100);
       pushFlat(run, x, x + w);
@@ -1749,7 +1789,7 @@ function addTerrainChunk(run) {
   addHazardChunk(run, x, p, true);
 }
 
-function addHazardChunk(run, x, p, withCoins) {
+function addHazardChunk(run, x, p, withCoins, forceKind) {
   const roll = Math.random();
   const pad = 40 + Math.floor(Math.random() * 36);
   pushFlat(run, x, x + pad);
@@ -1759,17 +1799,21 @@ function addHazardChunk(run, x, p, withCoins) {
   const nearGap = Math.abs(x - (run.lastGapWx || -99999)) < 380;
   const idle = run.t - (run.lastJumpT || 0) > 240;
 
-  let kind;
-  if (idle && !nearLight && p > 0.08) kind = "gap";
-  else if (nearGap) kind = roll < 0.62 ? "pipe" : "light";
-  else if (nearLight) kind = roll < 0.55 ? "pipe" : "gap";
-  else if (p < 0.16) kind = roll < 0.55 ? "light" : "pipe";
-  else if (roll < 0.28) kind = "light";
-  else if (roll < 0.72) kind = "pipe";
-  else kind = "gap";
+  let kind = forceKind;
+  if (!kind) {
+    if (idle && !nearLight && p > 0.08) kind = "gap";
+    else if (nearGap) kind = roll < 0.62 ? "pipe" : "light";
+    else if (nearLight) kind = roll < 0.55 ? "pipe" : "gap";
+    else if (p < 0.16) kind = roll < 0.55 ? "light" : "pipe";
+    else if (roll < 0.28) kind = "light";
+    else if (roll < 0.72) kind = "pipe";
+    else kind = "gap";
+  }
 
-  if (kind === "light" && nearGap) kind = "pipe";
-  if (kind === "gap" && nearLight) kind = "pipe";
+  if (!forceKind) {
+    if (kind === "light" && nearGap) kind = "pipe";
+    if (kind === "gap" && nearLight) kind = "pipe";
+  }
 
   if (kind === "light") {
     const w = 148 + Math.floor(p * 16);
@@ -1785,7 +1829,9 @@ function addHazardChunk(run, x, p, withCoins) {
     if (withCoins) spawnCoinW(run, x + 58, BASE_GROUND - 26);
     run.lastHazard = run.t;
     run.lastLightWx = x + 24 + (70 + p * 24) / 2;
+    run.sawLight = true;
     x += w;
+    if (withCoins && Math.random() < 0.62) x = spawnShelfAt(run, x);
   } else if (kind === "pipe") {
     const duo = Math.random() < 0.12 && p > 0.45;
     const w = duo ? 196 : 124;
@@ -1941,34 +1987,36 @@ function tick() {
   const px = PLAYER_SX;
   const pwx = run.scroll + px;
   const gy = groundAt(run, pwx);
-  const overGap = isGapAt(run, pwx);
-  run.ground = gy;
+  const ledgeY = landingLedge(run, pwx, run.y, run.vy);
+  const overGap = isGapAt(run, pwx) && ledgeY == null;
+  const floor = ledgeY != null ? ledgeY : gy;
+  run.ground = floor;
   const wasAir = run.wasAir;
 
   const stick =
     !overGap &&
     run.jumps === 0 &&
     run.vy >= 0 &&
-    run.y >= gy - 8 &&
-    run.y <= gy + 16;
+    run.y >= floor - 8 &&
+    run.y <= floor + 16;
 
   if (stick) {
-    run.y = gy;
+    run.y = floor;
     run.vy = 0;
     run.coyote = 12;
   } else {
-    if (!overGap && run.y >= gy - 1) run.coyote = 12;
+    if (!overGap && run.y >= floor - 1) run.coyote = 12;
     else if (run.coyote > 0) run.coyote -= 1;
     run.vy += 0.42;
     run.y += run.vy;
-    if (!overGap && run.y > gy) {
-      run.y = gy;
+    if (!overGap && run.y > floor) {
+      run.y = floor;
       run.vy = 0;
       run.jumps = 0;
     }
   }
-  if (wasAir && run.jumps === 0 && !overGap && run.y >= gy - 2) spawnDust(px, gy);
-  run.wasAir = run.jumps > 0 || run.y < gy - 4;
+  if (wasAir && run.jumps === 0 && !overGap && run.y >= floor - 2) spawnDust(px, floor);
+  run.wasAir = run.jumps > 0 || run.y < floor - 4;
   if (run.invuln > 0) run.invuln -= 1;
 
   const py = run.y;
@@ -1982,11 +2030,15 @@ function tick() {
   for (const o of run.objects) {
     o.x -= spd;
     if (o.kind === "light") {
-      if (!o.armed && o.x < 420) {
+      if (!o.armed && o.x < 480) {
         o.armed = true;
-        o.phase = 0.82;
+        o.phase = 0.18;
       }
       if (o.armed) o.phase += o.slow || 0.02;
+      if (!o.hinted && o.x < 400 && o.x > 70) {
+        o.hinted = true;
+        showRunNote("stayLow", { flash: true });
+      }
     }
     if (o.kind === "beam") {
       o.y = groundAt(run, run.scroll + o.x + o.w / 2) - o.h;
@@ -2493,6 +2545,7 @@ function drawGround(pal, W, H) {
 
 function drawLight(o, night) {
   const on = Math.sin(o.phase) > 0.62;
+  const lethal = Math.sin(o.phase) > 0.72;
   const cx = o.x + o.w / 2;
   const lgy = groundAt(run, run.scroll + cx);
   ctx.fillStyle = "#1a2438";
@@ -2517,6 +2570,41 @@ function drawLight(o, night) {
   } else {
     ctx.fillStyle = "rgba(93, 115, 140, 0.2)";
     ctx.fillRect(cx - 2, 32, 4, Math.max(40, lgy - 80));
+  }
+  const tunnel = 52;
+  ctx.fillStyle = lethal ? "rgba(8, 14, 24, 0.55)" : "rgba(8, 14, 24, 0.28)";
+  ctx.fillRect(o.x - 8, lgy - tunnel, o.w + 16, tunnel + 4);
+  ctx.fillStyle = "#f0c14a";
+  ctx.fillRect(o.x - 8, lgy - 6, o.w + 16, 3);
+  ctx.fillStyle = "#ffe08a";
+  const mid = Math.round(cx);
+  ctx.fillRect(mid - 5, lgy - 18, 10, 3);
+  ctx.fillRect(mid - 3, lgy - 14, 6, 3);
+  ctx.fillRect(mid - 1, lgy - 10, 2, 4);
+  ctx.font = lang === "en" ? "8px 'Press Start 2P'" : "12px 'Noto Sans SC', 'Noto Sans', sans-serif";
+  ctx.fillStyle = "#000";
+  ctx.fillText(t("stayLow"), mid - 31, lgy + 16);
+  ctx.fillStyle = "#ffe08a";
+  ctx.fillText(t("stayLow"), mid - 32, lgy + 15);
+}
+
+function drawLedges(pal) {
+  if (!run.ledges) return;
+  for (const L of run.ledges) {
+    const x = Math.round(L.x0 - run.scroll);
+    const w = Math.round(L.x1 - L.x0);
+    const y = Math.round(L.y);
+    if (x + w < -20 || x > canvas.width + 20) continue;
+    ctx.fillStyle = "rgba(0,0,0,0.28)";
+    ctx.fillRect(x + 4, y + 8, w, 6);
+    ctx.fillStyle = pal.dirt || "#2a3a28";
+    ctx.fillRect(x, y, w, 14);
+    ctx.fillStyle = pal.grass || "#3d9a4a";
+    ctx.fillRect(x, y - 5, w, 6);
+    ctx.fillStyle = pal.grassHi || "#7ae08a";
+    ctx.fillRect(x + 2, y - 7, w - 4, 3);
+    ctx.fillStyle = pal.lip || "#c9a24a";
+    ctx.fillRect(x, y - 1, w, 2);
   }
 }
 
@@ -2644,6 +2732,7 @@ function draw() {
   drawSky(pal, night, W, H);
   drawParallax(pal, night, W);
   drawGround(pal, W, H);
+  drawLedges(pal);
 
   for (const o of run.objects) {
     if (o.kind === "coin" && !o.hit) drawCoin(o);
