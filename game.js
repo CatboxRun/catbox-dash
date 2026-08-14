@@ -52,19 +52,14 @@ function rowPts(r) {
   return Number.isFinite(n) ? Math.floor(n) : 0;
 }
 
-function scoredRows(rows) {
-  return (rows || []).filter((r) => rowPts(r) > 0);
-}
-
 function renderList(id, rows, emptyKey) {
   const el = $(id);
   if (!el) return;
-  const ranked = scoredRows(rows);
-  if (!ranked.length) {
+  if (!rows || !rows.length) {
     el.innerHTML = `<li class="empty">${t(emptyKey || "emptyBoard")}</li>`;
     return;
   }
-  el.innerHTML = ranked
+  el.innerHTML = rows
     .slice(0, 6)
     .map((r, i) => {
       const name = r.you ? `${r.tag} · ${t("you")}` : r.tag;
@@ -92,8 +87,8 @@ function renderBurns(rows) {
 }
 
 function mergeWeekBoard(liveWeek) {
-  const live = scoredRows(liveWeek);
-  const localYou = loadBoard().find((r) => r.you && rowPts(r) > 0);
+  const live = liveWeek || [];
+  const localYou = loadBoard().find((r) => r.you);
   if (!localYou) return live;
   const liveYou = live.find((r) => r.you);
   if (liveYou && rowPts(liveYou) >= rowPts(localYou)) return live;
@@ -2418,7 +2413,7 @@ function finish(whyKey) {
   const leftover = Math.max(0, +(ticket - got).toFixed(6));
   const score = boardScore();
   const dailyScore = run.free ? 0 : score;
-  const rank = run.free ? 0 : postBoard(score, run.tier.id);
+  const rank = postBoard(dailyScore, run.tier.id);
   lastFinish = {
     cap,
     ticket,

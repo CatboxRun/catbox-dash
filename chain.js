@@ -723,7 +723,7 @@ const CatboxChain = (() => {
     }
   }
 
-  function toRows(map, youAddr) {
+  function toRows(map, youAddr, keepZero) {
     return Object.entries(map)
       .map(([addr, pts]) => ({
         tag: short(addr),
@@ -731,7 +731,7 @@ const CatboxChain = (() => {
         pts: asPts(pts),
         you: youAddr && addr.toLowerCase() === youAddr.toLowerCase(),
       }))
-      .filter((r) => r.pts > 0)
+      .filter((r) => keepZero || r.pts > 0)
       .sort((a, b) => b.pts - a.pts)
       .slice(0, 8);
   }
@@ -761,7 +761,6 @@ const CatboxChain = (() => {
     for (const e of settled) {
       if (e.blockNumber < dayFrom) continue;
       const add = eventScore(e);
-      if (add <= 0n) continue;
       const player = e.args.player;
       week[player] = (week[player] || 0n) + add;
     }
@@ -770,7 +769,7 @@ const CatboxChain = (() => {
       if (ref && ref !== ethers.ZeroAddress) invite[ref] = (invite[ref] || 0n) + 10n;
     }
     return {
-      week: toRows(week, account),
+      week: toRows(week, account, true),
       invite: toRows(invite, account),
     };
   }
