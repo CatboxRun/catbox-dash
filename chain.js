@@ -116,8 +116,14 @@ const CatboxChain = (() => {
 
   async function poolBalance() {
     const c = gameContract(await readProvider());
-    const [w, i, burned, free] = await Promise.all([c.weekPool(), c.invitePool(), c.burnedTotal(), c.freePool()]);
-    return { week: w, invite: i, burned, free, total: w + i };
+    const [i, burned, free] = await Promise.all([c.invitePool(), c.burnedTotal(), c.freePool()]);
+    let d;
+    try {
+      d = await c.dayPool();
+    } catch (_) {
+      d = await c.weekPool();
+    }
+    return { week: d, day: d, invite: i, burned, free, total: d + i };
   }
 
   async function pendingOf(addr = account) {
@@ -131,6 +137,35 @@ const CatboxChain = (() => {
     if (!addr) return 0n;
     const c = gameContract(await readProvider());
     return c.invitePts(addr);
+  }
+
+  async function inviteCountOf(addr = account) {
+    if (!addr) return 0n;
+    try {
+      const c = gameContract(await readProvider());
+      return await c.inviteCount(addr);
+    } catch (_) {
+      return 0n;
+    }
+  }
+
+  async function rewardBpsOf(addr = account) {
+    if (!addr) return 10000n;
+    try {
+      const c = gameContract(await readProvider());
+      return await c.rewardBps(addr);
+    } catch (_) {
+      return 10000n;
+    }
+  }
+
+  async function nextClaimAt() {
+    try {
+      const c = gameContract(await readProvider());
+      return await c.nextClaimAt();
+    } catch (_) {
+      return 0n;
+    }
   }
 
   async function claim() {
@@ -250,20 +285,22 @@ const CatboxChain = (() => {
     const tx = await game.settle(collectedWei(got, ticket), BigInt(score || 0));
     const rec = await tx.wait();
     let burned = 0n;
+    let payout = 0n;
     for (const log of rec.logs || []) {
       try {
         const parsed = game.interface.parseLog(log);
         if (parsed?.name === "Burned") burned = parsed.args.amount;
+        if (parsed?.name === "RunSettled") payout = parsed.args.payout;
       } catch (_) {}
     }
-    return { hash: rec.hash, burned };
+    return { hash: rec.hash, burned, payout };
   }
 
   async function withdrawWeekly(amountWei) {
     await connect();
     if (!isOwner()) throw new Error("NOT_OWNER");
     const s = await signer();
-    const tx = await gameContract(s).withdrawWeekly(amountWei);
+    const tx = await gameContract(s).withdrawDaily(amountWei);
     return (await tx.wait()).hash;
   }
 
@@ -513,13 +550,16 @@ const CatboxChain = (() => {
     const p = await readProvider();
     const c = gameContract(p);
     const latest = await p.getBlockNumber();
+    const dayBlocks = 30000;
     const [started, settled] = await Promise.all([
       queryLogs(c, c.filters.RunStarted(), latest),
       queryLogs(c, c.filters.RunSettled(), latest),
     ]);
     const week = {};
     const invite = {};
+    const dayFrom = Math.max(0, latest - dayBlocks);
     for (const e of settled) {
+      if (e.blockNumber < dayFrom) continue;
       const player = e.args.player;
       week[player] = (week[player] || 0n) + BigInt(e.args.score);
     }
@@ -564,6 +604,9 @@ const CatboxChain = (() => {
     poolBalance,
     pendingOf,
     invitePoints,
+    inviteCountOf,
+    rewardBpsOf,
+    nextClaimAt,
     claim,
     referrer,
     limBalance,

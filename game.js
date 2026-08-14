@@ -1,8 +1,8 @@
 const TIERS = [
-  { id: 0, name: "SCOUT", cost: 1, mult: 1, speed: 3.6, speedMax: 5.6, peakAt: 90 },
-  { id: 1, name: "RUNNER", cost: 3, mult: 1.5, speed: 3.8, speedMax: 6.6, peakAt: 75 },
-  { id: 2, name: "PHANTOM", cost: 6, mult: 2, speed: 4.0, speedMax: 7.6, peakAt: 60 },
-  { id: 3, name: "VAULT", cost: 10, mult: 3, speed: 4.2, speedMax: 8.4, peakAt: 50 },
+  { id: 0, name: "SCOUT", cost: 1, mult: 1, speed: 3.4, speedMax: 7.2, peakAt: 62 },
+  { id: 1, name: "RUNNER", cost: 3, mult: 1.5, speed: 3.7, speedMax: 8.4, peakAt: 52 },
+  { id: 2, name: "PHANTOM", cost: 6, mult: 2, speed: 4.0, speedMax: 9.6, peakAt: 44 },
+  { id: 3, name: "VAULT", cost: 10, mult: 3, speed: 4.3, speedMax: 10.8, peakAt: 36 },
 ];
 
 function playerTag() {
@@ -200,20 +200,33 @@ async function refreshWalletUi() {
 
 async function refreshClaimUi() {
   const amt = $("claimAmt");
+  const when = $("claimWhen");
   const btn = $("claimBtn");
   const acc = window.CatboxChain?.account;
+  const nextLabel = (ts) => {
+    const ms = Math.max(0, Number(ts) * 1000 - Date.now());
+    const h = Math.floor(ms / 3600000);
+    const m = Math.floor((ms % 3600000) / 60000);
+    return t("claimWait", { t: `${h}h ${m}m` });
+  };
   if (!acc || !chainReady) {
     if (amt) amt.textContent = t("claimNone");
+    if (when) when.textContent = t("claimWhen");
     if (btn) btn.disabled = true;
     return;
   }
   try {
-    const p = await CatboxChain.pendingOf(acc);
+    const [p, next] = await Promise.all([
+      CatboxChain.pendingOf(acc),
+      CatboxChain.nextClaimAt(),
+    ]);
     const text = `${CatboxChain.formatLim(p.total)} LIM`;
     if (amt) amt.textContent = p.total > 0n ? `${t("claimPending")} ${text}` : t("claimNone");
+    if (when) when.textContent = p.total > 0n ? t("claimReady") : nextLabel(next);
     if (btn) btn.disabled = p.total === 0n;
   } catch (_) {
     if (amt) amt.textContent = t("claimNone");
+    if (when) when.textContent = t("claimWhen");
     if (btn) btn.disabled = true;
   }
 }
@@ -277,15 +290,39 @@ async function refreshInviteUi() {
       link.value = t("connectFirst");
     }
   }
-  if (!ptsEl) return;
-  if (!acc || !window.CatboxChain || !chainReady) {
+  let bps = 10000;
+  if (acc && window.CatboxChain && chainReady) {
+    try {
+      if (ptsEl) {
+        const pts = await CatboxChain.invitePoints(acc);
+        ptsEl.textContent = String(pts);
+      }
+      bps = Number(await CatboxChain.rewardBpsOf(acc));
+    } catch (_) {
+      if (ptsEl) ptsEl.textContent = "0";
+    }
+  } else if (ptsEl) {
     ptsEl.textContent = "0";
-    return;
   }
-  try {
-    const pts = await CatboxChain.invitePoints(acc);
-    ptsEl.textContent = String(pts);
-  } catch (_) {}
+  window._rewardBps = bps;
+  const pct = `${Math.round(bps / 100)}%`;
+  if ($("rewardPct")) $("rewardPct").textContent = `${t("rewardCap")} ${pct}`;
+  if ($("myRewardPct")) $("myRewardPct").textContent = pct;
+  if ($("hudBonus")) $("hudBonus").textContent = pct;
+}
+
+function bootLobbyTabs() {
+  const tabs = document.querySelectorAll(".lobby-tab");
+  if (!tabs.length) return;
+  const setTab = (id) => {
+    tabs.forEach((b) => b.classList.toggle("on", b.dataset.tab === id));
+    document.querySelectorAll(".lobby-pane").forEach((p) => {
+      p.classList.toggle("hidden", p.dataset.pane !== id);
+    });
+  };
+  tabs.forEach((btn) => {
+    btn.onclick = () => setTab(btn.dataset.tab);
+  });
 }
 
 let quoteTimer = 0;
@@ -500,7 +537,7 @@ const BASE_GROUND = 400;
 const PLAYER_SX = 160;
 
 const imgCoin = new Image();
-imgCoin.src = "./assets/coin.png?v=2";
+imgCoin.src = "./assets/coin.png?v=3";
 const imgCat = new Image();
 imgCat.src = "./assets/catbox.png?v=2";
 const imgLogo = new Image();
@@ -666,7 +703,7 @@ function scoutIsFree(tier) {
 
 function renderTickets() {
   const glyphs = [
-    "./assets/coin.png?v=2",
+    "./assets/coin.png?v=3",
     "./assets/icon-ticket.png?v=1",
     "./assets/icon-trophy.png?v=1",
     "./assets/icon-burn.png?v=1",
@@ -715,17 +752,31 @@ let lastFinish = null;
 
 function refreshOver() {
   if (!lastFinish || over.classList.contains("hidden")) return;
-  const { cap, ticket, got, leftover, score, coins, whyKey, rank, burned, burnHash } = lastFinish;
-  $("overKicker").textContent = cap ? t("overFullK") : t("overPartK");
-  $("overTitle").textContent = cap ? t("overFullT") : t("overPartT");
-  $("overWhy").textContent = t(whyKey);
+  const { cap, ticket, got, leftover, score, coins, whyKey, rank, burned, burnHash, payout, bps } = lastFinish;
+  const fail = String(whyKey || "").startsWith("die");
+  const whyEl = $("overWhy");
+  if (whyEl) {
+    whyEl.textContent = t(whyKey);
+    whyEl.className = `over-why ${whyKey}`;
+  }
+  if (fail) {
+    $("overKicker").textContent = t("overFailK");
+    $("overTitle").textContent = t(`${whyKey}Title`);
+  } else {
+    $("overKicker").textContent = cap ? t("overFullK") : t("overPartK");
+    $("overTitle").textContent = cap ? t("overFullT") : t("overPartT");
+  }
   const burnAmt = leftover * 0.3;
   const weekAmt = leftover * 0.5;
   const invAmt = leftover * 0.2;
   const burnShown = typeof burned === "number" ? burned : burnAmt;
+  const pct = Math.round((bps || window._rewardBps || 10000) / 100);
+  const paid = payout != null ? payout : Math.min(got * pct / 100, ticket * 2);
   $("overResult").innerHTML = t(cap ? "resultFull" : "resultPart", {
     coins,
     got: got.toFixed(4),
+    paid: Number(paid).toFixed(4),
+    pct,
     ticket,
     score,
     left: leftover.toFixed(4),
@@ -807,13 +858,13 @@ function splitTicket(cost) {
   let remain = cost;
   const min = cost * 0.0001;
   let guard = 0;
-  while (remain > min && guard++ < 52) {
+  while (remain > min && guard++ < 88) {
     const r = Math.random();
     let pct;
-    if (r < 0.1) pct = 0.04 + Math.random() * 0.03;
-    else if (r < 0.28) pct = 0.015 + Math.random() * 0.02;
-    else if (r < 0.55) pct = 0.006 + Math.random() * 0.01;
-    else pct = 0.0002 + Math.random() * 0.004;
+    if (r < 0.08) pct = 0.03 + Math.random() * 0.02;
+    else if (r < 0.24) pct = 0.012 + Math.random() * 0.016;
+    else if (r < 0.5) pct = 0.005 + Math.random() * 0.008;
+    else pct = 0.0002 + Math.random() * 0.003;
     let v = cost * pct;
     if (v > remain) v = remain;
     v = +v.toFixed(6);
@@ -985,6 +1036,9 @@ function startRun(tier, teach) {
     popped: [],
     flash: 0,
     clearWait: 0,
+    coinsOut: false,
+    overtime: false,
+    noteT: 0,
     startedMs: Date.now(),
     tutorial: false,
     tutId: "",
@@ -1003,6 +1057,9 @@ function startRun(tier, teach) {
   $("hudTier").textContent = `${tierText(tier.id).name} · ${tier.cost} LIM`;
   $("rebateBar").style.width = "0%";
   $("hudRebate").textContent = `0.00/${tier.cost} LIM`;
+  if ($("hudBonus")) $("hudBonus").textContent = `${Math.round((window._rewardBps || 10000) / 100)}%`;
+  $("runNote")?.classList.add("hidden");
+  $("hudScore")?.parentElement?.classList.remove("x2");
   show(game);
   cancelAnimationFrame(raf);
   accMs = 0;
@@ -1018,14 +1075,52 @@ function progress(run) {
 
 function currentSpeed(run) {
   const p = progress(run);
-  return run.tier.speed + (run.tier.speedMax - run.tier.speed) * p * p;
+  const grab = run.tier.cost > 0 ? run.collected / run.tier.cost : 0;
+  let haste = p * p;
+  if (grab > 0.5) haste += (grab - 0.5) * 0.6;
+  if (grab > 0.9) haste += (grab - 0.9) * 2.4;
+  if (run.overtime) haste += 0.4;
+  haste = Math.min(1.4, haste);
+  return run.tier.speed + (run.tier.speedMax - run.tier.speed) * haste;
+}
+
+function addRaw(n) {
+  run.raw += run.overtime ? n * 2 : n;
+}
+
+function reachableCoinY(run, wx) {
+  const gy = groundAt(run, wx);
+  const maxLift = isGapAt(run, wx) ? 92 : 118;
+  const minLift = 26;
+  return gy - (minLift + Math.random() * (maxLift - minLift));
+}
+
+function placeCoin(run, x, y, amount) {
+  const gold = amount >= run.tier.cost * 0.02;
+  run.objects.push({
+    kind: "coin",
+    x,
+    y,
+    baseY: y,
+    hit: false,
+    amount,
+    gold,
+    bob: Math.random() * Math.PI * 2,
+  });
 }
 
 function spawnCoin(run, x, y) {
+  if (run.overtime || run.collected + 1e-9 >= run.tier.cost) return;
   if (run.bagI >= run.bag.length) return;
   const amount = run.bag[run.bagI++];
-  const gold = amount >= run.tier.cost * 0.02;
-  run.objects.push({ kind: "coin", x, y, hit: false, amount, gold });
+  placeCoin(run, x, y, amount);
+}
+
+function recycleMissedCoin(run, amount) {
+  if (run.overtime || run.collected + 1e-9 >= run.tier.cost) return;
+  const x = canvas.width * 0.78 + Math.random() * 90;
+  const wx = run.scroll + x;
+  placeCoin(run, x, reachableCoinY(run, wx), amount);
 }
 
 function hash11(n) {
@@ -1064,13 +1159,11 @@ function spawnCoinW(run, wx, wy) {
 }
 
 function coinArc(run, x0, x1) {
-  const n = 4 + Math.floor(Math.random() * 3);
+  const n = 3 + Math.floor(Math.random() * 2);
   for (let i = 0; i < n; i++) {
     const t = (i + 0.5) / n;
     const wx = x0 + t * (x1 - x0);
-    const gy = groundAt(run, wx);
-    const lift = Math.sin(t * Math.PI) * (46 + Math.random() * 30);
-    spawnCoinW(run, wx, gy - 30 - lift);
+    spawnCoinW(run, wx, reachableCoinY(run, wx));
   }
 }
 
@@ -1090,21 +1183,22 @@ function ensureTerrain(run) {
 function addTerrainChunk(run) {
   const p = progress(run);
   let x = run.nextTerrain;
-  const bag = run.bagI < run.bag.length;
+  const bag = !run.overtime && run.collected + 1e-9 < run.tier.cost && run.bagI < run.bag.length;
   if (!bag) {
-    pushFlat(run, x, x + 480);
-    run.nextTerrain = x + 480;
+    addHazardChunk(run, x, Math.min(1, progress(run) + 0.22 + (run.overtime ? 0.2 : 0)), false);
     return;
   }
 
   const sinceHazard = run.t - run.lastHazard;
-  const minGap = 108 - p * 22;
+  const grab = run.collected / run.tier.cost;
+  const minGap = Math.max(46, 100 - p * 38 - grab * 22);
   const roll = Math.random();
-  const pad = 32 + Math.floor(Math.random() * 28);
+  const pad = 28 + Math.floor(Math.random() * 24);
   pushFlat(run, x, x + pad);
   x += pad;
 
-  const wantSafe = p < 0.1 || roll < 0.58 || sinceHazard < minGap;
+  const safeChance = Math.max(0.2, 0.56 - p * 0.3 - grab * 0.16);
+  const wantSafe = p < 0.08 || roll < safeChance || sinceHazard < minGap;
 
   if (wantSafe) {
     const flavor = Math.random();
@@ -1136,6 +1230,14 @@ function addTerrainChunk(run) {
     return;
   }
 
+  addHazardChunk(run, x, p, true);
+}
+
+function addHazardChunk(run, x, p, withCoins) {
+  const roll = Math.random();
+  const pad = 28 + Math.floor(Math.random() * 36);
+  pushFlat(run, x, x + pad);
+  x += pad;
   if (p < 0.3 || roll < 0.8) {
     const w = 128 + Math.floor(p * 24);
     pushFlat(run, x, x + w);
@@ -1143,38 +1245,43 @@ function addTerrainChunk(run) {
       kind: "light",
       x: x + 24 - run.scroll,
       w: 70 + p * 24,
-      phase: 0,
-      slow: 0.02 + p * 0.016,
+      phase: 0.05,
+      slow: 0.016 + p * 0.012,
     });
+    if (withCoins) spawnCoinW(run, x + 58, BASE_GROUND - 28);
     run.lastHazard = run.t;
     x += w;
   } else if (p < 0.5 || roll < 0.91) {
-    const w = 108;
+    const duo = Math.random() < 0.3 && p > 0.2;
+    const w = duo ? 176 : 108;
     pushFlat(run, x, x + w);
     const style = Math.random() < 0.42 ? "brick" : "pipe";
-    const h = style === "brick" ? 26 : 46 + Math.floor(Math.random() * 22);
+    const h = style === "brick" ? 26 : 44 + Math.floor(Math.random() * 18);
     const bw = style === "brick" ? 32 : 28;
-    const wx = x + 40;
-    run.objects.push({
-      kind: "beam",
-      x: wx - run.scroll,
-      y: BASE_GROUND - h,
-      w: bw,
-      h,
-      style,
-    });
-    if (Math.random() > 0.32) {
-      spawnCoinW(run, wx + 54, BASE_GROUND - h - 52);
-      spawnCoinW(run, wx + 94, BASE_GROUND - h - 28);
+    const spots = duo ? [x + 36, x + 108] : [x + 40];
+    for (const wx of spots) {
+      run.objects.push({
+        kind: "beam",
+        x: wx - run.scroll,
+        y: BASE_GROUND - h,
+        w: bw,
+        h,
+        style,
+      });
+    }
+    if (withCoins) {
+      spawnCoinW(run, x + (duo ? 88 : 70), BASE_GROUND - h - 56);
+      if (Math.random() > 0.28) spawnCoinW(run, x + w - 24, BASE_GROUND - h - 28);
     }
     run.lastHazard = run.t;
     x += w;
   } else {
-    const gw = 52 + p * 18;
-    const ap = 72;
+    const gw = 46 + p * 14;
+    const ap = 80;
     pushFlat(run, x, x + ap);
     run.terrain.push({ kind: "gap", x0: x + ap, x1: x + ap + gw, y: BASE_GROUND });
     pushFlat(run, x + ap + gw, x + ap + gw + ap);
+    if (withCoins) spawnCoinW(run, x + ap + gw * 0.5, BASE_GROUND - 96);
     run.lastHazard = run.t;
     x += ap + gw + ap;
   }
@@ -1185,12 +1292,26 @@ function jump() {
   if (!run || run.dead) return;
   const onFloor = run.y >= run.ground - 2 || run.coyote > 0;
   if (onFloor && run.jumps === 0) {
-    run.vy = -12.4;
+    run.vy = -13.2;
     run.jumps = 1;
     run.coyote = 0;
+    spawnDust(PLAYER_SX, run.ground);
   } else if (run.jumps < 2) {
-    run.vy = -11.2;
+    run.vy = -11.8;
     run.jumps = 2;
+    if (run.fx) {
+      for (let i = 0; i < 4; i++) {
+        run.fx.push({
+          kind: "dust",
+          x: PLAYER_SX + (Math.random() - 0.5) * 10,
+          y: run.y,
+          vx: (Math.random() - 0.5) * 2,
+          vy: 1.2 + Math.random(),
+          t: 8 + Math.floor(Math.random() * 6),
+          s: 2,
+        });
+      }
+    }
   }
 }
 
@@ -1297,11 +1418,11 @@ function tick() {
   if (stick) {
     run.y = gy;
     run.vy = 0;
-    run.coyote = 8;
+    run.coyote = 12;
   } else {
-    if (!overGap && run.y >= gy - 1) run.coyote = 8;
+    if (!overGap && run.y >= gy - 1) run.coyote = 12;
     else if (run.coyote > 0) run.coyote -= 1;
-    run.vy += 0.48;
+    run.vy += 0.42;
     run.y += run.vy;
     if (!overGap && run.y > gy) {
       run.y = gy;
@@ -1328,12 +1449,24 @@ function tick() {
       o.y = groundAt(run, run.scroll + o.x + o.w / 2) - o.h;
     }
 
-    if (o.kind === "coin" && !o.hit && dist(px, py, o.x, o.y) < (o.gold ? 42 : 34)) {
+    if (o.kind === "coin" && !o.hit) {
+      o.bob = (o.bob || 0) + 0.14;
+      const mag = dist(px, py, o.x, o.y);
+      if (mag < 40 && mag > 2) {
+        o.x += (px - o.x) * 0.1;
+        o.y += (py - o.y) * 0.1;
+        o.baseY = o.y;
+      } else if (o.baseY != null) {
+        o.y = o.baseY + Math.sin(o.bob) * 4;
+      }
+    }
+
+    if (o.kind === "coin" && !o.hit && dist(px, py, o.x, o.y) < (o.gold ? 40 : 32)) {
       o.hit = true;
       run.coins += 1;
       run.combo += 1;
       run.collected = Math.min(run.tier.cost, +(run.collected + o.amount).toFixed(6));
-      run.raw += 36 + Math.round((o.amount / run.tier.cost) * 900) + Math.min(run.combo, 12) * 10;
+      addRaw(36 + Math.round((o.amount / run.tier.cost) * 900) + Math.min(run.combo, 12) * 10);
       if (o.gold) run.flash = 10;
       const showLim = o.amount >= 0.01 ? `+${o.amount.toFixed(2)} LIM` : `+${o.amount.toFixed(4)} LIM`;
       run.popped.push({
@@ -1347,11 +1480,24 @@ function tick() {
     }
 
     if (o.kind === "coin" && !o.hit && o.x < px - 50) run.combo = 0;
+    if (o.kind === "coin" && !o.hit && o.x < -36) {
+      recycleMissedCoin(run, o.amount);
+      o.hit = true;
+    }
 
     if (run.invuln > 0) continue;
-    if (o.kind === "beam" && aabb(hb.x, hb.y, hb.w, hb.h, o.x, o.y, o.w, o.h)) {
-      finish("dieBlock");
-      return;
+    if (o.kind === "beam") {
+      const hit = aabb(hb.x, hb.y, hb.w, hb.h, o.x, o.y, o.w, o.h);
+      const near = aabb(hb.x - 10, hb.y - 8, hb.w + 20, hb.h + 16, o.x, o.y, o.w, o.h);
+      if (hit) {
+        finish("dieBlock");
+        return;
+      }
+      if (near && !o.missed) {
+        o.missed = true;
+        addRaw(48);
+        spawnDust(o.x + o.w / 2, o.y);
+      }
     }
     if (o.kind === "light") {
       const on = Math.sin(o.phase) > 0.62;
@@ -1367,23 +1513,33 @@ function tick() {
   run.popped = run.popped.filter((n) => --n.t > 0);
   tickFx();
   if (run.flash > 0) run.flash -= 1;
-  run.raw += 0.28;
+  addRaw(0.28);
   const pct = (run.collected / run.tier.cost) * 100;
   $("hudRebate").textContent = `${run.collected.toFixed(3)}/${run.tier.cost} LIM`;
   $("rebateBar").style.width = `${Math.min(100, pct)}%`;
   $("hudScore").textContent = String(boardScore());
-  if (run.bagI >= run.bag.length && !run.objects.some((o) => o.kind === "coin")) {
-    run.clearWait += 1;
-    if (run.clearWait > 50) {
-      finish(run.collected + 1e-9 >= run.tier.cost ? "clearFull" : "clearPart");
-    }
+  if (!run.overtime && run.collected + 1e-9 >= run.tier.cost) {
+    run.overtime = true;
+    showRunNote("coinsOutFull");
+    $("hudScore")?.parentElement?.classList.add("x2");
+  }
+  if (run.noteT > 0) {
+    run.noteT -= 1;
+    if (run.noteT <= 0) $("runNote")?.classList.add("hidden");
   }
   if (run.tutorial) tickTutorial();
 }
 
+function showRunNote(key) {
+  run.noteT = 200;
+  const note = $("runNote");
+  if (!note) return;
+  note.textContent = t(key);
+  note.classList.remove("hidden");
+}
+
 function boardScore() {
-  const cap = run.collected + 1e-9 >= run.tier.cost;
-  return Math.floor(run.raw * run.tier.mult * (cap ? 2 : 1));
+  return Math.floor(run.raw * run.tier.mult);
 }
 
 function dist(ax, ay, bx, by) {
@@ -1784,25 +1940,25 @@ function drawLight(o, night) {
 }
 
 function drawCoin(o) {
-  const s = o.gold ? 52 : 32;
-  const bob = Math.sin(run.t * 0.14 + o.x * 0.03) * 3;
-  const spin = 0.28 + Math.abs(Math.sin(run.t * 0.1 + o.x * 0.02)) * 0.72;
+  const r = o.gold ? 11 : 8;
+  const bob = Math.sin((o.bob || 0)) * 3;
+  const spin = 0.42 + Math.abs(Math.sin(run.t * 0.1 + o.x * 0.02)) * 0.58;
+  const x = Math.round(o.x);
+  const y = Math.round(o.y + bob);
   ctx.save();
-  ctx.translate(o.x, o.y + bob);
-  ctx.fillStyle = o.gold ? "rgba(240, 193, 74, 0.32)" : "rgba(240, 193, 74, 0.16)";
-  ctx.fillRect(-s * 0.42, -s * 0.42, s * 0.84, s * 0.84);
+  ctx.translate(x, y);
   ctx.scale(spin, 1);
-  if (imgCoin.complete && imgCoin.naturalWidth) {
-    ctx.drawImage(imgCoin, -s / 2, -s / 2, s, s);
-  } else {
-    ctx.fillStyle = "#f0c14a";
-    ctx.fillRect(-10, -10, 20, 20);
-  }
+  ctx.fillStyle = o.gold ? "#ffe08a" : "#f0c14a";
+  ctx.fillRect(-r + 2, -r, (r - 2) * 2, r * 2);
+  ctx.fillRect(-r, -r + 2, r * 2, (r - 2) * 2);
+  ctx.fillStyle = "#c49a4a";
+  ctx.fillRect(-r, r - 3, r * 2, 2);
+  ctx.fillRect(r - 3, -r + 2, 2, r * 2 - 4);
+  ctx.fillStyle = "#fff6c8";
+  ctx.fillRect(-r + 2, -r + 2, 3, 3);
+  ctx.fillStyle = "#7a5a18";
+  ctx.fillRect(-2, -5, 4, 10);
   ctx.restore();
-  if ((run.t + Math.floor(o.x)) % 18 < 3) {
-    ctx.fillStyle = "#fff6c8";
-    ctx.fillRect(o.x + 8, o.y + bob - 12, 3, 3);
-  }
 }
 
 function drawCat() {
@@ -1928,6 +2084,7 @@ function draw() {
 
 function finish(whyKey) {
   if (!run || run.dead) return;
+  if (whyKey !== "dieBlock" && whyKey !== "dieLight" && whyKey !== "dieGap") return;
   if (run.tutorial) completeTutorial();
   run.dead = true;
   cancelAnimationFrame(raf);
@@ -1949,6 +2106,8 @@ function finish(whyKey) {
     burned: leftover > 0 ? +(leftover * 0.3).toFixed(6) : 0,
     burnHash: "",
     tx: "",
+    bps: window._rewardBps || 10000,
+    payout: Math.min(got * ((window._rewardBps || 10000) / 10000), ticket * 2),
   };
   show(over);
   refreshOver();
@@ -1967,6 +2126,7 @@ async function settleOnchain(got, ticket, score) {
       lastFinish.tx = rec.hash;
       lastFinish.burnHash = rec.burned > 0n ? rec.hash : "";
       if (rec.burned > 0n) lastFinish.burned = Number(ethers.formatUnits(rec.burned, 18));
+      if (rec.payout > 0n) lastFinish.payout = Number(ethers.formatUnits(rec.payout, 18));
       el.innerHTML = `<a href="${CatboxChain.txUrl(rec.hash)}" target="_blank" rel="noopener">${rec.hash.slice(0, 10)}…</a>`;
       refreshOver();
     } else {
@@ -1985,5 +2145,7 @@ async function settleOnchain(got, ticket, score) {
 mountLangs();
 applyI18n();
 bootTutorial();
+bootLobbyTabs();
 show(lobby);
+if ($("fundAddr") && window.CatboxChain) $("fundAddr").value = CatboxChain.cfg.address;
 bootWallet();
