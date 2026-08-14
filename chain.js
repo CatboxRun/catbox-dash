@@ -4,6 +4,7 @@ const ERC20_ABI = [
   "function balanceOf(address) view returns (uint256)",
   "function allowance(address,address) view returns (uint256)",
   "function approve(address,uint256) returns (bool)",
+  "function transfer(address,uint256) returns (bool)",
   "function decimals() view returns (uint8)",
   "function symbol() view returns (string)",
 ];
@@ -115,8 +116,8 @@ const CatboxChain = (() => {
 
   async function poolBalance() {
     const c = gameContract(await readProvider());
-    const [w, i, burned] = await Promise.all([c.weekPool(), c.invitePool(), c.burnedTotal()]);
-    return { week: w, invite: i, burned, total: w + i };
+    const [w, i, burned, free] = await Promise.all([c.weekPool(), c.invitePool(), c.burnedTotal(), c.freePool()]);
+    return { week: w, invite: i, burned, free, total: w + i };
   }
 
   async function pendingOf(addr = account) {
@@ -177,6 +178,24 @@ const CatboxChain = (() => {
     const c = gameContract(await readProvider());
     const s = await c.freeStatus(addr);
     return { used: Number(s[0]), left: Number(s[1]), pool: s[2], eligible: Boolean(s[3]) };
+  }
+
+  async function fundFreePool(limAmount) {
+    await connect();
+    const s = await signer();
+    const game = gameContract(s);
+    const lim = limContract(s);
+    const amt = ethers.parseUnits(String(limAmount), 18);
+    if (amt <= 0n) throw new Error("NO_LIM");
+    const bal = await lim.balanceOf(account);
+    if (bal < amt) throw new Error("NO_LIM");
+    const allow = await lim.allowance(account, cfg.address);
+    if (allow < amt) {
+      const txA = await lim.approve(cfg.address, ethers.MaxUint256);
+      await txA.wait();
+    }
+    const tx = await game.fund(amt);
+    return (await tx.wait()).hash;
   }
 
   async function approveAndEnter(tierId = 0) {
@@ -552,6 +571,7 @@ const CatboxChain = (() => {
     activeRun,
     approveAndEnter,
     freeStatus,
+    fundFreePool,
     settleRun,
     withdrawWeekly,
     setTicketPrice,

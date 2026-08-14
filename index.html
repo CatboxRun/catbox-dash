@@ -31,7 +31,7 @@
       href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@500;700&family=Noto+Sans+SC:wght@500;700&family=Noto+Sans+JP:wght@500;700&family=Noto+Sans+KR:wght@500;700&family=Noto+Sans+Thai:wght@500;700&family=Press+Start+2P&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="./styles.css?v=20" />
+    <link rel="stylesheet" href="./styles.css?v=22" />
   </head>
   <body>
     <div class="crt">
@@ -70,67 +70,12 @@
           <div class="hero-copy">
             <img class="hero-mascot" src="./assets/hero-cat.png?v=1" alt="Catbox" />
             <div class="hero-text">
-              <div class="marquee-wrap">
-                <p class="marquee" data-i18n="marquee">PICK A TICKET · JUMP · CATCH COINS</p>
-              </div>
               <h1 data-i18n="hero">JUMP THE COIN.<br />BANK THE TICKET.</h1>
-              <p class="play-lead" data-i18n="playLead">Tickets start at 1 LIM. Catch coins. Keep what you grab.</p>
             </div>
           </div>
-        </section>
-
-        <section class="auto-card">
-          <div class="auto-head">
-            <img src="./assets/icon-auto.png?v=1" alt="" />
-            <img src="./assets/icon-fair.png?v=1" alt="" />
-            <div>
-              <p class="kicker" data-i18n="autoKicker">ON-CHAIN ARCADE</p>
-              <h2 data-i18n="autoTitle">SMART CONTRACT RUNS IT ALL</h2>
-            </div>
-          </div>
-          <p class="auto-body" data-i18n="autoBody">Tickets, settle, prize split, and burn all run on the BSC contract. Ratios are fixed on-chain. Fair, automatic, verifiable.</p>
-          <div class="auto-steps">
-            <div class="auto-step">
-              <img src="./assets/icon-ticket.png?v=1" alt="" />
-              <span data-i18n="autoStep1">PAY TICKET</span>
-            </div>
-            <i>→</i>
-            <div class="auto-step">
-              <img src="./assets/hero-cat.png?v=1" alt="" />
-              <span data-i18n="autoStep2">PLAY</span>
-            </div>
-            <i>→</i>
-            <div class="auto-step">
-              <img src="./assets/icon-trophy.png?v=1" alt="" />
-              <span data-i18n="autoStep3">AUTO SPLIT</span>
-            </div>
-          </div>
-          <p class="fair-badge" data-i18n="fairBadge">FAIR · AUTOMATIC · ON-CHAIN</p>
         </section>
 
         <p class="play-now" data-i18n="playNow">PICK A TICKET</p>
-        <nav class="how-strip" aria-label="How to play">
-          <div class="how-item">
-            <img src="./assets/hero-cat.png?v=1" alt="" />
-            <span data-i18n="howJump">TAP · JUMP</span>
-          </div>
-          <div class="how-item">
-            <img src="./assets/coin.png?v=2" alt="" />
-            <span data-i18n="howCoin">COINS = LIM</span>
-          </div>
-          <div class="how-item">
-            <span class="how-glyph light" aria-hidden="true"></span>
-            <span data-i18n="howLight">WALK UNDER LIGHTS</span>
-          </div>
-          <div class="how-item">
-            <span class="how-glyph pipe" aria-hidden="true"></span>
-            <span data-i18n="howPipe">JUMP RED PIPES</span>
-          </div>
-          <div class="how-item">
-            <span class="how-glyph gap" aria-hidden="true"></span>
-            <span data-i18n="howGap">JUMP GAPS</span>
-          </div>
-        </nav>
         <div class="tickets" id="tickets"></div>
         <details class="rules-fold">
           <summary data-i18n="rulesToggle">RULES</summary>
@@ -142,8 +87,36 @@
           </ul>
         </details>
 
+        <section class="auto-card">
+          <div class="auto-head">
+            <img src="./assets/icon-auto.png?v=1" alt="" />
+            <img src="./assets/icon-fair.png?v=1" alt="" />
+            <div>
+              <p class="kicker" data-i18n="autoKicker">ON-CHAIN ARCADE</p>
+              <h2 data-i18n="autoTitle">SMART CONTRACT RUNS IT ALL</h2>
+            </div>
+          </div>
+          <p class="auto-body" data-i18n="autoBody">Tickets, settle, prize split, and burn all run on the BSC contract. Ratios are fixed on-chain. Fair, automatic, verifiable.</p>
+          <p class="fair-badge" data-i18n="fairBadge">FAIR · AUTOMATIC · ON-CHAIN</p>
+        </section>
+
         <section id="admin" class="admin hidden">
           <p class="kicker" data-i18n="admin">OWNER</p>
+          <div class="fund-box">
+            <p class="stat-k" data-i18n="fundTitle">FREE SCOUT POOL</p>
+            <p class="fund-amt" id="freePoolAmt">0 LIM</p>
+            <p class="fund-hint" data-i18n="fundHint">Send LIM to this contract. Extra LIM (after week / invite / ticket reserved) funds 2 free SCOUT runs. Or deposit below.</p>
+            <div class="invite-link-row">
+              <input id="fundAddr" readonly value="" />
+              <button class="ghost" id="copyFund" type="button" data-i18n="copyAddr">COPY ADDR</button>
+            </div>
+            <label class="ticket-edit">
+              <span data-i18n="fundAmt">LIM</span>
+              <input id="fundInput" type="number" min="1" step="1" value="20" />
+              <button class="primary" id="fundBtn" type="button" data-i18n="fundGo">DEPOSIT LIM</button>
+            </label>
+            <p class="tx-line" id="fundStatus"></p>
+          </div>
           <div class="row left">
             <button class="ghost" id="withdrawBtn" type="button" data-i18n="withdraw">WITHDRAW WEEKLY</button>
             <label class="ticket-edit">
@@ -254,7 +227,7 @@
           <div class="hud">
             <span class="hud-chip tier" id="hudTier"></span>
             <span class="hud-chip score"><small data-i18n="hudScore">SCORE</small><b id="hudScore">0</b></span>
-            <span class="hud-chip grab"><small>LIM</small><b id="hudRebate">0%</b></span>
+            <span class="hud-chip grab"><img src="./assets/coin.png?v=2" alt="" /><small>LIM</small><b id="hudRebate">0%</b></span>
           </div>
           <div class="bar"><i id="rebateBar"></i></div>
           <p id="rotateSoft" class="rotate-soft hidden" data-i18n="rotateSoft">Play here. Rotate only if this browser turns landscape.</p>
@@ -262,20 +235,21 @@
             <canvas id="cv" width="960" height="540"></canvas>
             <div id="tutLayer" class="tut-layer hidden" aria-live="polite">
               <button type="button" class="tut-skip" id="tutSkip" data-i18n="tutSkip">GOT IT</button>
-              <div class="tut-callout" id="tutCallout">
-                <span class="tut-hand" aria-hidden="true"></span>
-                <p class="tut-title" id="tutTitle"></p>
-                <p class="tut-sub" id="tutSub"></p>
-              </div>
             </div>
           </div>
         </div>
         <p class="hint" data-i18n="hint">JUMP THE CATBOX INTO COINS · WALK UNDER LIGHTS · JUMP RED BLOCKS</p>
       </section>
 
-      <section id="over" class="panel hidden">
-        <p class="kicker" id="overKicker">RUN OVER</p>
-        <h1 id="overTitle">END</h1>
+      <section id="over" class="panel hidden over-panel">
+        <div class="over-stub">
+          <img src="./assets/hero-cat.png?v=1" alt="" />
+          <div>
+            <p class="kicker" id="overKicker">RUN OVER</p>
+            <h1 id="overTitle">END</h1>
+          </div>
+          <img src="./assets/coin.png?v=2" alt="" />
+        </div>
         <p id="overWhy"></p>
         <div class="result" id="overResult"></div>
         <p class="posted" id="overPosted"></p>
@@ -337,11 +311,11 @@
       </div>
     </div>
 
-    <script src="./config.js?v=20"></script>
+    <script src="./config.js?v=22"></script>
     <script src="https://cdn.jsdelivr.net/npm/ethers@6.13.5/dist/ethers.umd.min.js"></script>
-    <script src="./chain.js?v=20"></script>
-    <script src="./i18n.js?v=20"></script>
-    <script src="./game.js?v=20"></script>
-    <script src="./bgm.js?v=20"></script>
+    <script src="./chain.js?v=22"></script>
+    <script src="./i18n.js?v=22"></script>
+    <script src="./game.js?v=22"></script>
+    <script src="./bgm.js?v=22"></script>
   </body>
 </html>

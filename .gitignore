@@ -3,3 +3,4 @@ contracts/
 package-lock.json
 process_assets.py
 .DS_Store
+tmp-shots/
