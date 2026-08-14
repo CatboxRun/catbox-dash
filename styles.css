@@ -496,6 +496,67 @@ h1 { font-size: 16px; line-height: 1.6; margin: 0 0 14px; }
 }
 .invite-pts, .claimable { font-size: 8px; color: var(--dim); }
 .invite-pts strong, .claimable strong { display: block; color: var(--gold); margin-top: 4px; font-size: 12px; }
+.crew {
+  margin: 0 0 12px;
+  padding: 10px;
+  border: 2px solid var(--gold);
+  background: #0b1220;
+}
+.crew-k {
+  margin: 0 0 8px;
+  color: var(--gold);
+  font-size: 8px;
+}
+.crew-slots {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  margin: 0 0 8px;
+}
+.crew-slot {
+  display: block;
+  height: 28px;
+  border: 2px dashed var(--line);
+  background: #070b12;
+}
+.crew-slot.on {
+  border-style: solid;
+  border-color: var(--gold);
+  background: var(--gold);
+}
+.crew-cta {
+  margin: 0 0 8px;
+  color: var(--ink);
+  font-size: 8px;
+  line-height: 1.45;
+}
+.crew [data-crew-btn] { width: 100%; }
+.crew-invite {
+  margin: 0 0 8px;
+  padding: 8px;
+}
+.hud-chip.friend {
+  color: var(--gold-hi);
+  border-color: var(--gold);
+}
+.over-share {
+  margin: 10px 0;
+  padding: 10px;
+  border: 2px solid var(--gold);
+  background: #0b1220;
+}
+.over-share-hook {
+  margin: 0 0 6px;
+  color: var(--gold-hi);
+  font-size: 10px;
+  line-height: 1.4;
+}
+.over-share-next {
+  margin: 0 0 8px;
+  color: var(--ink);
+  font-size: 8px;
+}
+.over-share .row { margin: 0; }
 .split-row {
   display: grid;
   grid-template-columns: 1fr 1fr 1fr;

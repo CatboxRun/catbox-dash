@@ -379,26 +379,34 @@ async function doClaim() {
   }
 }
 
+let lastInviteSeen = null;
+
 async function refreshInviteUi() {
   const link = $("inviteLink");
   const ptsEl = $("myInvitePts");
   const acc = window.CatboxChain?.account;
   if (link) {
     if (acc) {
-      const u = new URL(location.href.split("#")[0]);
-      u.searchParams.set("ref", acc);
-      link.value = u.toString();
+      link.value = inviteLinkValue();
     } else {
       link.value = t("connectFirst");
     }
   }
   let bps = 10500;
+  let crew = 0;
+  let pts = 0;
   if (acc && window.CatboxChain && chainReady) {
     try {
       if (ptsEl) {
-        const pts = await CatboxChain.invitePoints(acc);
+        pts = Number(await CatboxChain.invitePoints(acc));
         ptsEl.textContent = String(pts);
       }
+      try {
+        crew = Number(await CatboxChain.inviteCountOf(acc));
+      } catch (_) {
+        crew = 0;
+      }
+      if (!Number.isFinite(crew) || crew < 0) crew = 0;
       bps = Number(await CatboxChain.rewardBpsOf(acc));
       if (!bps || bps < 10500) bps = 10500;
     } catch (_) {
@@ -408,10 +416,161 @@ async function refreshInviteUi() {
     ptsEl.textContent = "0";
   }
   window._rewardBps = bps;
+  window._crewCount = crew;
   const pct = fmtRewardPct(bps);
   if ($("rewardPct")) $("rewardPct").textContent = `${t("rewardCap")} ${pct}`;
   if ($("myRewardPct")) $("myRewardPct").textContent = pct;
   if ($("hudBonus")) $("hudBonus").textContent = pct;
+  paintCrew();
+  if (acc && chainReady && lastInviteSeen?.ready) {
+    if (crew > lastInviteSeen.crew || pts > lastInviteSeen.pts) {
+      showToast(t("friendJoined", { pct }));
+    }
+  }
+  if (acc && chainReady) lastInviteSeen = { crew, pts, ready: true };
+}
+
+function inviteLinkValue() {
+  const acc = window.CatboxChain?.account;
+  if (!acc) return "";
+  const u = new URL(location.href.split("#")[0]);
+  u.searchParams.set("ref", acc);
+  return u.toString();
+}
+
+function nextInviteSettlePct(crew) {
+  const n = Math.max(0, Math.floor(Number(crew) || 0));
+  return Math.min(200, 105 + (n + 1) * 5);
+}
+
+function paintCrew() {
+  const n = Math.max(0, Math.floor(Number(window._crewCount) || 0));
+  const filled = Math.min(4, n);
+  document.querySelectorAll("[data-crew-slots]").forEach((el) => {
+    el.innerHTML = [0, 1, 2, 3]
+      .map((i) => `<i class="crew-slot${i < filled ? " on" : ""}"></i>`)
+      .join("");
+  });
+  const need = Math.max(0, 4 - n);
+  let line = t("crewFull");
+  if (n < 4) {
+    line = need === 1
+      ? t("crewNeed1", { pct: 125 })
+      : t("crewNeedN", { n: need, next: nextInviteSettlePct(n), pct: 125 });
+  }
+  document.querySelectorAll("[data-crew-cta]").forEach((el) => {
+    el.textContent = line;
+  });
+  document.querySelectorAll("[data-crew-btn]").forEach((el) => {
+    el.textContent = need === 1 ? t("crewCopy1") : t("crewCopy");
+  });
+}
+
+async function copyInviteLink(btn) {
+  const acc = window.CatboxChain?.account;
+  if (!acc) {
+    try {
+      await CatboxChain.connect();
+    } catch (_) {
+      showToast(t("connectFirst"));
+      return;
+    }
+  }
+  await refreshInviteUi();
+  const val = inviteLinkValue();
+  if (!val) {
+    showToast(t("connectFirst"));
+    return;
+  }
+  try {
+    await navigator.clipboard.writeText(val);
+    const label = btn && btn.tagName === "BUTTON" ? btn : $("copyInvite");
+    if (label) {
+      label.textContent = t("copied");
+      setTimeout(() => {
+        if (label.hasAttribute("data-crew-btn")) {
+          const need = Math.max(0, 4 - Math.floor(Number(window._crewCount) || 0));
+          label.textContent = need === 1 ? t("crewCopy1") : t("crewCopy");
+        } else if (label.id === "overShareCopy") {
+          label.textContent = t("shareCopy");
+        } else {
+          label.textContent = t("copyInvite");
+        }
+      }, 1200);
+    }
+    showToast(t("copied"));
+  } catch (_) {}
+}
+
+function friendRunKey(addr) {
+  return `catbox-friend-run-${String(addr || "anon").toLowerCase()}`;
+}
+
+function hasFriendRef() {
+  try {
+    const ref = window.CatboxChain?.referrer?.() || "";
+    if (!ref || ref === ethers.ZeroAddress) return false;
+    const acc = window.CatboxChain?.account;
+    if (acc && String(ref).toLowerCase() === String(acc).toLowerCase()) return false;
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
+function friendRunPending() {
+  if (!hasFriendRef()) return false;
+  try {
+    return localStorage.getItem(friendRunKey(window.CatboxChain?.account)) !== "1";
+  } catch (_) {
+    return true;
+  }
+}
+
+function consumeFriendRun() {
+  try {
+    localStorage.setItem(friendRunKey(window.CatboxChain?.account), "1");
+  } catch (_) {}
+}
+
+function shareTweetUrl() {
+  const link = inviteLinkValue() || SITE_URL;
+  const grab = lastFinish
+    ? lastFinish.cap
+      ? "100%"
+      : `${Math.round((lastFinish.got / Math.max(lastFinish.ticket, 1e-9)) * 100)}%`
+    : "";
+  const text = t("shareTweet", {
+    grab,
+    pct: nextInviteSettlePct(window._crewCount || 0),
+  });
+  const u = new URL("https://twitter.com/intent/tweet");
+  u.searchParams.set("text", text);
+  u.searchParams.set("url", link);
+  return u.toString();
+}
+
+function paintOverShare() {
+  const box = $("overShare");
+  if (!box) return;
+  const acc = window.CatboxChain?.account;
+  const ratio = lastFinish && lastFinish.ticket > 0 ? lastFinish.got / lastFinish.ticket : 0;
+  const hot = Boolean(lastFinish && (lastFinish.cap || ratio >= 0.8));
+  if (!hot && !acc) {
+    box.classList.add("hidden");
+    return;
+  }
+  box.classList.remove("hidden");
+  const hook = $("overShareHook");
+  if (hook) {
+    if (lastFinish?.cap) hook.textContent = t("shareHookFull");
+    else if (hot) hook.textContent = t("shareHookHot", { grab: Math.round(ratio * 100) });
+    else hook.textContent = t("shareHookSoft");
+  }
+  const next = $("overShareNext");
+  if (next) next.textContent = t("shareNext", { pct: nextInviteSettlePct(window._crewCount || 0) });
+  const x = $("overShareX");
+  if (x) x.href = shareTweetUrl();
 }
 
 function bootLobbyTabs() {
@@ -774,20 +933,11 @@ async function bootWallet() {
       }
     };
   }
-  $("copyInvite").onclick = async () => {
-    const acc = CatboxChain.account;
-    if (!acc) {
-      try { await CatboxChain.connect(); } catch (_) { return; }
-    }
-    refreshInviteUi();
-    const val = $("inviteLink")?.value;
-    if (!val || val === t("connectFirst")) return;
-    try {
-      await navigator.clipboard.writeText(val);
-      $("copyInvite").textContent = t("copied");
-      setTimeout(() => { $("copyInvite").textContent = t("copyInvite"); }, 1200);
-    } catch (_) {}
-  };
+  $("copyInvite").onclick = () => copyInviteLink($("copyInvite"));
+  document.querySelectorAll(".js-copy-invite").forEach((btn) => {
+    if (btn.id === "copyInvite") return;
+    btn.onclick = () => copyInviteLink(btn);
+  });
   bootSwap();
   bootShare();
   $("claimBtn") && ($("claimBtn").onclick = doClaim);
@@ -1146,6 +1296,7 @@ function refreshOver() {
       burnEl.textContent = t("overBurnWait");
     }
   }
+  paintOverShare();
 }
 
 $("payBack").onclick = () => show(lobby);
@@ -1397,7 +1548,9 @@ function startRun(tier, teach, freeRun) {
     notePri: 0,
     noteT: 0,
     startedMs: Date.now(),
-    tutorial: false,
+    magnet: 56,
+    magnetPull: 0.16,
+    friend: false,
     tutId: "",
     tutAnchor: null,
     fx: [],
@@ -1411,13 +1564,23 @@ function startRun(tier, teach, freeRun) {
   } else {
     hideTutorial();
   }
+  if (friendRunPending()) {
+    run.friend = true;
+    run.invuln = Math.max(run.invuln, 150);
+    run.magnet = 92;
+    run.magnetPull = 0.28;
+    consumeFriendRun();
+  }
   $("hudTier").textContent = `${tierText(tier.id).name} · ${tier.cost} LIM`;
   $("rebateBar").style.width = "0%";
   $("hudRebate").textContent = `0.00/${tier.cost} LIM`;
   if ($("hudBonus")) $("hudBonus").textContent = fmtRewardPct(window._rewardBps || 10500);
+  const friendChip = $("hudFriend");
+  if (friendChip) friendChip.classList.toggle("hidden", !run.friend);
   $("runNote")?.classList.add("hidden");
   $("hudScore")?.parentElement?.classList.remove("x2");
   show(game);
+  if (run.friend) showRunNote("friendNote", { flash: true });
   cancelAnimationFrame(raf);
   accMs = 0;
   lastTs = 0;
@@ -1832,9 +1995,11 @@ function tick() {
     if (o.kind === "coin" && !o.hit) {
       o.bob = (o.bob || 0) + 0.14;
       const mag = dist(px, py, o.x, o.y);
-      if (mag < 56 && mag > 2) {
-        o.x += (px - o.x) * 0.16;
-        o.y += (py - o.y) * 0.16;
+      const reach = run.magnet || 56;
+      const pull = run.magnetPull || 0.16;
+      if (mag < reach && mag > 2) {
+        o.x += (px - o.x) * pull;
+        o.y += (py - o.y) * pull;
         o.baseY = o.y;
       } else if (o.baseY != null) {
         o.y = o.baseY + Math.sin(o.bob) * 4;

@@ -275,11 +275,55 @@ const CatboxChain = (() => {
     return c.invitePts(addr);
   }
 
+  let inviteeCache = { addr: "", n: 0, at: 0 };
+
+  async function uniqueInviteesOf(addr = account) {
+    if (!addr) return 0;
+    const key = String(addr).toLowerCase();
+    if (inviteeCache.addr === key && Date.now() - inviteeCache.at < 60000) {
+      return inviteeCache.n;
+    }
+    const me = ethers.getAddress(addr);
+    const c = gameContract(await publicReadProvider());
+    const n = Number(await c.nextRunId());
+    const from = Math.max(1, n - 400);
+    const players = new Set();
+    const batch = 8;
+    for (let i = n - 1; i >= from; i -= batch) {
+      const ids = [];
+      for (let id = i; id >= Math.max(from, i - batch + 1); id--) ids.push(id);
+      const runs = await Promise.all(ids.map((id) => c.runs(id).catch(() => null)));
+      for (const r of runs) {
+        if (!r) continue;
+        const player = r.player || r[0];
+        if (player && player !== ethers.ZeroAddress) players.add(ethers.getAddress(player));
+      }
+    }
+    const addrs = [...players].filter((a) => a !== me);
+    let count = 0;
+    for (let i = 0; i < addrs.length; i += batch) {
+      const chunk = addrs.slice(i, i + batch);
+      const refs = await Promise.all(chunk.map((a) => c.refOf(a).catch(() => ethers.ZeroAddress)));
+      chunk.forEach((_, j) => {
+        const ref = refs[j];
+        if (ref && ref !== ethers.ZeroAddress && ethers.getAddress(ref) === me) count += 1;
+      });
+    }
+    inviteeCache = { addr: key, n: count, at: Date.now() };
+    return count;
+  }
+
   async function inviteCountOf(addr = account) {
     if (!addr) return 0n;
     try {
-      const c = gameContract(await readProvider());
-      return await c.inviteCount(addr);
+      if (await isV6()) {
+        const c = gameContract(await readProvider());
+        const v = await c.inviteCount(addr);
+        if (v != null) return v;
+      }
+    } catch (_) {}
+    try {
+      return BigInt(await uniqueInviteesOf(addr));
     } catch (_) {
       return 0n;
     }
@@ -1149,6 +1193,7 @@ const CatboxChain = (() => {
     isV6,
     invitePoints,
     inviteCountOf,
+    uniqueInviteesOf,
     countPlaysOf,
     notePlay,
     rewardBpsFromParts,
