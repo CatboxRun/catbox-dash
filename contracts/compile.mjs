@@ -24,7 +24,7 @@ const art = out.contracts["CatboxDash.sol"].CatboxDash;
 const abi = art.abi;
 const bytecode = "0x" + art.evm.bytecode.object;
 const factory = "0x4e59b44847b379578588920cA78FbF26c0B4956C";
-const salt = id("LIMINAL.CATBOX.DASH.V4");
+const salt = id("LIMINAL.CATBOX.DASH.V5");
 const address = getCreate2Address(factory, salt, keccak256(bytecode));
 
 writeFileSync(new URL("./abi.json", import.meta.url), JSON.stringify(abi, null, 2));

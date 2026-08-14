@@ -171,18 +171,33 @@ const CatboxChain = (() => {
     return c.activeRun(addr);
   }
 
+  async function freeStatus(addr = account) {
+    const empty = { used: 0, left: 2, pool: 0n, eligible: false };
+    if (!addr) return empty;
+    const c = gameContract(await readProvider());
+    const s = await c.freeStatus(addr);
+    return { used: Number(s[0]), left: Number(s[1]), pool: s[2], eligible: Boolean(s[3]) };
+  }
+
   async function approveAndEnter(tierId = 0) {
     await connect();
     const s = await signer();
     const game = gameContract(s);
     const lim = limContract(s);
     const price = await game.ticketPrice(tierId);
-    const bal = await lim.balanceOf(account);
-    if (bal < price) throw new Error("NO_LIM");
-    const allow = await lim.allowance(account, cfg.address);
-    if (allow < price) {
-      const txA = await lim.approve(cfg.address, ethers.MaxUint256);
-      await txA.wait();
+    let useFree = false;
+    if (Number(tierId) === 0) {
+      const st = await game.freeStatus(account);
+      useFree = Boolean(st[3]);
+    }
+    if (!useFree) {
+      const bal = await lim.balanceOf(account);
+      if (bal < price) throw new Error("NO_LIM");
+      const allow = await lim.allowance(account, cfg.address);
+      if (allow < price) {
+        const txA = await lim.approve(cfg.address, ethers.MaxUint256);
+        await txA.wait();
+      }
     }
     const pending = await game.activeRun(account);
     if (pending !== 0n) {
@@ -536,6 +551,7 @@ const CatboxChain = (() => {
     bnbBalance,
     activeRun,
     approveAndEnter,
+    freeStatus,
     settleRun,
     withdrawWeekly,
     setTicketPrice,

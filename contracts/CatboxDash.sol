@@ -4,6 +4,7 @@ pragma solidity ^0.8.20;
 interface IERC20 {
     function transfer(address to, uint256 value) external returns (bool);
     function transferFrom(address from, address to, uint256 value) external returns (bool);
+    function balanceOf(address account) external view returns (uint256);
 }
 
 /// Catbox Dash on BSC.
@@ -29,6 +30,11 @@ contract CatboxDash {
 
     uint256 public weekPtsTotal;
     uint256 public invitePtsTotal;
+
+    uint256 public freePool;
+    uint256 public ticketFloat;
+    uint8 public constant FREE_CAP = 2;
+    mapping(address => uint8) public freeUsed;
 
     mapping(address => uint256) public weekPts;
     mapping(address => uint256) public invitePts;
@@ -58,6 +64,8 @@ contract CatboxDash {
     event Burned(address indexed player, uint256 amount);
     event Claimed(address indexed player, uint256 amount);
     event WeeklyWithdraw(address indexed to, uint256 amount);
+    event Funded(address indexed from, uint256 amount);
+    event FreeEnter(address indexed player, uint256 indexed runId, uint8 used);
 
     constructor() {
         _ticketPrice[0] = 1 ether;
@@ -83,10 +91,32 @@ contract CatboxDash {
         emit TicketSet(tierId, price);
     }
 
+    function fund(uint256 amount) external {
+        require(amount > 0, "amount");
+        _syncFree();
+        _pull(msg.sender, amount);
+        freePool += amount;
+        emit Funded(msg.sender, amount);
+    }
+
+    function freeStatus(address player) external view returns (uint8 used, uint8 left, uint256 pool, bool eligible) {
+        used = freeUsed[player];
+        left = used >= FREE_CAP ? 0 : uint8(FREE_CAP - used);
+        pool = _freeAvailable();
+        eligible = left > 0 && pool >= _ticketPrice[0];
+    }
+
     function enter(address referrer, uint256 tierId) external returns (uint256 runId) {
         require(activeRun[msg.sender] == 0, "active run");
         uint256 price = ticketPrice(tierId);
-        _pull(msg.sender, price);
+        _syncFree();
+        bool free = tierId == 0 && freeUsed[msg.sender] < FREE_CAP && freePool >= price;
+        if (free) {
+            freePool -= price;
+            freeUsed[msg.sender] += 1;
+        } else {
+            _pull(msg.sender, price);
+        }
 
         if (refOf[msg.sender] == address(0) && referrer != address(0) && referrer != msg.sender) {
             refOf[msg.sender] = referrer;
@@ -97,7 +127,9 @@ contract CatboxDash {
         runId = nextRunId++;
         runs[runId] = Run(msg.sender, price, uint64(block.timestamp), false);
         activeRun[msg.sender] = runId;
+        ticketFloat += price;
         emit RunStarted(runId, msg.sender, ref, price);
+        if (free) emit FreeEnter(msg.sender, runId, freeUsed[msg.sender]);
     }
 
     function settle(uint256 collected, uint256 score) external {
@@ -152,6 +184,7 @@ contract CatboxDash {
         if (collected > r.paid) collected = r.paid;
         r.settled = true;
         activeRun[r.player] = 0;
+        ticketFloat -= r.paid;
 
         uint256 leftover = r.paid - collected;
         uint256 burned = 0;
@@ -196,6 +229,22 @@ contract CatboxDash {
         inviteDebt[u] += pts * inviteAcc / ACC;
         invitePts[u] += pts;
         invitePtsTotal += pts;
+    }
+
+    function _freeAvailable() internal view returns (uint256) {
+        uint256 bal = IERC20(LIM).balanceOf(address(this));
+        uint256 reserved = weekPool + invitePool + freePool + ticketFloat;
+        if (bal > reserved) return freePool + (bal - reserved);
+        return freePool;
+    }
+
+    function _syncFree() internal {
+        uint256 avail = _freeAvailable();
+        if (avail > freePool) {
+            uint256 extra = avail - freePool;
+            freePool += extra;
+            emit Funded(msg.sender, extra);
+        }
     }
 
     function _pull(address from, uint256 value) internal {

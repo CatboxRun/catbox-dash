@@ -189,6 +189,7 @@ async function refreshWalletUi() {
   } catch (_) {}
   refreshInviteUi();
   refreshClaimUi();
+  await refreshFreeUi();
 }
 
 async function refreshClaimUi() {
@@ -208,6 +209,28 @@ async function refreshClaimUi() {
   } catch (_) {
     if (amt) amt.textContent = t("claimNone");
     if (btn) btn.disabled = true;
+  }
+}
+
+async function refreshFreeUi() {
+  const el = $("freeLeft");
+  const acc = window.CatboxChain?.account;
+  if (!el) return;
+  if (!acc || !chainReady) {
+    window._freeStatus = null;
+    el.textContent = "";
+    return;
+  }
+  try {
+    const st = await CatboxChain.freeStatus(acc);
+    const prev = window._freeStatus;
+    window._freeStatus = st;
+    el.textContent = t("freeLeft", { n: st.left });
+    const changed = !prev || prev.left !== st.left || prev.eligible !== st.eligible;
+    if (changed && typeof renderTickets === "function") renderTickets();
+  } catch (_) {
+    window._freeStatus = null;
+    el.textContent = "";
   }
 }
 
@@ -334,6 +357,7 @@ async function liveRefresh() {
   await refreshInviteUi();
   await refreshClaimUi();
   await pullLiveBoards();
+  await refreshFreeUi();
   if ($("swapModal") && !$("swapModal").classList.contains("hidden")) await refreshSwap();
   const acc = window.CatboxChain?.account;
   if (acc && $("limBal")) {
@@ -593,14 +617,20 @@ async function enterPlay() {
   } catch (_) {}
 }
 
+function scoutIsFree(tier) {
+  return tier && tier.id === 0 && window._freeStatus?.eligible;
+}
+
 function renderTickets() {
   $("tickets").innerHTML = TIERS.map((tier) => {
     const copy = tierText(tier.id);
+    const free = scoutIsFree(tier);
     return `
     <button class="ticket t${tier.id}" data-id="${tier.id}">
       <img class="ticket-mascot" src="./assets/hero-cat.png?v=1" alt="" />
       <img class="ticket-coin" src="./assets/coin.png?v=2" alt="" />
-      <div class="cost"><img src="./assets/icon-ticket.png?v=1" alt="" />${tier.cost} LIM</div>
+      ${free ? `<span class="free-badge">${t("freeScout")} · ${window._freeStatus.left}</span>` : ""}
+      <div class="cost"><img src="./assets/icon-ticket.png?v=1" alt="" />${free ? t("freeScout") + " · " : ""}${tier.cost} LIM</div>
       <h3>${copy.name}</h3>
       <p>${copy.blurb}</p>
       <div class="meta">${tier.mult}×</div>
@@ -608,7 +638,7 @@ function renderTickets() {
         <span class="chip board">${t("chipBoard")}</span>
         <span class="chip pool">${t("chipPool")}</span>
       </div>
-      <span class="play-tag">${t("playTag")}</span>
+      <span class="play-tag">${free ? t("payGoFree") : t("playTag")}</span>
     </button>`;
   }).join("");
   $("tickets").onclick = (e) => {
@@ -621,8 +651,10 @@ function renderTickets() {
 function openPay(tier) {
   selected = tier;
   const copy = tierText(tier.id);
-  $("payTitle").textContent = `${tier.cost} LIM`;
-  $("payCopy").textContent = t("payCopy", { name: copy.name, cost: tier.cost });
+  const free = scoutIsFree(tier);
+  $("payTitle").textContent = free ? `${t("freeScout")} · ${tier.cost} LIM` : `${tier.cost} LIM`;
+  $("payCopy").textContent = free ? t("freePay") : t("payCopy", { name: copy.name, cost: tier.cost });
+  $("payGo").textContent = free ? t("payGoFree") : t("payGo");
   $("payGo").disabled = false;
   if ($("payStatus")) $("payStatus").textContent = "";
   show(pay);
@@ -698,7 +730,9 @@ async function payAndStart() {
       go.disabled = false;
       return;
     }
-    status.textContent = t("approve");
+    await refreshFreeUi();
+    const free = scoutIsFree(selected);
+    status.textContent = free ? t("paying") : t("approve");
     const hash = await CatboxChain.approveAndEnter(selected.id);
     status.innerHTML = `<a href="${CatboxChain.txUrl(hash)}" target="_blank" rel="noopener">${hash.slice(0, 10)}…</a>`;
     enterPlay();

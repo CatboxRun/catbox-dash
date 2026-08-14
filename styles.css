@@ -443,6 +443,12 @@ h1 { font-size: 16px; line-height: 1.6; margin: 0 0 14px; }
   position: absolute; top: 8px; right: 8px; width: 28px; height: 28px;
   object-fit: contain; image-rendering: pixelated;
 }
+.ticket .free-badge {
+  position: absolute; top: 8px; left: 8px; z-index: 1;
+  font-size: 7px; color: #1a1204; background: var(--gold);
+  padding: 3px 6px; font-weight: 700;
+}
+.wallet-line #freeLeft { color: var(--gold); white-space: nowrap; }
 .play-tag {
   position: absolute; left: 0; right: 0; bottom: 0;
   text-align: center; background: var(--gold); color: #1a1204;
