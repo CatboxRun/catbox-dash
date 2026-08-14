@@ -41,7 +41,7 @@
       href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@500;700&family=Noto+Sans+SC:wght@500;700&family=Noto+Sans+JP:wght@500;700&family=Noto+Sans+KR:wght@500;700&family=Noto+Sans+Thai:wght@500;700&family=Press+Start+2P&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="./styles.css?v=38" />
+    <link rel="stylesheet" href="./styles.css?v=39" />
   </head>
   <body>
     <div class="crt">
@@ -99,12 +99,6 @@
             <p class="play-now" data-i18n="playNow">PICK A TICKET</p>
             <p class="free-offer" data-i18n="freeOffer">New wallets play two 1 LIM SCOUT runs free. Jump, catch coins, keep them.</p>
             <p class="reward-line" data-i18n="inviteBoost">Every run settles from 105%. Each invite +5% more. Every extra run +0.1%. Cap 200%.</p>
-            <div class="crew" id="playCrew">
-              <p class="crew-k" data-i18n="crewTitle">CREW · 4 FRIENDS = 125%</p>
-              <div class="crew-slots" data-crew-slots></div>
-              <p class="crew-cta" data-crew-cta></p>
-              <button type="button" class="primary js-copy-invite" data-crew-btn data-i18n="crewCopy">COPY LINK</button>
-            </div>
             <div class="tickets" id="tickets"></div>
             <button type="button" class="rules-jump" id="openRules" data-i18n="openRules">HOW TO PLAY</button>
           </div>
@@ -316,6 +310,12 @@
             <div id="tutLayer" class="tut-layer hidden" aria-live="polite">
               <button type="button" class="tut-skip" id="tutSkip" data-i18n="tutSkip">GOT IT</button>
             </div>
+          </div>
+          <div class="crew crew-under-game" id="playCrew">
+            <p class="crew-k" data-i18n="crewTitle">CREW · 4 FRIENDS = 125%</p>
+            <div class="crew-slots" data-crew-slots></div>
+            <p class="crew-cta" data-crew-cta></p>
+            <button type="button" class="primary js-copy-invite" data-crew-btn data-i18n="crewCopy">COPY LINK</button>
           </div>
         </div>
       </section>
