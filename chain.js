@@ -53,9 +53,7 @@ const CatboxChain = (() => {
     "function xClaimed(address) view returns (bool)",
     "function claimXBonus()",
     "function freeScoutUsed(address) view returns (uint8)",
-    "function freeVaultUsed(address) view returns (bool)",
     "function scoutIsFree(address) view returns (bool)",
-    "function vaultIsFree(address) view returns (bool)",
   ];
 
   function gameContract(s) {
@@ -271,7 +269,7 @@ const CatboxChain = (() => {
   }
 
   function assumedFree() {
-    return { used: 0, left: 1, pool: 0n, eligible: true, scoutFree: true };
+    return { used: 0, left: 2, pool: 0n, eligible: true, scoutFree: true };
   }
 
   async function freeStatus(addr = account) {
@@ -283,14 +281,7 @@ const CatboxChain = (() => {
       const left = Number(s[1]);
       const pool = s[2];
       const eligible = Boolean(s[3]) || (left > 0 && pool > 0n);
-      const out = { used, left, pool, eligible };
-      try {
-        const [sf, vf] = await Promise.all([c.scoutIsFree(addr), c.vaultIsFree(addr)]);
-        out.scoutFree = Boolean(sf);
-        out.vaultFree = Boolean(vf);
-        out.v6 = true;
-      } catch (_) {}
-      return out;
+      return { used, left, pool, eligible, scoutFree: left > 0 };
     } catch (_) {
       return assumedFree();
     }

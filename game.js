@@ -281,7 +281,7 @@ async function refreshClaimUi() {
 }
 
 function assumedFreeUi() {
-  return { used: 0, left: 1, pool: 0n, eligible: true, scoutFree: true };
+  return { used: 0, left: 2, pool: 0n, eligible: true, scoutFree: true };
 }
 
 function paintFreeUi(st) {
@@ -289,19 +289,9 @@ function paintFreeUi(st) {
   const prev = window._freeStatus;
   window._freeStatus = st;
   if (!el) return;
-  if (st.vaultFree != null) {
-    const bits = [];
-    if (st.scoutFree) bits.push("1 LIM");
-    if (st.vaultFree) bits.push("10 LIM");
-    el.textContent = bits.length ? t("freeLeftOffer", { n: bits.join(" · ") }) : "";
-  } else if (st.left <= 0) el.textContent = "";
+  if (st.left <= 0) el.textContent = "";
   else el.textContent = t("freeLeft", { n: st.left });
-  const changed =
-    !prev ||
-    prev.left !== st.left ||
-    prev.eligible !== st.eligible ||
-    prev.scoutFree !== st.scoutFree ||
-    prev.vaultFree !== st.vaultFree;
+  const changed = !prev || prev.left !== st.left || prev.eligible !== st.eligible;
   if (changed && typeof renderTickets === "function") renderTickets();
 }
 
@@ -502,7 +492,7 @@ const X_TWEET = [
   "🐱 CATBOX DASH · 100,000 LIM AIRDROP",
   "🎮 Play to get it. Jump for LIM coins — keep what you catch.",
   "",
-  "✨ 1 free 1 LIM SCOUT + 1 free 10 LIM VAULT for new wallets. Join TG or post this for +1 SCOUT each (once per address).",
+  "✨ Two free 1 LIM SCOUT runs for new wallets.",
   "🔒 Every transfer, private by default.",
   "",
   "@LiminalFi",
@@ -982,22 +972,11 @@ function scoutIsFree(tier) {
   if (!tier || tier.id !== 0) return false;
   const st = window._freeStatus;
   if (!st) return true;
-  if (st.scoutFree != null) return Boolean(st.scoutFree);
   return Number(st.left) > 0;
 }
 
-function vaultIsFree(tier) {
-  if (!tier || tier.id !== 3) return false;
-  const st = window._freeStatus;
-  if (!st || st.vaultFree == null) return false;
-  return Boolean(st.vaultFree);
-}
-
 function freeForTier(tier) {
-  if (!tier) return false;
-  if (tier.id === 0) return scoutIsFree(tier);
-  if (tier.id === 3) return vaultIsFree(tier);
-  return false;
+  return scoutIsFree(tier);
 }
 
 function renderTickets() {
