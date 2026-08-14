@@ -50,6 +50,8 @@ const CatboxChain = (() => {
     "function currentDay() view returns (uint256)",
     "function tgClaimed(address) view returns (bool)",
     "function claimTgBonus()",
+    "function xClaimed(address) view returns (bool)",
+    "function claimXBonus()",
   ];
 
   function gameContract(s) {
@@ -296,6 +298,24 @@ const CatboxChain = (() => {
     }
     try {
       const tx = await game.claimTgBonus();
+      await tx.wait();
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  async function claimXBonus() {
+    await connect();
+    const s = await signer();
+    const game = gameContract(s);
+    try {
+      if (await game.xClaimed.staticCall(account)) return true;
+    } catch (_) {
+      return false;
+    }
+    try {
+      const tx = await game.claimXBonus();
       await tx.wait();
       return true;
     } catch (_) {
@@ -715,6 +735,7 @@ const CatboxChain = (() => {
     freeStatus,
     hasTgBonus,
     claimTgBonus,
+    claimXBonus,
     fundFreePool,
     settleRun,
     withdrawWeekly,

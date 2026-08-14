@@ -227,7 +227,7 @@ async function refreshWalletUi() {
   refreshInviteUi();
   refreshClaimUi();
   await refreshFreeUi();
-  paintTgCtas();
+  paintShareCtas();
 }
 
 async function refreshClaimUi() {
@@ -437,39 +437,66 @@ function showToast(msg) {
 }
 
 const TG_URL = "https://t.me/Liminal_Official";
+const SITE_URL = "https://catboxrun.github.io/catbox-dash/";
+const POSTER_URL = `${SITE_URL}lim-airdrop-100000-poster.png`;
+const X_TWEET = [
+  "CATBOX DASH · 100,000 LIM AIRDROP",
+  "Play to get it. Jump for LIM coins — keep what you catch.",
+  "",
+  "2 free SCOUT for new wallets. Join TG or post this for +1 each (once per address).",
+  "",
+  "Every transfer, private by default.",
+  "",
+  "@LiminalFi",
+  POSTER_URL,
+].join("\n");
 
-function tgFreeKey(addr) {
-  return `catbox-tg-free-${String(addr).toLowerCase()}`;
+function xIntentUrl() {
+  const u = new URL("https://twitter.com/intent/tweet");
+  u.searchParams.set("text", X_TWEET);
+  u.searchParams.set("url", SITE_URL);
+  return u.toString();
 }
 
-function tgClaimedLocal(addr) {
+function bonusKey(kind, addr) {
+  return `catbox-${kind}-free-${String(addr).toLowerCase()}`;
+}
+
+function bonusClaimedLocal(kind, addr) {
   if (!addr) return false;
   try {
-    return localStorage.getItem(tgFreeKey(addr)) === "1";
+    return localStorage.getItem(bonusKey(kind, addr)) === "1";
   } catch (_) {
     return false;
   }
 }
 
-function markTgLocal(addr) {
+function markBonusLocal(kind, addr) {
   if (!addr) return;
   try {
-    localStorage.setItem(tgFreeKey(addr), "1");
+    localStorage.setItem(bonusKey(kind, addr), "1");
   } catch (_) {}
 }
 
-function paintTgCtas() {
+function paintShareCtas() {
   const acc = window.CatboxChain?.account;
-  const claimed = Boolean(acc && tgClaimedLocal(acc));
+  const tgOn = Boolean(acc && bonusClaimedLocal("tg", acc));
+  const xOn = Boolean(acc && bonusClaimedLocal("x", acc));
   document.querySelectorAll("a.cta.tg").forEach((a) => {
     const title = a.querySelector(".cta-t");
     const body = a.querySelector(".cta-s");
-    if (title) title.textContent = claimed ? t("tgClaimedBtn") : t("tgBtn");
+    if (title) title.textContent = tgOn ? t("tgClaimedBtn") : t("tgBtn");
     if (body) body.textContent = t("tgBody");
+  });
+  document.querySelectorAll("a.cta.x").forEach((a) => {
+    const title = a.querySelector(".cta-t");
+    const body = a.querySelector(".cta-s");
+    if (title) title.textContent = xOn ? t("xClaimedBtn") : t("xBtn");
+    if (body) body.textContent = t("xBody");
   });
 }
 
-async function claimTgExtra() {
+async function claimShareBonus(kind) {
   const chain = window.CatboxChain;
   if (!chain) throw new Error("NO_WALLET");
   if (!window.ethereum) throw new Error("NO_WALLET");
@@ -478,29 +505,40 @@ async function claimTgExtra() {
   if (!addr) throw new Error("NO_WALLET");
   let onchain = false;
   try {
-    onchain = await chain.claimTgBonus();
+    onchain = kind === "x" ? await chain.claimXBonus() : await chain.claimTgBonus();
   } catch (_) {
     onchain = false;
   }
-  markTgLocal(addr);
-  paintTgCtas();
+  markBonusLocal(kind, addr);
+  paintShareCtas();
   try {
     await refreshFreeUi();
   } catch (_) {}
-  if (onchain) showToast(t("tgClaimedOn"));
-  else showToast(t("tgClaimedSaved"));
+  if (onchain) showToast(t(kind === "x" ? "xClaimedOn" : "tgClaimedOn"));
+  else showToast(t(kind === "x" ? "xClaimedSaved" : "tgClaimedSaved"));
 }
 
-function bootTg() {
+function bootShare() {
   document.querySelectorAll("a.cta.tg").forEach((a) => {
     a.addEventListener("click", async (e) => {
       e.preventDefault();
       try {
-        await claimTgExtra();
+        await claimShareBonus("tg");
       } catch (_) {
         showToast(t("connectFirst"));
       }
       window.open(TG_URL, "_blank", "noopener,noreferrer");
+    });
+  });
+  document.querySelectorAll("a.cta.x").forEach((a) => {
+    a.addEventListener("click", async (e) => {
+      e.preventDefault();
+      try {
+        await claimShareBonus("x");
+      } catch (_) {
+        showToast(t("connectFirst"));
+      }
+      window.open(xIntentUrl(), "_blank", "noopener,noreferrer");
     });
   });
 }
@@ -643,7 +681,7 @@ async function bootWallet() {
     } catch (_) {}
   };
   bootSwap();
-  bootTg();
+  bootShare();
   $("claimBtn") && ($("claimBtn").onclick = doClaim);
   startLiveClock();
   try { CatboxChain.referrer(); } catch (_) {}
