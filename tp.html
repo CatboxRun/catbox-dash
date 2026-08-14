@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#070b12" />
+    <title>CATBOX DASH · TokenPocket</title>
+    <style>
+      html, body { margin: 0; min-height: 100%; background: #070b12; color: #e8f0ff; font-family: sans-serif; }
+      .wrap { max-width: 420px; margin: 0 auto; padding: 48px 20px; text-align: center; }
+      img { width: 88px; height: 88px; image-rendering: pixelated; }
+      h1 { font-size: 22px; margin: 16px 0 8px; }
+      p { color: #7f93b0; line-height: 1.6; }
+      a.btn {
+        display: block;
+        margin: 24px 0 12px;
+        padding: 16px;
+        background: #e6b84c;
+        color: #1a1204;
+        font-weight: 700;
+        text-decoration: none;
+        border: 3px solid #000;
+      }
+      small { color: #7f93b0; word-break: break-all; }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <img src="./assets/hero-cat.png" alt="Catbox" />
+      <h1>CATBOX DASH</h1>
+      <p>用 TokenPocket 打开，自动进入 DApp 浏览器并连接钱包（BNB Chain）。</p>
+      <a class="btn" id="openTp" href="#">用 TokenPocket 打开</a>
+      <p>请先安装 TokenPocket。微信里打不开，请用系统浏览器或直接发给朋友。</p>
+    </div>
+    <script>
+      const params = encodeURIComponent(
+        JSON.stringify({
+          url: "https://catboxrun.github.io/catbox-dash/",
+          chain: "bsc",
+          source: "catbox-dash",
+        }),
+      );
+      const deep = "tpdapp://open?params=" + params;
+      const a = document.getElementById("openTp");
+      a.href = deep;
+      location.href = deep;
+    </script>
+  </body>
+</html>
