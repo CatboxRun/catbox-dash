@@ -257,40 +257,29 @@ body:not([data-lang="en"]) .swap-head h2 { font-size: 18px; }
   background:
     linear-gradient(180deg, rgba(201, 162, 39, 0.14), transparent 42%),
     var(--panel);
-  padding: 12px 14px 10px;
+  padding: 10px 12px 8px;
   box-shadow: 4px 4px 0 #000;
 }
-.notice-board h2 {
-  margin: 0 0 10px;
-  font-size: 13px;
-  line-height: 1.4;
-  color: var(--ink);
+.notice-board .kicker { margin-bottom: 8px; }
+.notice-viewport {
+  overflow: hidden;
+  border: 2px solid var(--line);
+  background: var(--bg);
 }
 .notice-list {
   list-style: none;
+  display: flex;
   margin: 0;
   padding: 0;
-  counter-reset: notice;
+  transition: transform 0.45s ease;
+  will-change: transform;
 }
 .notice-list li {
-  counter-increment: notice;
-  position: relative;
-  margin: 0 0 10px;
-  padding: 8px 10px 8px 42px;
-  border: 2px solid var(--line);
-  background: var(--bg);
+  flex: 0 0 100%;
+  min-width: 100%;
+  box-sizing: border-box;
+  padding: 10px 12px;
   color: var(--ink);
-}
-.notice-list li:last-child { margin-bottom: 0; }
-.notice-list li::before {
-  content: counter(notice, decimal-leading-zero);
-  position: absolute;
-  left: 8px;
-  top: 8px;
-  font-family: "Press Start 2P", monospace;
-  font-size: 9px;
-  color: var(--gold-hi);
-  line-height: 1.4;
 }
 .notice-list b {
   display: block;
@@ -312,7 +301,24 @@ body:not([data-lang="en"]) .swap-head h2 { font-size: 18px; }
   text-underline-offset: 2px;
 }
 .notice-a:hover { color: var(--gold-hi); }
-body:not([data-lang="en"]) .notice-board h2 { font-size: 16px; }
+.notice-dots {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  margin-top: 8px;
+}
+.notice-dots button {
+  width: 7px;
+  height: 7px;
+  padding: 0;
+  border: 2px solid var(--gold);
+  background: transparent;
+  border-radius: 0;
+  cursor: pointer;
+}
+.notice-dots button.on {
+  background: var(--gold);
+}
 .meme-line {
   margin: 16px 0 4px;
   text-align: center;
@@ -1177,15 +1183,21 @@ body.playing .claim-btn { display: none; }
   box-shadow: 4px 4px 0 #d4c4a4;
   min-height: 118px;
   margin: 0 0 8px;
-  background:
-    linear-gradient(180deg, rgba(255, 248, 236, 0.08), transparent 40%),
-    linear-gradient(180deg, #cfe0f2 0%, #e4eef6 52%, #f6ead4 100%);
+  background: #efe3cf;
 }
 .hero-art {
-  display: none;
+  width: 100%;
+  height: 118px;
+  object-fit: cover;
+  object-position: center 42%;
+  display: block;
+  image-rendering: pixelated;
 }
 .hero-veil {
-  display: none;
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(255, 248, 236, 0.18) 0%, rgba(243, 234, 216, 0.72) 100%);
+  pointer-events: none;
 }
 .hero-copy {
   position: absolute;

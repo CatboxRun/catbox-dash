@@ -43,7 +43,7 @@
       href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@500;700&family=Noto+Sans+SC:wght@500;700&family=Noto+Sans+JP:wght@500;700&family=Noto+Sans+KR:wght@500;700&family=Noto+Sans+Thai:wght@500;700&family=Press+Start+2P&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="./styles.css?v=50" />
+    <link rel="stylesheet" href="./styles.css?v=51" />
   </head>
   <body>
     <div class="crt">
@@ -88,7 +88,7 @@
         <div class="lobby-grid">
           <div class="lobby-pane pane-play" data-pane="play">
             <section class="hero-arcade">
-              <img class="hero-art" src="./assets/hero-run.png?v=1" alt="" />
+              <img class="hero-art" src="./assets/hero-run.png?v=2" alt="" />
               <div class="hero-veil"></div>
               <div class="hero-copy">
                 <img class="hero-mascot" src="./assets/hero-cat.png?v=3" alt="Catbox" />
@@ -98,23 +98,25 @@
               </div>
             </section>
 
-            <section class="notice-board">
+            <section class="notice-board" id="noticeBoard">
               <p class="kicker" data-i18n="noticeKicker">NOTICE</p>
-              <h2 data-i18n="noticeTitle">BOARD</h2>
-              <ol class="notice-list">
-                <li>
-                  <b data-i18n="notice1Title">AMBASSADORS</b>
-                  <p data-i18n="notice1Body">Join the Telegram group, fill the ambassador form, or shout: 我想成为liminal catboxrun大使</p>
-                </li>
-                <li>
-                  <b data-i18n="notice2Title">BUGS &amp; IDEAS</b>
-                  <p data-i18n="notice2Body">Send game bugs and ideas on X or Telegram for a mystery LIM pack.</p>
-                </li>
-                <li>
-                  <b data-i18n="notice3Title">WELCOME</b>
-                  <p data-i18n="notice3Body">Welcome to Liminal CatboxRun. Surprise airdrops in the community. Love you all.</p>
-                </li>
-              </ol>
+              <div class="notice-viewport">
+                <ol class="notice-list" id="noticeList">
+                  <li>
+                    <b data-i18n="notice1Title">AMBASSADORS</b>
+                    <p data-i18n="notice1Body">Join Telegram, fill the form, or shout: 我想成为liminal catboxrun大使</p>
+                  </li>
+                  <li>
+                    <b data-i18n="notice2Title">BUGS PAY LIM</b>
+                    <p data-i18n="notice2Body">Send bugs and ideas on X or Telegram for a mystery LIM pack.</p>
+                  </li>
+                  <li>
+                    <b data-i18n="notice3Title">WELCOME</b>
+                    <p data-i18n="notice3Body">Welcome. Surprise airdrops. Love you all.</p>
+                  </li>
+                </ol>
+              </div>
+              <div class="notice-dots" id="noticeDots"></div>
             </section>
 
             <p class="play-now" data-i18n="playNow">PICK A TICKET</p>
@@ -434,8 +436,8 @@
     <script src="./config.js?v=26"></script>
     <script src="https://cdn.jsdelivr.net/npm/ethers@6.13.5/dist/ethers.umd.min.js"></script>
     <script src="./chain.js?v=56"></script>
-    <script src="./i18n.js?v=62"></script>
-    <script src="./game.js?v=69"></script>
+    <script src="./i18n.js?v=63"></script>
+    <script src="./game.js?v=70"></script>
     <script src="./bgm.js?v=26"></script>
   </body>
 </html>

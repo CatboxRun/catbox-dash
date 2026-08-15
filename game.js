@@ -644,6 +644,63 @@ function bootLobbyTabs() {
   if (open) open.onclick = () => setTab("rules");
 }
 
+function bootNoticeCarousel() {
+  const board = $("noticeBoard");
+  const list = $("noticeList");
+  const dots = $("noticeDots");
+  if (!board || !list) return;
+  const slides = [...list.children];
+  const n = slides.length;
+  if (n < 2) return;
+  let i = 0;
+  let timer = 0;
+  let x0 = 0;
+  if (dots) {
+    dots.innerHTML = slides
+      .map((_, k) => `<button type="button" data-notice="${k}" aria-label="${k + 1}"></button>`)
+      .join("");
+  }
+  const paint = () => {
+    list.style.transform = `translateX(-${i * 100}%)`;
+    if (dots) {
+      dots.querySelectorAll("button").forEach((b, k) => b.classList.toggle("on", k === i));
+    }
+  };
+  const go = (k) => {
+    i = ((k % n) + n) % n;
+    paint();
+  };
+  const stop = () => {
+    if (timer) clearInterval(timer);
+    timer = 0;
+  };
+  const start = () => {
+    stop();
+    timer = setInterval(() => go(i + 1), 4500);
+  };
+  paint();
+  start();
+  board.addEventListener("mouseenter", stop);
+  board.addEventListener("mouseleave", start);
+  board.addEventListener("touchstart", (e) => {
+    stop();
+    x0 = e.changedTouches[0].clientX;
+  }, { passive: true });
+  board.addEventListener("touchend", (e) => {
+    const dx = e.changedTouches[0].clientX - x0;
+    if (Math.abs(dx) > 40) go(i + (dx < 0 ? 1 : -1));
+    start();
+  }, { passive: true });
+  if (dots) {
+    dots.addEventListener("click", (e) => {
+      const btn = e.target.closest("[data-notice]");
+      if (!btn) return;
+      go(Number(btn.dataset.notice));
+      start();
+    });
+  }
+}
+
 let quoteTimer = 0;
 
 function bootSwap() {
@@ -2937,6 +2994,7 @@ mountLangs();
 applyI18n();
 bootTutorial();
 bootLobbyTabs();
+bootNoticeCarousel();
 bootBoardMore();
 show(lobby);
 bootWallet();
