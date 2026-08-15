@@ -137,14 +137,7 @@ function renderBurns(rows) {
 }
 
 function mergeWeekBoard(liveWeek) {
-  const live = liveWeek || [];
-  const localYou = loadBoard().find((r) => r.you);
-  if (!localYou) return live;
-  const liveYou = live.find((r) => r.you);
-  if (liveYou && rowPts(liveYou) >= rowPts(localYou)) return live;
-  const others = live.filter((r) => !r.you);
-  return [...others, { tag: localYou.tag, score: rowPts(localYou), you: true }]
-    .sort((a, b) => rowPts(b) - rowPts(a));
+  return liveWeek || [];
 }
 
 function renderBoards() {
@@ -174,7 +167,12 @@ async function pullLiveBoards() {
 
   if (!pullingBoards) {
     pullingBoards = true;
-    CatboxChain.fetchLeaderboards()
+    CatboxChain.fetchLeaderboards((partial) => {
+      if (!partial) return;
+      window._liveBoards = partial;
+      renderList("weekList", mergeWeekBoard(partial.week));
+      renderList("inviteList", partial.invite);
+    })
       .then((boards) => {
         if (!boards) throw new Error("NO_BOARDS");
         window._liveBoards = boards;
@@ -235,7 +233,7 @@ async function syncOnchainPool() {
       return;
     }
     const pool = await CatboxChain.poolBalance();
-    const weekShown = pool.v6 ? pool.week : pool.week + 31941477000000000000n;
+    const weekShown = pool.week;
     if ($("weekPoolAmt")) $("weekPoolAmt").textContent = `${CatboxChain.formatLim(weekShown)} LIM`;
     if ($("invitePoolAmt")) $("invitePoolAmt").textContent = `${CatboxChain.formatLim(pool.invite)} LIM`;
     if ($("burnedAmt")) $("burnedAmt").textContent = `${CatboxChain.formatLim(pool.burned)} LIM`;

@@ -1160,45 +1160,93 @@ const CatboxChain = (() => {
     return out;
   }
 
-  async function fetchLeaderboards() {
+  async function fetchLeaderboards(onPartial) {
     const p = await publicReadProvider();
     const c = gameContract(p);
     const n = Number(await withTimeout(c.nextRunId(), 5000));
-    const from = Math.max(1, n - 500);
-    const ids = [];
-    for (let i = n - 1; i >= from; i--) ids.push(i);
-    const players = new Set();
-    const decodedRuns = await multicallFn(p, c.interface, "runs", ids);
-    for (const decoded of decodedRuns) {
-      if (!decoded) continue;
-      const player = decoded.player || decoded[0];
-      if (player && player !== ethers.ZeroAddress) players.add(ethers.getAddress(player));
+    if (!Number.isFinite(n) || n < 2) {
+      return { week: [], invite: [] };
     }
-    const addrs = [...players];
-    const refs = new Set();
-    const week = {};
-    const [ptsRows, refRows] = await Promise.all([
-      multicallFn(p, c.interface, "weekPts", addrs),
-      multicallFn(p, c.interface, "refOf", addrs),
-    ]);
-    addrs.forEach((a, j) => {
-      const pts = ptsRows[j];
-      week[a] = pts ? pts[0] || 0n : 0n;
-      const refDec = refRows[j];
-      const ref = refDec ? refDec[0] : ethers.ZeroAddress;
-      if (ref && ref !== ethers.ZeroAddress) refs.add(ethers.getAddress(ref));
-    });
-    const invite = {};
-    const refAddrs = [...refs];
-    const inviteRows = await multicallFn(p, c.interface, "invitePts", refAddrs);
-    refAddrs.forEach((a, j) => {
-      const pts = inviteRows[j];
-      invite[a] = pts ? pts[0] || 0n : 0n;
-    });
-    return {
-      week: toRows(week, account),
-      invite: toRows(invite, account),
-    };
+    const last = n - 1;
+    const recentFrom = Math.max(1, n - 500);
+
+    async function playersFrom(fromId, toId) {
+      const ids = [];
+      for (let i = toId; i >= fromId; i--) ids.push(i);
+      const decodedRuns = await multicallFn(p, c.interface, "runs", ids);
+      const set = new Set();
+      for (const decoded of decodedRuns) {
+        if (!decoded) continue;
+        const player = decoded.player || decoded[0];
+        if (player && player !== ethers.ZeroAddress) set.add(ethers.getAddress(player));
+      }
+      return [...set];
+    }
+
+    async function inviteFrom(addrs, seed = {}) {
+      const invite = { ...seed };
+      if (!addrs.length) return invite;
+      const [ptsRows, refRows] = await Promise.all([
+        multicallFn(p, c.interface, "invitePts", addrs),
+        multicallFn(p, c.interface, "refOf", addrs),
+      ]);
+      const refs = new Set();
+      addrs.forEach((a, j) => {
+        const pts = ptsRows[j] ? ptsRows[j][0] || 0n : 0n;
+        if (pts > 0n) invite[a] = pts;
+        const refDec = refRows[j];
+        const ref = refDec ? refDec[0] : ethers.ZeroAddress;
+        if (ref && ref !== ethers.ZeroAddress) refs.add(ethers.getAddress(ref));
+      });
+      const missing = [...refs].filter((a) => invite[a] == null);
+      if (missing.length) {
+        const extra = await multicallFn(p, c.interface, "invitePts", missing);
+        missing.forEach((a, j) => {
+          const pts = extra[j] ? extra[j][0] || 0n : 0n;
+          if (pts > 0n) invite[a] = pts;
+        });
+      }
+      return invite;
+    }
+
+    async function ptsFrom(fn, addrs, seed = {}) {
+      const map = { ...seed };
+      if (!addrs.length) return map;
+      const rows = await multicallFn(p, c.interface, fn, addrs);
+      addrs.forEach((a, j) => {
+        const v = rows[j] ? rows[j][0] || 0n : 0n;
+        if (v > 0n) map[a] = v;
+      });
+      return map;
+    }
+
+    function pack(weekMap, inviteMap) {
+      return {
+        week: toRows(weekMap, account).filter((r) => r.pts > 0),
+        invite: toRows(inviteMap, account).filter((r) => r.pts > 0),
+      };
+    }
+
+    const recentAddrs = await playersFrom(recentFrom, last);
+    let week = await ptsFrom("weekPts", recentAddrs);
+    let invite = await inviteFrom(recentAddrs);
+    const first = pack(week, invite);
+    if (typeof onPartial === "function") {
+      try {
+        onPartial(first);
+      } catch (_) {}
+    }
+
+    if (recentFrom > 1) {
+      const olderAddrs = await playersFrom(1, recentFrom - 1);
+      const seen = new Set(recentAddrs);
+      const extra = olderAddrs.filter((a) => !seen.has(a));
+      if (extra.length) {
+        week = await ptsFrom("weekPts", extra, week);
+        invite = await inviteFrom(extra, invite);
+      }
+    }
+    return pack(week, invite);
   }
 
   function asAmt(v) {
