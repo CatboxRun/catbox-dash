@@ -1368,22 +1368,25 @@ function shuffle(arr) {
 function splitTicket(cost) {
   const pieces = [];
   let remain = cost;
-  const min = Math.max(0.03, cost * 0.04);
+  const min = Math.max(0.012, cost * 0.015);
+  const maxP = cost * 0.055;
   let guard = 0;
-  while (remain > min && guard++ < 18) {
+  while (remain > min && guard++ < 40) {
     const r = Math.random();
     let pct;
-    if (r < 0.22) pct = 0.14 + Math.random() * 0.1;
-    else if (r < 0.55) pct = 0.08 + Math.random() * 0.06;
-    else pct = 0.045 + Math.random() * 0.035;
-    let v = cost * pct;
-    if (v > remain) v = remain;
-    v = +v.toFixed(3);
+    if (r < 0.18) pct = 0.04 + Math.random() * 0.015;
+    else if (r < 0.55) pct = 0.025 + Math.random() * 0.012;
+    else pct = 0.016 + Math.random() * 0.01;
+    let v = Math.min(cost * pct, maxP, remain);
+    v = +v.toFixed(4);
     if (v <= 0) break;
     pieces.push(v);
-    remain = +(remain - v).toFixed(3);
+    remain = +(remain - v).toFixed(4);
   }
-  if (remain > 0) pieces.push(+remain.toFixed(3));
+  if (remain > 0) {
+    if (pieces.length) pieces[pieces.length - 1] = +(pieces[pieces.length - 1] + remain).toFixed(4);
+    else pieces.push(+remain.toFixed(4));
+  }
   return shuffle(pieces);
 }
 
