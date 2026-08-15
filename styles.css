@@ -712,11 +712,11 @@ h1 { font-size: 16px; line-height: 1.6; margin: 0 0 14px; }
 .ticket.t0 { border-color: #5ad0a0; }
 .ticket.t0 .ticket-mascot { border-color: #5ad0a0; filter: none; }
 .ticket.t1 { border-color: #5aa6ff; }
-.ticket.t1 .ticket-mascot { border-color: #5aa6ff; filter: hue-rotate(190deg) saturate(1.25); }
+.ticket.t1 .ticket-mascot { border-color: #5aa6ff; filter: none; }
 .ticket.t2 { border-color: #9b7dff; }
-.ticket.t2 .ticket-mascot { border-color: #9b7dff; filter: hue-rotate(255deg) saturate(1.35) brightness(1.05); }
+.ticket.t2 .ticket-mascot { border-color: #9b7dff; filter: none; }
 .ticket.t3 { border-color: var(--gold); }
-.ticket.t3 .ticket-mascot { border-color: var(--gold); filter: hue-rotate(-18deg) saturate(1.45) contrast(1.08); }
+.ticket.t3 .ticket-mascot { border-color: var(--gold); filter: none; }
 .play-tag {
   position: absolute; left: 0; right: 0; bottom: 0;
   text-align: center; background: linear-gradient(180deg, #edd078, #c9a227); color: #1a1204;
