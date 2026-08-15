@@ -263,12 +263,14 @@ body:not([data-lang="en"]) .swap-head h2 { font-size: 18px; }
 .notice-board .kicker { margin-bottom: 8px; }
 .notice-viewport {
   overflow: hidden;
+  width: 100%;
   border: 2px solid var(--line);
   background: var(--bg);
 }
 .notice-list {
   list-style: none;
   display: flex;
+  width: 100%;
   margin: 0;
   padding: 0;
   transition: transform 0.45s ease;
@@ -276,6 +278,7 @@ body:not([data-lang="en"]) .swap-head h2 { font-size: 18px; }
 }
 .notice-list li {
   flex: 0 0 100%;
+  width: 100%;
   min-width: 100%;
   box-sizing: border-box;
   padding: 10px 12px;
@@ -467,6 +470,14 @@ body:not([data-lang="en"]) .play-now {
   font-size: 13px;
   letter-spacing: 0;
   line-height: 1.55;
+  font-family: inherit;
+}
+body:not([data-lang="en"]) .kicker,
+body:not([data-lang="en"]) h1,
+body:not([data-lang="en"]) .stat-k,
+body:not([data-lang="en"]) .play-now,
+body:not([data-lang="en"]) .fair-badge {
+  font-family: inherit;
 }
 body:not([data-lang="en"]) h1 { font-size: 22px; line-height: 1.35; }
 body:not([data-lang="en"]) .kicker,
@@ -1196,7 +1207,7 @@ body.playing .claim-btn { display: none; }
 .hero-veil {
   position: absolute;
   inset: 0;
-  background: linear-gradient(180deg, rgba(255, 248, 236, 0.18) 0%, rgba(243, 234, 216, 0.72) 100%);
+  background: linear-gradient(90deg, rgba(12, 18, 32, 0.42) 0%, rgba(12, 18, 32, 0.12) 48%, transparent 78%);
   pointer-events: none;
 }
 .hero-copy {
@@ -1222,8 +1233,8 @@ body.playing .claim-btn { display: none; }
 }
 .hero-text { flex: 1; min-width: 0; }
 .hero-copy h1 {
-  color: var(--ink);
-  text-shadow: 1px 1px 0 #fff8ee, 0 0 12px rgba(201, 162, 39, 0.28);
+  color: #fff8ee;
+  text-shadow: 0 2px 0 #1c2740, 0 0 14px rgba(0, 0, 0, 0.55);
   margin: 0;
   font-size: 13px;
   line-height: 1.45;

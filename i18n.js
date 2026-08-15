@@ -1099,8 +1099,28 @@ const I18N = {
   },
 };
 
-let lang = localStorage.getItem("catbox-lang") || "en";
+let lang = detectLang();
 if (!I18N[lang]) lang = "en";
+
+function detectLang() {
+  try {
+    if (localStorage.getItem("catbox-lang-on") === "1") {
+      const saved = localStorage.getItem("catbox-lang");
+      if (saved && I18N[saved]) return saved;
+    }
+  } catch (_) {}
+  let nav = "";
+  try {
+    nav = `${navigator.language || ""} ${(navigator.languages || []).join(" ")}`.toLowerCase();
+  } catch (_) {}
+  if (/zh/.test(nav)) return "zh";
+  if (/\bja\b/.test(nav)) return "ja";
+  if (/\bko\b/.test(nav)) return "ko";
+  if (/\bvi\b/.test(nav)) return "vi";
+  if (/\bth\b/.test(nav)) return "th";
+  if (/\bru\b/.test(nav)) return "ru";
+  return "en";
+}
 
 function t(key, vars = {}) {
   const pack = I18N[lang] || I18N.en;
@@ -1121,6 +1141,7 @@ function setLang(id) {
   if (!I18N[id]) return;
   lang = id;
   localStorage.setItem("catbox-lang", lang);
+  localStorage.setItem("catbox-lang-on", "1");
   applyI18n();
 }
 
