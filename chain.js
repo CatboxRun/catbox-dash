@@ -154,18 +154,24 @@ const CatboxChain = (() => {
   }
 
   async function logsReadProvider() {
-    if (logsProvider && Date.now() - logsOkAt < 15000) return logsProvider;
-    for (const url of LOG_RPCS) {
-      try {
-        const p = makePublic(url);
-        const n = await withTimeout(p.getBlockNumber(), 5000);
-        await withTimeout(p.getLogs({ address: cfg.address, fromBlock: n, toBlock: n }), 5000);
-        logsProvider = p;
-        logsOkAt = Date.now();
-        return p;
-      } catch (_) {}
-    }
-    throw new Error("NO_LOGS_RPC");
+    if (logsProvider && Date.now() - logsOkAt < 120000) return logsProvider;
+    const found = await Promise.all(
+      LOG_RPCS.map(async (url) => {
+        try {
+          const p = makePublic(url);
+          const n = await withTimeout(p.getBlockNumber(), 4000);
+          await withTimeout(p.getLogs({ address: cfg.address, fromBlock: n, toBlock: n }), 4000);
+          return p;
+        } catch (_) {
+          return null;
+        }
+      }),
+    );
+    const p = found.find(Boolean);
+    if (!p) throw new Error("NO_LOGS_RPC");
+    logsProvider = p;
+    logsOkAt = Date.now();
+    return p;
   }
   let publicProvider = null;
   let publicRpc = "";
@@ -991,57 +997,84 @@ const CatboxChain = (() => {
     }
   }
 
-  async function fetchEventLogs(eventNames, maxChunks = 24) {
+  async function fetchEventLogs(eventNames, maxChunks = 8) {
     const names = Array.isArray(eventNames) ? eventNames : [eventNames];
     const p = await logsReadProvider();
     const iface = gameContract(p).interface;
-    const topic0 = names.map((n) => iface.getEvent(n).topicHash);
+    const hashes = names.map((n) => iface.getEvent(n).topicHash);
     const latest = await withTimeout(p.getBlockNumber(), 5000);
-    const chunk = 3000;
-    const out = [];
-    let fails = 0;
+    const span = 4000;
+    const ranges = [];
     for (let i = 0; i < maxChunks; i++) {
-      const toBlock = latest - i * chunk;
+      const toBlock = latest - i * span;
       if (toBlock < 0) break;
-      const fromBlock = Math.max(0, toBlock - chunk + 1);
-      let got = null;
-      for (let attempt = 0; attempt < 2 && !got; attempt++) {
-        try {
-          got = await withTimeout(
-            p.getLogs({
-              address: cfg.address,
-              topics: [topic0.length === 1 ? topic0[0] : topic0],
-              fromBlock,
-              toBlock,
-            }),
-            8000,
-          );
-        } catch (_) {
-          await sleep(200 * (attempt + 1));
+      ranges.push({ fromBlock: Math.max(0, toBlock - span + 1), toBlock });
+    }
+    const topic0 = hashes.length === 1 ? hashes[0] : hashes;
+    const out = [];
+    const PARALLEL = 3;
+    let fails = 0;
+    let quiet = 0;
+    for (let i = 0; i < ranges.length; i += PARALLEL) {
+      const slice = ranges.slice(i, i + PARALLEL);
+      const results = await Promise.all(
+        slice.map(async (r) => {
+          for (let attempt = 0; attempt < 2; attempt++) {
+            try {
+              return await withTimeout(
+                p.getLogs({
+                  address: cfg.address,
+                  topics: [topic0],
+                  fromBlock: r.fromBlock,
+                  toBlock: r.toBlock,
+                }),
+                7000,
+              );
+            } catch (_) {
+              await sleep(150 * (attempt + 1));
+            }
+          }
+          return null;
+        }),
+      );
+      let parsed = 0;
+      let emptyOk = 0;
+      let failed = 0;
+      for (const got of results) {
+        if (!got) {
+          failed += 1;
+          continue;
         }
-      }
-      if (got) {
-        fails = 0;
+        if (!got.length) emptyOk += 1;
         for (const log of got) {
           try {
-            const parsed = iface.parseLog(log);
+            const parsedLog = iface.parseLog(log);
             out.push({
-              name: parsed.name,
-              args: parsed.args,
+              name: parsedLog.name,
+              args: parsedLog.args,
               blockNumber: log.blockNumber,
               transactionHash: log.transactionHash,
             });
+            parsed += 1;
           } catch (_) {}
         }
-      } else {
+      }
+      if (failed === slice.length) {
         fails += 1;
-        if (fails >= 3) {
+        if (fails >= 2) {
           logsProvider = null;
           logsOkAt = 0;
           break;
         }
+      } else {
+        fails = 0;
       }
-      await sleep(80);
+      if (parsed === 0 && emptyOk === slice.length && out.length) {
+        quiet += 1;
+        if (quiet >= 1) break;
+      } else if (parsed) {
+        quiet = 0;
+      }
     }
     return out;
   }
@@ -1068,7 +1101,7 @@ const CatboxChain = (() => {
     const ids = [];
     for (let i = n - 1; i >= from; i--) ids.push(i);
     const players = new Set();
-    const batch = 8;
+    const batch = 20;
     for (let i = 0; i < ids.length; i += batch) {
       const chunk = ids.slice(i, i + batch);
       const runs = await Promise.all(chunk.map((id) => c.runs(id)));
@@ -1163,21 +1196,40 @@ const CatboxChain = (() => {
   async function fetchBurns() {
     const byHash = new Map();
     try {
-      const burnedLogs = await fetchRawLogs("Burned", 24);
-      for (const log of burnedLogs) {
-        const amt = asAmt(log.args.amount);
-        if (amt <= 0n) continue;
-        const player = log.args.player;
-        if (!player || player === ethers.ZeroAddress) continue;
-        const hash = log.transactionHash || "";
-        const key = hash || `${log.blockNumber}-${player}-${amt.toString()}`;
-        if (byHash.has(key)) continue;
+      const logs = await fetchEventLogs(["Burned", "RunSettled"], 8);
+      for (const log of logs) {
+        if (log.name === "Burned") {
+          const amt = asAmt(log.args.amount);
+          if (amt <= 0n) continue;
+          const player = log.args.player;
+          if (!player || player === ethers.ZeroAddress) continue;
+          const hash = log.transactionHash || "";
+          const key = hash || `${log.blockNumber}-${player}-${amt.toString()}`;
+          const prev = byHash.get(key) || {};
+          byHash.set(key, {
+            ...prev,
+            player: ethers.getAddress(player),
+            tag: short(player),
+            amount: amt,
+            hash,
+            blockNumber: Number(log.blockNumber) || prev.blockNumber || 0,
+          });
+          continue;
+        }
+        if (log.name !== "RunSettled") continue;
+        const row = burnRowFromSettled(
+          Number(log.args.runId),
+          log.args.player,
+          log.args.burned,
+          log.transactionHash,
+        );
+        if (!row) continue;
+        const key = log.transactionHash || `run-${row.runId}`;
+        const prev = byHash.get(key) || {};
         byHash.set(key, {
-          player: ethers.getAddress(player),
-          tag: short(player),
-          amount: amt,
-          hash,
-          blockNumber: Number(log.blockNumber) || 0,
+          ...prev,
+          ...row,
+          blockNumber: Number(log.blockNumber) || prev.blockNumber || 0,
         });
       }
     } catch (_) {
@@ -1185,58 +1237,8 @@ const CatboxChain = (() => {
       logsOkAt = 0;
     }
 
-    if (!byHash.size) {
-      try {
-        const settledLogs = await fetchRawLogs("RunSettled", 24);
-        for (const log of settledLogs) {
-          const row = burnRowFromSettled(
-            Number(log.args.runId),
-            log.args.player,
-            log.args.burned,
-            log.transactionHash,
-          );
-          if (!row) continue;
-          row.blockNumber = Number(log.blockNumber) || 0;
-          byHash.set(log.transactionHash || `run-${row.runId}`, row);
-        }
-      } catch (_) {}
-    }
-
-    if (byHash.size) {
-      return [...byHash.values()]
-        .sort((a, b) => (b.blockNumber || 0) - (a.blockNumber || 0) || (b.runId || 0) - (a.runId || 0))
-        .slice(0, 30);
-    }
-
-    try {
-      const c = gameContract(await publicReadProvider());
-      const p = await logsReadProvider();
-      const iface = gameContract(p).interface;
-      const latest = await withTimeout(p.getBlockNumber(), 5000);
-      const n = Number(await c.nextRunId());
-      if (Number.isFinite(n) && n > 1) {
-        const missing = [];
-        const from = Math.max(1, n - 80);
-        for (let id = n - 1; id >= from && missing.length < 24; id--) missing.push(id);
-        const batch = 6;
-        for (let i = 0; i < missing.length; i += batch) {
-          const chunk = missing.slice(i, i + batch);
-          const found = await Promise.all(
-            chunk.map((id) => fetchRunSettledById(p, iface, id, latest).catch(() => null)),
-          );
-          chunk.forEach((id, j) => {
-            const rec = found[j];
-            if (!rec) return;
-            const row = burnRowFromSettled(id, rec.player, rec.burned, rec.hash);
-            if (row) byHash.set(row.hash || `run-${id}`, row);
-          });
-        }
-      }
-    } catch (_) {}
-
     return [...byHash.values()]
-      .sort((a, b) => (b.runId || 0) - (a.runId || 0) || (b.blockNumber || 0) - (a.blockNumber || 0))
-      .slice(0, 30);
+      .sort((a, b) => (b.blockNumber || 0) - (a.blockNumber || 0) || (b.runId || 0) - (a.runId || 0));
   }
 
   const TIER_NAMES = ["SCOUT", "RUNNER", "PHANTOM", "VAULT"];

@@ -63,7 +63,8 @@ function rowPts(r) {
 }
 
 const BOARD_PREVIEW = 20;
-const boardOpen = { weekList: false, inviteList: false };
+const BURN_PREVIEW = 8;
+const boardOpen = { weekList: false, inviteList: false, burnList: false };
 
 function renderList(id, rows, emptyKey) {
   const el = $(id);
@@ -110,23 +111,29 @@ function renderBurns(rows) {
     return;
   }
   const explorer = window.CatboxChain?.cfg?.explorer || "https://bscscan.com";
-  el.innerHTML = rows
-    .slice(0, 30)
-    .map((r) => {
-      const amt = window.CatboxChain ? CatboxChain.formatLim(r.amount) : r.amount;
-      const who = r.player
-        ? `<a href="${explorer}/address/${r.player}" target="_blank" rel="noopener">${r.tag}</a>`
-        : r.tag;
-      const runBit = r.runId != null ? ` · #${r.runId}` : "";
-      const label = `<span class="tag">${who}${runBit} · ${amt} LIM</span>`;
-      if (r.hash) {
-        const href = CatboxChain.txUrl(r.hash);
-        const shortHash = `${r.hash.slice(0, 10)}…${r.hash.slice(-6)}`;
-        return `<li>${label}<a href="${href}" target="_blank" rel="noopener">${shortHash}</a></li>`;
-      }
-      return `<li>${label}</li>`;
-    })
-    .join("");
+  const open = Boolean(boardOpen.burnList);
+  const shown = open || rows.length <= BURN_PREVIEW ? rows : rows.slice(0, BURN_PREVIEW);
+  const items = shown.map((r) => {
+    const amt = window.CatboxChain ? CatboxChain.formatLim(r.amount) : r.amount;
+    const who = r.player
+      ? `<a href="${explorer}/address/${r.player}" target="_blank" rel="noopener">${r.tag}</a>`
+      : r.tag;
+    const runBit = r.runId != null ? ` · #${r.runId}` : "";
+    const label = `<span class="tag">${who}${runBit} · ${amt} LIM</span>`;
+    if (r.hash) {
+      const href = CatboxChain.txUrl(r.hash);
+      const shortHash = `${r.hash.slice(0, 10)}…${r.hash.slice(-6)}`;
+      return `<li>${label}<a href="${href}" target="_blank" rel="noopener">${shortHash}</a></li>`;
+    }
+    return `<li>${label}</li>`;
+  });
+  if (rows.length > BURN_PREVIEW) {
+    const label = open ? t("boardCollapse") : t("boardExpand", { n: String(rows.length) });
+    items.push(
+      `<li class="board-more"><button type="button" data-board-more="burnList">${label}</button></li>`,
+    );
+  }
+  el.innerHTML = items.join("");
 }
 
 function mergeWeekBoard(liveWeek) {
@@ -155,17 +162,27 @@ function renderBoards() {
 
 async function pullLiveBoards() {
   if (!window.CatboxChain) return;
+  const weekEl = $("weekList");
+  const inviteEl = $("inviteList");
+  const burnEl = $("burnList");
+  if (weekEl && !window._liveBoards) weekEl.innerHTML = `<li class="empty">${t("loadingBoard")}</li>`;
+  if (inviteEl && !window._liveBoards) inviteEl.innerHTML = `<li class="empty">${t("loadingBoard")}</li>`;
+  if (burnEl && !window._liveBurns) burnEl.innerHTML = `<li class="empty">${t("loadingBoard")}</li>`;
   try {
     if (!(await CatboxChain.isDeployed())) return;
-    const boards = await CatboxChain.fetchLeaderboards();
-    window._liveBoards = boards;
-    renderList("weekList", mergeWeekBoard(boards.week));
-    renderList("inviteList", boards.invite);
-  } catch (_) {}
-  try {
-    const burns = await CatboxChain.fetchBurns();
-    window._liveBurns = burns;
-    renderBurns(burns);
+    const [boards, burns] = await Promise.all([
+      CatboxChain.fetchLeaderboards().catch(() => null),
+      CatboxChain.fetchBurns().catch(() => null),
+    ]);
+    if (boards) {
+      window._liveBoards = boards;
+      renderList("weekList", mergeWeekBoard(boards.week));
+      renderList("inviteList", boards.invite);
+    }
+    if (burns) {
+      window._liveBurns = burns;
+      renderBurns(burns);
+    }
   } catch (_) {}
 }
 
