@@ -107,10 +107,14 @@ const CatboxChain = (() => {
     return account && account.toLowerCase() === cfg.owner.toLowerCase();
   }
 
+  let deployedCached = null;
+
   async function isDeployed() {
+    if (deployedCached === true) return true;
     const p = await publicReadProvider();
     const code = await p.getCode(cfg.address);
-    return code && code !== "0x";
+    deployedCached = Boolean(code && code !== "0x");
+    return deployedCached;
   }
 
   async function deploy() {
@@ -185,29 +189,34 @@ const CatboxChain = (() => {
   }
 
   async function publicReadProvider() {
-    if (publicProvider && Date.now() - publicOkAt < 20000) return publicProvider;
-    if (publicProvider) {
-      try {
-        await publicProvider.getBlockNumber();
-        publicOkAt = Date.now();
-        return publicProvider;
-      } catch (_) {
-        publicProvider = null;
-      }
-    }
+    if (publicProvider && Date.now() - publicOkAt < 60000) return publicProvider;
     const urls = publicRpc ? [publicRpc, ...RPCS.filter((u) => u !== publicRpc)] : RPCS;
-    for (const url of urls) {
-      try {
+    const picked = await new Promise((resolve, reject) => {
+      let left = urls.length;
+      let done = false;
+      urls.forEach((url) => {
         const p = makePublic(url);
-        await p.getBlockNumber();
-        publicProvider = p;
-        publicRpc = url;
-        publicOkAt = Date.now();
-        return p;
-      } catch (_) {}
+        withTimeout(p.getBlockNumber(), 2500)
+          .then(() => {
+            if (done) return;
+            done = true;
+            resolve({ p, url });
+          })
+          .catch(() => {
+            left -= 1;
+            if (!done && left <= 0) reject(new Error("NO_RPC"));
+          });
+      });
+    }).catch(() => null);
+    if (picked) {
+      publicProvider = picked.p;
+      publicRpc = picked.url;
+      publicOkAt = Date.now();
+      return publicProvider;
     }
     publicProvider = makePublic(cfg.rpc);
     publicRpc = cfg.rpc;
+    publicOkAt = Date.now();
     return publicProvider;
   }
 
@@ -222,45 +231,46 @@ const CatboxChain = (() => {
 
   async function poolBalance() {
     const c = gameContract(await readProvider());
-    const [i, burned, free] = await Promise.all([c.invitePool(), c.burnedTotal(), c.freePool()]);
-    let d;
-    try {
-      d = await c.dayPool();
-    } catch (_) {
-      d = await c.weekPool();
+    const v6 = await isV6();
+    if (!v6) {
+      const [week, invite, burned, free] = await Promise.all([
+        c.weekPool(),
+        c.invitePool(),
+        c.burnedTotal(),
+        c.freePool(),
+      ]);
+      return {
+        week,
+        day: week,
+        dayScore: week,
+        dayEq: null,
+        dayPlayers: null,
+        topLen: null,
+        v6: false,
+        invite,
+        burned,
+        free,
+        total: week + invite,
+      };
     }
-    let eq = null;
-    let players = null;
-    let topN = null;
-    let v6 = false;
-    try {
-      eq = await c.dayEqPool();
-      v6 = true;
-    } catch (_) {
-      eq = null;
-    }
-    if (v6) {
-      try {
-        players = await c.dayPlayerCount();
-      } catch (_) {
-        players = 0n;
-      }
-      try {
-        topN = await c.topLen();
-      } catch (_) {
-        topN = 0n;
-      }
-    }
+    const [d, eq, i, burned, free, players, topN] = await Promise.all([
+      c.dayPool(),
+      c.dayEqPool(),
+      c.invitePool(),
+      c.burnedTotal(),
+      c.freePool(),
+      c.dayPlayerCount().catch(() => 0n),
+      c.topLen().catch(() => 0n),
+    ]);
     const daily = d + (eq || 0n);
-    v6Cached = v6;
     return {
       week: daily,
       day: daily,
-      dayScore: v6 ? d : daily,
+      dayScore: d,
       dayEq: eq,
       dayPlayers: players,
       topLen: topN,
-      v6,
+      v6: true,
       invite: i,
       burned,
       free,

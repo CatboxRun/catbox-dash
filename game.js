@@ -236,16 +236,19 @@ async function syncOnchainPool() {
     if ($("freePoolAmt") && freeShown != null) {
       $("freePoolAmt").textContent = `${CatboxChain.formatLim(freeShown)} LIM`;
     }
-    const prices = await Promise.all(TIERS.map((tier) => CatboxChain.ticketPrice(tier.id)));
-    let changed = false;
-    TIERS.forEach((tier, i) => {
-      const n = Number(ethers.formatUnits(prices[i], 18));
-      if (n > 0 && tier.cost !== n) {
-        tier.cost = n;
-        changed = true;
-      }
-    });
-    if (changed && typeof renderTickets === "function") renderTickets();
+    if (Date.now() - pricesAt > 60000) {
+      pricesAt = Date.now();
+      const prices = await Promise.all(TIERS.map((tier) => CatboxChain.ticketPrice(tier.id)));
+      let changed = false;
+      TIERS.forEach((tier, i) => {
+        const n = Number(ethers.formatUnits(prices[i], 18));
+        if (n > 0 && tier.cost !== n) {
+          tier.cost = n;
+          changed = true;
+        }
+      });
+      if (changed && typeof renderTickets === "function") renderTickets();
+    }
   } catch (_) {}
 }
 
@@ -443,17 +446,13 @@ async function refreshInviteUi() {
   let pts = 0;
   if (acc && window.CatboxChain && chainReady) {
     try {
-      if (ptsEl) {
-        pts = Number(await CatboxChain.invitePoints(acc));
-        ptsEl.textContent = String(pts);
-      }
-      try {
-        crew = Number(await CatboxChain.inviteCountOf(acc));
-      } catch (_) {
-        crew = 0;
-      }
+      const jobs = [];
+      if (ptsEl) jobs.push(CatboxChain.invitePoints(acc).then((v) => { pts = Number(v); }).catch(() => {}));
+      jobs.push(CatboxChain.inviteCountOf(acc).then((v) => { crew = Number(v); }).catch(() => { crew = 0; }));
+      jobs.push(CatboxChain.rewardBpsOf(acc).then((v) => { bps = Number(v); }).catch(() => {}));
+      await Promise.all(jobs);
+      if (ptsEl) ptsEl.textContent = String(Number.isFinite(pts) ? pts : 0);
       if (!Number.isFinite(crew) || crew < 0) crew = 0;
-      bps = Number(await CatboxChain.rewardBpsOf(acc));
       if (!bps || bps < 10500) bps = 10500;
     } catch (_) {
       if (ptsEl) ptsEl.textContent = "0";
@@ -630,7 +629,10 @@ function bootLobbyTabs() {
     });
   };
   tabs.forEach((btn) => {
-    btn.onclick = () => setTab(btn.dataset.tab);
+    btn.onclick = () => {
+      setTab(btn.dataset.tab);
+      if (btn.dataset.tab === "pool") pullLiveBoards();
+    };
   });
   const open = $("openRules");
   if (open) open.onclick = () => setTab("rules");
@@ -876,17 +878,19 @@ function startLiveClock() {
   setInterval(() => {
     if (document.body.classList.contains("playing")) return;
     liveRefresh();
-  }, 6000);
-  liveRefresh();
+  }, 12000);
 }
 
+let liveTick = 0;
+let pricesAt = 0;
+
 async function liveRefresh() {
-  await syncOnchainPool();
-  await refreshInviteUi();
-  await refreshClaimUi();
-  await pullLiveBoards();
-  await refreshFreeUi();
-  if ($("swapModal") && !$("swapModal").classList.contains("hidden")) await refreshSwap();
+  liveTick += 1;
+  const onPool = document.querySelector(".lobby-tab.on")?.dataset.tab === "pool";
+  const jobs = [syncOnchainPool(), refreshClaimUi(), refreshFreeUi()];
+  if (onPool || liveTick === 1 || liveTick % 3 === 0) jobs.push(pullLiveBoards());
+  await Promise.all(jobs.map((p) => Promise.resolve(p).catch(() => {})));
+  refreshInviteUi();
   const acc = window.CatboxChain?.account;
   if (acc && $("limBal")) {
     try {
@@ -931,13 +935,15 @@ async function bootWallet() {
     }
   };
   window.addEventListener("catbox-wallet", () => refreshWalletUi());
+  refreshWalletUi();
   if (window.ethereum) {
     try {
-      const accs = await withTimeout(window.ethereum.request({ method: "eth_accounts" }), 2500);
-      if (accs[0]) await withTimeout(CatboxChain.connect(), 8000);
+      const accs = await withTimeout(window.ethereum.request({ method: "eth_accounts" }), 1500);
+      if (accs[0]) await withTimeout(CatboxChain.connect(), 5000);
     } catch (_) {}
   }
   await refreshWalletUi();
+  liveRefresh();
   $("withdrawBtn").onclick = async () => {
     try {
       const pool = await CatboxChain.poolBalance();
@@ -998,7 +1004,7 @@ const pay = $("pay");
 const game = $("game");
 const over = $("over");
 const canvas = $("cv");
-const ctx = canvas.getContext("2d");
+const ctx = canvas.getContext("2d", { alpha: false, desynchronized: true }) || canvas.getContext("2d");
 ctx.imageSmoothingEnabled = false;
 
 const BASE_GROUND = 400;
@@ -1367,21 +1373,23 @@ async function payAndStart() {
     if (!window.ethereum) throw new Error("NO_WALLET");
     status.textContent = t("connecting");
     await CatboxChain.connect();
-    const deployed = await CatboxChain.isDeployed();
-    if (!deployed) {
-      status.textContent = t("deployNeed");
-      go.disabled = false;
-      return;
+    if (!chainReady) {
+      const deployed = await CatboxChain.isDeployed();
+      if (!deployed) {
+        status.textContent = t("deployNeed");
+        go.disabled = false;
+        return;
+      }
+      chainReady = true;
     }
-    await refreshFreeUi();
     const free = freeForTier(selected);
     const teach = shouldTeach(selected);
     status.textContent = free ? t("paying") : t("approve");
     const hash = await CatboxChain.approveAndEnter(selected.id);
     status.innerHTML = `<a href="${CatboxChain.txUrl(hash)}" target="_blank" rel="noopener">${hash.slice(0, 10)}…</a>`;
-    await refreshInviteUi();
     enterPlay();
     startRun(selected, teach, free);
+    refreshInviteUi();
   } catch (e) {
     const msg = e?.message || "";
     if (msg === "NO_WALLET") status.textContent = t("noWallet");
@@ -1986,17 +1994,35 @@ function jump() {
   }
 }
 
+let jumpLock = 0;
+function jumpNow() {
+  const now = performance.now();
+  if (now - jumpLock < 20) return;
+  jumpLock = now;
+  jump();
+}
+
 window.addEventListener("pointerdown", (e) => {
   if (game.classList.contains("hidden")) return;
   if (e.target.closest("a, button, .langs, .lang-btn, .rotate-gate, .rotate-soft, .tut-skip")) return;
   e.preventDefault();
-  jump();
+  jumpNow();
 });
+window.addEventListener(
+  "touchstart",
+  (e) => {
+    if (game.classList.contains("hidden")) return;
+    if (e.target.closest("a, button, .langs, .lang-btn, .rotate-gate, .rotate-soft, .tut-skip")) return;
+    e.preventDefault();
+    jumpNow();
+  },
+  { passive: false },
+);
 window.addEventListener("keydown", (e) => {
   if (game.classList.contains("hidden")) return;
   if (e.code === "Space" || e.code === "ArrowUp") {
     e.preventDefault();
-    jump();
+    jumpNow();
   }
 });
 window.addEventListener("orientationchange", syncRotate);
