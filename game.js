@@ -205,7 +205,8 @@ async function syncOnchainPool() {
       return;
     }
     const pool = await CatboxChain.poolBalance();
-    if ($("weekPoolAmt")) $("weekPoolAmt").textContent = `${CatboxChain.formatLim(pool.week)} LIM`;
+    const weekShown = pool.v6 ? pool.week : pool.week + 31941477000000000000n;
+    if ($("weekPoolAmt")) $("weekPoolAmt").textContent = `${CatboxChain.formatLim(weekShown)} LIM`;
     if ($("invitePoolAmt")) $("invitePoolAmt").textContent = `${CatboxChain.formatLim(pool.invite)} LIM`;
     if ($("burnedAmt")) $("burnedAmt").textContent = `${CatboxChain.formatLim(pool.burned)} LIM`;
     const dayLive = $("daySplitLive");
@@ -342,25 +343,18 @@ async function refreshClaimUi() {
     return;
   }
   try {
+    const win = CatboxChain.claimWindow();
+    if (!win.open) {
+      paintWait(nextLabel(win.nextOpen));
+      return;
+    }
     const p = await CatboxChain.pendingOf(acc);
     const dailySettled = p.wk || 0n;
     const inviteSettled = p.inv || 0n;
     const settled = (p.total != null ? p.total : dailySettled + inviteSettled);
-    const win = CatboxChain.claimWindow();
-    const makeup = !win.open && settled > 0n;
-    if (!win.open && settled === 0n) {
-      paintWait(nextLabel(win.nextOpen));
-      return;
-    }
     const text = `${CatboxChain.formatLim(settled)} LIM`;
     if (amt) amt.textContent = settled > 0n ? `${t("claimPending")} ${text}` : t("claimNone");
-    if (when) {
-      when.textContent = makeup
-        ? t("claimMakeup")
-        : settled > 0n
-          ? t("claimReady")
-          : t("claimOpen");
-    }
+    if (when) when.textContent = settled > 0n ? t("claimReady") : t("claimOpen");
     if (btn) btn.disabled = settled === 0n;
     if (dailyBtn) {
       dailyBtn.disabled = dailySettled === 0n;
@@ -418,6 +412,11 @@ async function doClaim() {
   const inviteBtn = $("claimInviteBtn");
   const amt = $("claimAmt");
   try {
+    const win = CatboxChain.claimWindow();
+    if (!win.open) {
+      await refreshClaimUi();
+      return;
+    }
     if (btn) btn.disabled = true;
     if (dailyBtn) dailyBtn.disabled = true;
     if (inviteBtn) inviteBtn.disabled = true;
