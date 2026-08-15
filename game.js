@@ -1195,9 +1195,9 @@ function freeForTier(tier) {
 function renderTickets() {
   const glyphs = [
     "./assets/coin.png?v=4",
-    "./assets/icon-ticket.png?v=1",
-    "./assets/icon-trophy.png?v=1",
-    "./assets/icon-burn.png?v=1",
+    "./assets/icon-ticket.png?v=2",
+    "./assets/icon-trophy.png?v=2",
+    "./assets/icon-burn.png?v=2",
   ];
   $("tickets").innerHTML = TIERS.map((tier) => {
     const copy = tierText(tier.id);
@@ -1207,7 +1207,7 @@ function renderTickets() {
       <img class="ticket-mascot" src="./assets/hero-cat.png?v=3" alt="" />
       <img class="ticket-coin" src="${glyphs[tier.id]}" alt="" />
       ${free ? `<span class="free-badge">${t("freeScout")} · ${tier.cost} LIM</span>` : ""}
-      <div class="cost"><img src="./assets/icon-ticket.png?v=1" alt="" />${free ? t("freeScout") + " · " : ""}${tier.cost} LIM</div>
+      <div class="cost"><img src="./assets/icon-ticket.png?v=2" alt="" />${free ? t("freeScout") + " · " : ""}${tier.cost} LIM</div>
       <h3>${copy.name}</h3>
       <p>${copy.blurb}</p>
       <div class="meta">${tier.mult}×</div>
