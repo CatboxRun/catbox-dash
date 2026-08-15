@@ -1256,12 +1256,17 @@ const CatboxChain = (() => {
     return { id: best, name: TIER_NAMES[best] || `T${best}`, lim: n };
   }
 
+  function payoutCapWei(ticket) {
+    if (ticket <= 10n ** 18n) return ticket * 2n;
+    return (ticket * 15n) / 10n;
+  }
+
   function displayPayout(collected, paid, bps) {
     if (collected == null) return null;
     const got = asAmt(collected);
     const ticket = asAmt(paid);
     const raw = (got * BigInt(bps || 10500)) / 10000n;
-    const cap = ticket * 2n;
+    const cap = payoutCapWei(ticket);
     return raw > cap ? cap : raw;
   }
 
