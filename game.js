@@ -1368,23 +1368,23 @@ function shuffle(arr) {
 function splitTicket(cost) {
   const pieces = [];
   let remain = cost;
-  const min = cost * 0.0001;
+  const min = cost * 0.002;
   let guard = 0;
-  while (remain > min && guard++ < 88) {
+  while (remain > min && guard++ < 48) {
     const r = Math.random();
     let pct;
-    if (r < 0.08) pct = 0.03 + Math.random() * 0.02;
-    else if (r < 0.24) pct = 0.012 + Math.random() * 0.016;
-    else if (r < 0.5) pct = 0.005 + Math.random() * 0.008;
-    else pct = 0.0002 + Math.random() * 0.003;
+    if (r < 0.16) pct = 0.06 + Math.random() * 0.05;
+    else if (r < 0.4) pct = 0.028 + Math.random() * 0.03;
+    else if (r < 0.72) pct = 0.012 + Math.random() * 0.016;
+    else pct = 0.005 + Math.random() * 0.008;
     let v = cost * pct;
     if (v > remain) v = remain;
-    v = +v.toFixed(6);
+    v = +v.toFixed(4);
     if (v <= 0) break;
     pieces.push(v);
-    remain = +(remain - v).toFixed(6);
+    remain = +(remain - v).toFixed(4);
   }
-  if (remain > 0) pieces.push(+remain.toFixed(6));
+  if (remain > 0) pieces.push(+remain.toFixed(4));
   return shuffle(pieces);
 }
 
@@ -1711,13 +1711,15 @@ function isGapAt(run, wx) {
   return false;
 }
 
-function landingLedge(run, wx, py, vy) {
-  if (!run.ledges || !run.ledges.length || vy < -1) return null;
+function landingLedge(run, wx, py, vy, prevY) {
+  if (!run.ledges || !run.ledges.length) return null;
   let best = null;
   for (let i = 0; i < run.ledges.length; i++) {
     const L = run.ledges[i];
-    if (wx < L.x0 + 4 || wx >= L.x1 - 4) continue;
-    if (py <= L.y + 12 && py >= L.y - 36) {
+    if (wx < L.x0 - 8 || wx >= L.x1 + 8) continue;
+    const crossedUp = prevY != null && prevY > L.y + 2 && py <= L.y + 12;
+    const fallingOn = vy >= -2 && py <= L.y + 16 && py >= L.y - 56;
+    if (crossedUp || fallingOn) {
       if (best == null || L.y < best) best = L.y;
     }
   }
@@ -1735,7 +1737,7 @@ function spawnShelfAt(run, x) {
   pushFlat(run, x, x + pad + w + pad);
   const x0 = x + pad;
   const x1 = x + pad + w;
-  const ly = BASE_GROUND - 86;
+  const ly = BASE_GROUND - 72;
   pushLedge(run, x0, x1, ly);
   spawnCoinW(run, x0 + w * 0.48, ly - 38);
   return x + pad + w + pad;
@@ -2018,29 +2020,35 @@ function tick() {
   const px = PLAYER_SX;
   const pwx = run.scroll + px;
   const gy = groundAt(run, pwx);
-  const ledgeY = landingLedge(run, pwx, run.y, run.vy);
-  const overGap = isGapAt(run, pwx) && ledgeY == null;
-  const floor = ledgeY != null ? ledgeY : gy;
-  run.ground = floor;
+  const prevY = run.y;
   const wasAir = run.wasAir;
 
   const stick =
-    !overGap &&
     run.jumps === 0 &&
     run.vy >= 0 &&
-    run.y >= floor - 8 &&
-    run.y <= floor + 16;
+    run.y >= run.ground - 8 &&
+    run.y <= run.ground + 16 &&
+    !(isGapAt(run, pwx) && landingLedge(run, pwx, run.y, run.vy, prevY) == null);
 
   if (stick) {
-    run.y = floor;
+    run.y = run.ground;
     run.vy = 0;
     run.coyote = 12;
   } else {
-    if (!overGap && run.y >= floor - 1) run.coyote = 12;
+    if (!isGapAt(run, pwx) && run.y >= run.ground - 1) run.coyote = 12;
     else if (run.coyote > 0) run.coyote -= 1;
     run.vy += 0.42;
     run.y += run.vy;
-    if (!overGap && run.y > floor) {
+  }
+
+  const ledgeY = landingLedge(run, pwx, run.y, run.vy, prevY);
+  const overGap = isGapAt(run, pwx) && ledgeY == null;
+  const floor = ledgeY != null ? ledgeY : gy;
+  run.ground = floor;
+
+  if (!overGap) {
+    const hoppedUp = ledgeY != null && prevY > ledgeY + 2 && run.y <= ledgeY + 12;
+    if (hoppedUp || run.y > floor) {
       run.y = floor;
       run.vy = 0;
       run.jumps = 0;

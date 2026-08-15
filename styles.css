@@ -40,7 +40,7 @@ body {
   padding: calc(16px + var(--safe-t)) 16px calc(28px + var(--safe-b));
 }
 .topbar { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; flex-wrap: nowrap; }
-.logo { width: 36px; height: 36px; object-fit: contain; flex-shrink: 0; image-rendering: pixelated; }
+.logo { width: 36px; height: 36px; object-fit: contain; flex-shrink: 0; image-rendering: auto; background: transparent; }
 .brand-text { min-width: 0; flex: 1; }
 .title { font-size: 11px; letter-spacing: 1px; font-family: "Press Start 2P", monospace; color: var(--gold-hi); text-shadow: 0 0 12px rgba(240, 193, 74, 0.45); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .sub { font-size: 11px; color: var(--dim); margin-top: 4px; }
