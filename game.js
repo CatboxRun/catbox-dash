@@ -160,6 +160,9 @@ function renderBoards() {
   refreshInviteUi();
 }
 
+let pullingBoards = false;
+let pullingBurns = false;
+
 async function pullLiveBoards() {
   if (!window.CatboxChain) return;
   const weekEl = $("weekList");
@@ -168,22 +171,49 @@ async function pullLiveBoards() {
   if (weekEl && !window._liveBoards) weekEl.innerHTML = `<li class="empty">${t("loadingBoard")}</li>`;
   if (inviteEl && !window._liveBoards) inviteEl.innerHTML = `<li class="empty">${t("loadingBoard")}</li>`;
   if (burnEl && !window._liveBurns) burnEl.innerHTML = `<li class="empty">${t("loadingBoard")}</li>`;
-  try {
-    if (!(await CatboxChain.isDeployed())) return;
-    const [boards, burns] = await Promise.all([
-      CatboxChain.fetchLeaderboards().catch(() => null),
-      CatboxChain.fetchBurns().catch(() => null),
-    ]);
-    if (boards) {
-      window._liveBoards = boards;
-      renderList("weekList", mergeWeekBoard(boards.week));
-      renderList("inviteList", boards.invite);
-    }
-    if (burns) {
-      window._liveBurns = burns;
-      renderBurns(burns);
-    }
-  } catch (_) {}
+
+  if (!pullingBoards) {
+    pullingBoards = true;
+    CatboxChain.fetchLeaderboards()
+      .then((boards) => {
+        if (!boards) throw new Error("NO_BOARDS");
+        window._liveBoards = boards;
+        renderList("weekList", mergeWeekBoard(boards.week));
+        renderList("inviteList", boards.invite);
+      })
+      .catch(() => {
+        if (!window._liveBoards) {
+          if (weekEl) weekEl.innerHTML = `<li class="empty">${t("emptyBoard")}</li>`;
+          if (inviteEl) inviteEl.innerHTML = `<li class="empty">${t("emptyBoard")}</li>`;
+        }
+      })
+      .finally(() => {
+        pullingBoards = false;
+      });
+  }
+
+  if (!pullingBurns) {
+    pullingBurns = true;
+    CatboxChain.fetchBurns((rows) => {
+      if (!rows || !rows.length) return;
+      window._liveBurns = rows;
+      renderBurns(rows);
+    })
+      .then((burns) => {
+        if (burns && burns.length) {
+          window._liveBurns = burns;
+          renderBurns(burns);
+        } else if (!window._liveBurns && burnEl) {
+          burnEl.innerHTML = `<li class="empty">${t("emptyBoard")}</li>`;
+        }
+      })
+      .catch(() => {
+        if (!window._liveBurns && burnEl) burnEl.innerHTML = `<li class="empty">${t("emptyBoard")}</li>`;
+      })
+      .finally(() => {
+        pullingBurns = false;
+      });
+  }
 }
 
 async function syncOnchainPool() {
@@ -951,7 +981,7 @@ async function liveRefresh() {
   liveTick += 1;
   const onPool = document.querySelector(".lobby-tab.on")?.dataset.tab === "pool";
   const jobs = [syncOnchainPool(), refreshClaimUi(), refreshFreeUi()];
-  if (onPool || liveTick === 1 || liveTick % 3 === 0) jobs.push(pullLiveBoards());
+  if (onPool || liveTick === 1 || liveTick % 3 === 0) pullLiveBoards();
   await Promise.all(jobs.map((p) => Promise.resolve(p).catch(() => {})));
   refreshInviteUi();
   const acc = window.CatboxChain?.account;

@@ -150,6 +150,10 @@ const CatboxChain = (() => {
     "https://bsc.publicnode.com",
     "https://1rpc.io/bnb",
   ];
+  const MULTICALL3 = "0xcA11bde05977b3631167028862bE2a173976CA11";
+  const multiIface = new ethers.Interface([
+    "function aggregate3((address target, bool allowFailure, bytes callData)[] calls) payable returns ((bool success, bytes returnData)[] returnData)",
+  ]);
   let logsProvider = null;
   let logsOkAt = 0;
 
@@ -159,20 +163,27 @@ const CatboxChain = (() => {
 
   async function logsReadProvider() {
     if (logsProvider && Date.now() - logsOkAt < 120000) return logsProvider;
-    const found = await Promise.all(
-      LOG_RPCS.map(async (url) => {
-        try {
-          const p = makePublic(url);
-          const n = await withTimeout(p.getBlockNumber(), 4000);
-          await withTimeout(p.getLogs({ address: cfg.address, fromBlock: n, toBlock: n }), 4000);
-          return p;
-        } catch (_) {
-          return null;
-        }
-      }),
-    );
-    const p = found.find(Boolean);
-    if (!p) throw new Error("NO_LOGS_RPC");
+    const p = await new Promise((resolve, reject) => {
+      let left = LOG_RPCS.length;
+      let done = false;
+      LOG_RPCS.forEach((url) => {
+        const prov = makePublic(url);
+        (async () => {
+          const n = await withTimeout(prov.getBlockNumber(), 2500);
+          await withTimeout(prov.getLogs({ address: cfg.address, fromBlock: n, toBlock: n }), 2500);
+          return prov;
+        })()
+          .then((ok) => {
+            if (done) return;
+            done = true;
+            resolve(ok);
+          })
+          .catch(() => {
+            left -= 1;
+            if (!done && left <= 0) reject(new Error("NO_LOGS_RPC"));
+          });
+      });
+    });
     logsProvider = p;
     logsOkAt = Date.now();
     return p;
@@ -1007,12 +1018,12 @@ const CatboxChain = (() => {
     }
   }
 
-  async function fetchEventLogs(eventNames, maxChunks = 8) {
+  async function fetchEventLogs(eventNames, maxChunks = 8, onPartial) {
     const names = Array.isArray(eventNames) ? eventNames : [eventNames];
     const p = await logsReadProvider();
     const iface = gameContract(p).interface;
     const hashes = names.map((n) => iface.getEvent(n).topicHash);
-    const latest = await withTimeout(p.getBlockNumber(), 5000);
+    const latest = await withTimeout(p.getBlockNumber(), 4000);
     const span = 4000;
     const ranges = [];
     for (let i = 0; i < maxChunks; i++) {
@@ -1022,29 +1033,26 @@ const CatboxChain = (() => {
     }
     const topic0 = hashes.length === 1 ? hashes[0] : hashes;
     const out = [];
-    const PARALLEL = 3;
+    const PARALLEL = 2;
     let fails = 0;
     let quiet = 0;
     for (let i = 0; i < ranges.length; i += PARALLEL) {
       const slice = ranges.slice(i, i + PARALLEL);
       const results = await Promise.all(
         slice.map(async (r) => {
-          for (let attempt = 0; attempt < 2; attempt++) {
-            try {
-              return await withTimeout(
-                p.getLogs({
-                  address: cfg.address,
-                  topics: [topic0],
-                  fromBlock: r.fromBlock,
-                  toBlock: r.toBlock,
-                }),
-                7000,
-              );
-            } catch (_) {
-              await sleep(150 * (attempt + 1));
-            }
+          try {
+            return await withTimeout(
+              p.getLogs({
+                address: cfg.address,
+                topics: [topic0],
+                fromBlock: r.fromBlock,
+                toBlock: r.toBlock,
+              }),
+              4500,
+            );
+          } catch (_) {
+            return null;
           }
-          return null;
         }),
       );
       let parsed = 0;
@@ -1081,9 +1089,14 @@ const CatboxChain = (() => {
       }
       if (parsed === 0 && emptyOk === slice.length && out.length) {
         quiet += 1;
-        if (quiet >= 1) break;
+        if (quiet >= 2) break;
       } else if (parsed) {
         quiet = 0;
+      }
+      if (typeof onPartial === "function" && out.length) {
+        try {
+          onPartial(out);
+        } catch (_) {}
       }
     }
     return out;
@@ -1104,46 +1117,84 @@ const CatboxChain = (() => {
       .sort((a, b) => b.pts - a.pts);
   }
 
+  async function aggregate3(p, calls) {
+    const data = multiIface.encodeFunctionData("aggregate3", [calls]);
+    const raw = await withTimeout(p.call({ to: MULTICALL3, data }), 10000);
+    return multiIface.decodeFunctionResult("aggregate3", raw)[0];
+  }
+
+  async function multicallFn(p, iface, fn, items) {
+    const out = [];
+    const batch = 40;
+    for (let i = 0; i < items.length; i += batch) {
+      const chunk = items.slice(i, i + batch);
+      const calls = chunk.map((item) => ({
+        target: cfg.address,
+        allowFailure: true,
+        callData: iface.encodeFunctionData(fn, [item]),
+      }));
+      let rows = null;
+      try {
+        rows = await aggregate3(p, calls);
+      } catch (_) {
+        await sleep(180);
+        try {
+          rows = await aggregate3(p, calls);
+        } catch (_) {}
+      }
+      chunk.forEach((_, j) => {
+        const row = rows && rows[j];
+        const ok = row && (row.success === true || row[0] === true);
+        const bytes = row ? row.returnData || row[1] : "0x";
+        if (!ok || !bytes || bytes === "0x") {
+          out.push(null);
+          return;
+        }
+        try {
+          out.push(iface.decodeFunctionResult(fn, bytes));
+        } catch (_) {
+          out.push(null);
+        }
+      });
+    }
+    return out;
+  }
+
   async function fetchLeaderboards() {
-    const c = gameContract(await publicReadProvider());
-    const n = Number(await c.nextRunId());
+    const p = await publicReadProvider();
+    const c = gameContract(p);
+    const n = Number(await withTimeout(c.nextRunId(), 5000));
     const from = Math.max(1, n - 500);
     const ids = [];
     for (let i = n - 1; i >= from; i--) ids.push(i);
     const players = new Set();
-    const batch = 20;
-    for (let i = 0; i < ids.length; i += batch) {
-      const chunk = ids.slice(i, i + batch);
-      const runs = await Promise.all(chunk.map((id) => c.runs(id)));
-      for (const r of runs) {
-        const player = r.player || r[0];
-        if (player && player !== ethers.ZeroAddress) players.add(ethers.getAddress(player));
-      }
+    const decodedRuns = await multicallFn(p, c.interface, "runs", ids);
+    for (const decoded of decodedRuns) {
+      if (!decoded) continue;
+      const player = decoded.player || decoded[0];
+      if (player && player !== ethers.ZeroAddress) players.add(ethers.getAddress(player));
     }
     const addrs = [...players];
     const refs = new Set();
     const week = {};
-    for (let i = 0; i < addrs.length; i += batch) {
-      const chunk = addrs.slice(i, i + batch);
-      const [pts, refList] = await Promise.all([
-        Promise.all(chunk.map((a) => c.weekPts(a).catch(() => 0n))),
-        Promise.all(chunk.map((a) => c.refOf(a).catch(() => ethers.ZeroAddress))),
-      ]);
-      chunk.forEach((a, j) => {
-        week[a] = pts[j] || 0n;
-        const ref = refList[j];
-        if (ref && ref !== ethers.ZeroAddress) refs.add(ethers.getAddress(ref));
-      });
-    }
+    const [ptsRows, refRows] = await Promise.all([
+      multicallFn(p, c.interface, "weekPts", addrs),
+      multicallFn(p, c.interface, "refOf", addrs),
+    ]);
+    addrs.forEach((a, j) => {
+      const pts = ptsRows[j];
+      week[a] = pts ? pts[0] || 0n : 0n;
+      const refDec = refRows[j];
+      const ref = refDec ? refDec[0] : ethers.ZeroAddress;
+      if (ref && ref !== ethers.ZeroAddress) refs.add(ethers.getAddress(ref));
+    });
     const invite = {};
     const refAddrs = [...refs];
-    for (let i = 0; i < refAddrs.length; i += batch) {
-      const chunk = refAddrs.slice(i, i + batch);
-      const pts = await Promise.all(chunk.map((a) => c.invitePts(a).catch(() => 0n)));
-      chunk.forEach((a, j) => {
-        invite[a] = pts[j] || 0n;
-      });
-    }
+    const inviteRows = await multicallFn(p, c.interface, "invitePts", refAddrs);
+    refAddrs.forEach((a, j) => {
+      const pts = inviteRows[j];
+      invite[a] = pts ? pts[0] || 0n : 0n;
+    });
     return {
       week: toRows(week, account),
       invite: toRows(invite, account),
@@ -1203,10 +1254,9 @@ const CatboxChain = (() => {
     };
   }
 
-  async function fetchBurns() {
+  async function fetchBurns(onPartial) {
     const byHash = new Map();
-    try {
-      const logs = await fetchEventLogs(["Burned", "RunSettled"], 8);
+    function ingest(logs) {
       for (const log of logs) {
         if (log.name === "Burned") {
           const amt = asAmt(log.args.amount);
@@ -1242,13 +1292,26 @@ const CatboxChain = (() => {
           blockNumber: Number(log.blockNumber) || prev.blockNumber || 0,
         });
       }
+    }
+    function snapshot() {
+      return [...byHash.values()].sort(
+        (a, b) => (b.blockNumber || 0) - (a.blockNumber || 0) || (b.runId || 0) - (a.runId || 0),
+      );
+    }
+    try {
+      const logs = await fetchEventLogs(["Burned", "RunSettled"], 20, (partial) => {
+        byHash.clear();
+        ingest(partial);
+        if (typeof onPartial === "function") onPartial(snapshot());
+      });
+      byHash.clear();
+      ingest(logs);
     } catch (_) {
       logsProvider = null;
       logsOkAt = 0;
     }
 
-    return [...byHash.values()]
-      .sort((a, b) => (b.blockNumber || 0) - (a.blockNumber || 0) || (b.runId || 0) - (a.runId || 0));
+    return snapshot();
   }
 
   const TIER_NAMES = ["SCOUT", "RUNNER", "PHANTOM", "VAULT"];
