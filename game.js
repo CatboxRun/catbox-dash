@@ -1204,7 +1204,7 @@ function renderTickets() {
     const free = freeForTier(tier);
     return `
     <button class="ticket t${tier.id}" data-id="${tier.id}">
-      <img class="ticket-mascot" src="./assets/hero-cat.png?v=1" alt="" />
+      <img class="ticket-mascot" src="./assets/hero-cat.png?v=2" alt="" />
       <img class="ticket-coin" src="${glyphs[tier.id]}" alt="" />
       ${free ? `<span class="free-badge">${t("freeScout")} · ${tier.cost} LIM</span>` : ""}
       <div class="cost"><img src="./assets/icon-ticket.png?v=1" alt="" />${free ? t("freeScout") + " · " : ""}${tier.cost} LIM</div>

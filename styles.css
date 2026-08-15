@@ -706,8 +706,8 @@ h1 { font-size: 16px; line-height: 1.6; margin: 0 0 14px; }
 .ticket h3 { font-size: 10px; margin: 0 0 4px; }
 .ticket p, .ticket .meta { font-size: 12px; font-family: "Noto Sans", "Noto Sans SC", sans-serif; color: var(--dim); margin: 0; line-height: 1.4; }
 .ticket-mascot {
-  width: 56px; height: 56px; object-fit: cover; display: block; margin: 0 auto 6px;
-  image-rendering: pixelated; border: 2px solid var(--line);
+  width: 56px; height: 56px; object-fit: contain; display: block; margin: 0 auto 6px;
+  image-rendering: pixelated; background: transparent; border: 2px solid var(--line);
 }
 .ticket.t0 { border-color: #5ad0a0; }
 .ticket.t0 .ticket-mascot { border-color: #5ad0a0; filter: none; }
@@ -1099,20 +1099,15 @@ body.playing .claim-btn { display: none; }
   box-shadow: 4px 4px 0 #d4c4a4;
   min-height: 118px;
   margin: 0 0 8px;
-  background: #efe3cf;
+  background:
+    linear-gradient(180deg, rgba(255, 248, 236, 0.08), transparent 40%),
+    linear-gradient(180deg, #cfe0f2 0%, #e4eef6 52%, #f6ead4 100%);
 }
 .hero-art {
-  width: 100%;
-  height: 118px;
-  object-fit: cover;
-  object-position: center 42%;
-  display: block;
+  display: none;
 }
 .hero-veil {
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(180deg, rgba(255, 248, 236, 0.18) 0%, rgba(243, 234, 216, 0.72) 100%);
-  pointer-events: none;
+  display: none;
 }
 .hero-copy {
   position: absolute;
@@ -1127,11 +1122,12 @@ body.playing .claim-btn { display: none; }
 .hero-mascot {
   width: 52px;
   height: 52px;
-  object-fit: cover;
+  object-fit: contain;
   image-rendering: pixelated;
+  background: transparent;
   border: 2px solid var(--gold);
   flex-shrink: 0;
-  box-shadow: 3px 3px 0 #000;
+  box-shadow: 3px 3px 0 #d4c4a4;
   animation: mascot-bob 1.6s ease-in-out infinite;
 }
 .hero-text { flex: 1; min-width: 0; }
@@ -1346,8 +1342,9 @@ body:not([data-lang="en"]) .how-item {
 .how-item img {
   width: 28px;
   height: 28px;
-  object-fit: cover;
+  object-fit: contain;
   image-rendering: pixelated;
+  background: transparent;
 }
 .how-glyph {
   width: 28px;
@@ -1397,10 +1394,11 @@ body:not([data-lang="en"]) .how-item {
 .pay-stub-art img {
   width: 56px;
   height: 56px;
-  object-fit: cover;
+  object-fit: contain;
   image-rendering: pixelated;
+  background: transparent;
   border: 3px solid var(--gold);
-  box-shadow: 3px 3px 0 #000;
+  box-shadow: 3px 3px 0 #d4c4a4;
 }
 .meter-preview {
   border-color: var(--gold);
@@ -1486,10 +1484,11 @@ body.playing.force-landscape .hud-chip { padding: 2px 5px; }
 .over-stub img {
   width: 52px;
   height: 52px;
-  object-fit: cover;
+  object-fit: contain;
   image-rendering: pixelated;
+  background: transparent;
   border: 3px solid var(--gold);
-  box-shadow: 3px 3px 0 #000;
+  box-shadow: 3px 3px 0 #d4c4a4;
 }
 .coin-logo {
   border: 0 !important;
