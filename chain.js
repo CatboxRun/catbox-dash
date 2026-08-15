@@ -1058,14 +1058,13 @@ const CatboxChain = (() => {
         pts: asPts(pts),
         you: youAddr && addr.toLowerCase() === youAddr.toLowerCase(),
       }))
-      .sort((a, b) => b.pts - a.pts)
-      .slice(0, 20);
+      .sort((a, b) => b.pts - a.pts);
   }
 
   async function fetchLeaderboards() {
     const c = gameContract(await publicReadProvider());
     const n = Number(await c.nextRunId());
-    const from = Math.max(1, n - 80);
+    const from = Math.max(1, n - 500);
     const ids = [];
     for (let i = n - 1; i >= from; i--) ids.push(i);
     const players = new Set();

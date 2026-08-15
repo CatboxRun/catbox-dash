@@ -668,6 +668,22 @@ h1 { font-size: 16px; line-height: 1.6; margin: 0 0 14px; }
 }
 .board-list li.you { color: var(--gold); }
 .board-list .tag { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.board-list li.board-more {
+  border: 0;
+  justify-content: center;
+  padding-top: 8px;
+}
+.board-list .board-more button {
+  width: 100%;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--gold-hi);
+  background: transparent;
+  border: 2px solid var(--gold);
+  padding: 6px 8px;
+  cursor: pointer;
+}
 
 .tickets { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 4px 0 12px; }
 .ticket {

@@ -62,6 +62,9 @@ function rowPts(r) {
   return Number.isFinite(n) ? Math.floor(n) : 0;
 }
 
+const BOARD_PREVIEW = 20;
+const boardOpen = { weekList: false, inviteList: false };
+
 function renderList(id, rows, emptyKey) {
   const el = $(id);
   if (!el) return;
@@ -70,16 +73,33 @@ function renderList(id, rows, emptyKey) {
     return;
   }
   const explorer = window.CatboxChain?.cfg?.explorer || "https://bscscan.com";
-  el.innerHTML = rows
-    .slice(0, 20)
-    .map((r, i) => {
-      const tag = r.addr
-        ? `<a href="${explorer}/address/${r.addr}" target="_blank" rel="noopener">${r.tag}</a>`
-        : r.tag;
-      const name = r.you ? `${tag} · ${t("you")}` : tag;
-      return `<li class="${r.you ? "you" : ""}"><span class="tag">${i + 1}. ${name}</span><span>${rowPts(r)}</span></li>`;
-    })
-    .join("");
+  const open = Boolean(boardOpen[id]);
+  const shown = open || rows.length <= BOARD_PREVIEW ? rows : rows.slice(0, BOARD_PREVIEW);
+  const items = shown.map((r, i) => {
+    const tag = r.addr
+      ? `<a href="${explorer}/address/${r.addr}" target="_blank" rel="noopener">${r.tag}</a>`
+      : r.tag;
+    const name = r.you ? `${tag} · ${t("you")}` : tag;
+    return `<li class="${r.you ? "you" : ""}"><span class="tag">${i + 1}. ${name}</span><span>${rowPts(r)}</span></li>`;
+  });
+  if (rows.length > BOARD_PREVIEW) {
+    const label = open ? t("boardCollapse") : t("boardExpand", { n: String(rows.length) });
+    items.push(
+      `<li class="board-more"><button type="button" data-board-more="${id}">${label}</button></li>`,
+    );
+  }
+  el.innerHTML = items.join("");
+}
+
+function bootBoardMore() {
+  document.addEventListener("click", (e) => {
+    const btn = e.target.closest("[data-board-more]");
+    if (!btn) return;
+    const id = btn.getAttribute("data-board-more");
+    if (!id) return;
+    boardOpen[id] = !boardOpen[id];
+    renderBoards();
+  });
 }
 
 function renderBurns(rows) {
@@ -117,8 +137,7 @@ function mergeWeekBoard(liveWeek) {
   if (liveYou && rowPts(liveYou) >= rowPts(localYou)) return live;
   const others = live.filter((r) => !r.you);
   return [...others, { tag: localYou.tag, score: rowPts(localYou), you: true }]
-    .sort((a, b) => rowPts(b) - rowPts(a))
-    .slice(0, 8);
+    .sort((a, b) => rowPts(b) - rowPts(a));
 }
 
 function renderBoards() {
@@ -2869,5 +2888,6 @@ mountLangs();
 applyI18n();
 bootTutorial();
 bootLobbyTabs();
+bootBoardMore();
 show(lobby);
 bootWallet();
