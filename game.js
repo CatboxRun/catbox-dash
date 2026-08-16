@@ -239,6 +239,22 @@ function renderBoards() {
   }
   syncOnchainPool();
   refreshInviteUi();
+  paintSnapNote();
+}
+
+function formatSnapTime(iso) {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const sgt = new Date(d.getTime() + 8 * 3600 * 1000);
+  const p = (n) => String(n).padStart(2, "0");
+  return `${p(sgt.getUTCMonth() + 1)}-${p(sgt.getUTCDate())} ${p(sgt.getUTCHours())}:${p(sgt.getUTCMinutes())} SGT`;
+}
+
+function paintSnapNote() {
+  const el = $("boardSnapNote");
+  if (!el) return;
+  const when = window._snapAt ? formatSnapTime(window._snapAt) : "";
+  el.textContent = when ? t("boardSnapNoteAt", { t: when }) : t("boardSnapNote");
 }
 
 function markBoardYou(rows) {
@@ -275,6 +291,8 @@ async function pullLiveBoards(forceBoards) {
         if (!boards || (!boards.week.length && !boards.invite.length)) throw new Error("NO_BOARDS");
         window._liveBoards = boards;
         window._boardsReady = true;
+        window._snapAt = snap.at || "";
+        paintSnapNote();
         renderList("weekList", mergeWeekBoard(boards.week));
         renderList("inviteList", boards.invite);
         if (snap.burns && snap.burns.length) {
