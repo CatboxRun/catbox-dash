@@ -1431,33 +1431,16 @@ const CatboxChain = (() => {
 
     function pack(weekMap, inviteMap) {
       return {
-        week: toRows(weekMap, account).filter((r) => r.pts > 0),
-        invite: toRows(inviteMap, account).filter((r) => r.pts > 0),
+        week: toRows(weekMap, account).filter((r) => r.pts > 0).slice(0, 1000),
+        invite: toRows(inviteMap, account).filter((r) => r.pts > 0).slice(0, 1000),
       };
     }
 
-    let week = {};
-    let invite = {};
-    let painted = pack(week, invite);
-    let cursor = last;
-    for (const keep of [60, 240, 600]) {
-      const fromId = Math.max(1, last - keep + 1);
-      if (fromId > cursor) continue;
-      const fresh = await playersFrom(fromId, cursor);
-      cursor = fromId - 1;
-      if (fresh.length) {
-        week = await ptsFrom("weekPts", fresh, week);
-        invite = await inviteFrom(fresh, invite);
-      }
-      painted = pack(week, invite);
-      if (typeof onPartial === "function") {
-        try {
-          onPartial(painted);
-        } catch (_) {}
-      }
-      if (cursor < 1) break;
-    }
-    return painted;
+    const fromId = Math.max(1, last - 999);
+    const fresh = await playersFrom(fromId, last);
+    const week = await ptsFrom("weekPts", fresh);
+    const invite = await inviteFrom(fresh);
+    return pack(week, invite);
   }
 
   function asAmt(v) {
@@ -1617,11 +1600,7 @@ const CatboxChain = (() => {
           anyOk = true;
           ingestRaw(got, iface);
         }
-        if (typeof onPartial === "function" && byHash.size) {
-          try {
-            onPartial(snapshot());
-          } catch (_) {}
-        }
+        if (byHash.size >= 1000) break;
       }
       if (!anyOk) throw new Error("NO_BURN_LOGS");
     } catch (e) {
@@ -1630,7 +1609,7 @@ const CatboxChain = (() => {
       if (!byHash.size) throw e;
     }
 
-    return snapshot();
+    return snapshot().slice(0, 1000);
   }
 
   const TIER_NAMES = ["SCOUT", "RUNNER", "PHANTOM", "VAULT"];
