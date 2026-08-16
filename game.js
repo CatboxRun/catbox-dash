@@ -156,7 +156,8 @@ async function runBoardLookup(fromMine) {
       addr: tag,
       week: String(week),
       invite: String(invite),
-      unit: t("boardPtsUnit"),
+      shard: t("shardUnit"),
+      pts: t("ptsUnit"),
       weekRank: weekRank ? t("boardLookupRank", { n: String(weekRank) }) : "",
       inviteRank: inviteRank ? t("boardLookupRank", { n: String(inviteRank) }) : "",
     });
