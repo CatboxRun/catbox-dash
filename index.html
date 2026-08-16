@@ -44,7 +44,7 @@
       href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@500;700&family=Noto+Sans+SC:wght@500;700&family=Noto+Sans+JP:wght@500;700&family=Noto+Sans+KR:wght@500;700&family=Noto+Sans+Thai:wght@500;700&family=Press+Start+2P&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="./styles.css?v=54" />
+    <link rel="stylesheet" href="./styles.css?v=55" />
   </head>
   <body>
     <div class="crt">
@@ -167,7 +167,7 @@
                 <li data-i18n="ruleInvitePay">Caught LIM × 105%+. Invites and extra runs are separate, one reward % cap at 200%. Each friend who plays from your link adds +5%. Four friends is 125% from invites. On your own, every extra run you start adds +0.1% — no invite needed. Payout this run cannot pass the LIM cap: 1 LIM tickets ×2, others ×1.5.</li>
                 <li data-i18n="ruleLeft">Missed coins go to the pools: daily 50% · invite 20% · burn 30%.</li>
                 <li data-i18n="ruleDaily">Missed coins feed the daily pool. It splits by on-chain board score share. Opens 00:00 Singapore for one hour. Miss it, and claim at the same hour the next day.</li>
-                <li data-i18n="ruleInviteBoard">Invite 20% splits by on-chain invite points share — not an equal top-200 cut. Same 00:00 Singapore hour as the daily pool.</li>
+                <li data-i18n="ruleInviteBoard">Invite pool follows LIM shards. Same midnight hour as the daily board.</li>
               </ol>
             </article>
           </div>
@@ -324,7 +324,7 @@
             </div>
           </div>
         </div>
-        <p class="meme-line" data-i18n="memeLine">1 LIM = 1 USDT? Send LIM to the moon.</p>
+        <p class="meme-line" data-i18n="memeLine">Jump the ticket. Keep the LIM.</p>
       </section>
 
       <section id="pay" class="panel hidden pay-panel">
@@ -423,7 +423,7 @@
           <h2 data-i18n="swapTitle">BUY/SELL LIM</h2>
           <button class="ghost" id="swapClose" type="button">✕</button>
         </div>
-        <p class="swap-note" data-i18n="swapNote">Buy or sell LIM with BNB or USDT. Separate from daily and invite boards.</p>
+        <p class="swap-note" data-i18n="swapNote">Buy LIM with BNB or USDT, or sell it back. On-chain on BSC — separate from the boards.</p>
         <label class="swap-field">
           <span data-i18n="swapPay">YOU PAY</span>
           <div class="swap-in">
@@ -432,11 +432,12 @@
               <option value="USDT">USDT</option>
               <option value="LIM">LIM</option>
             </select>
-            <input id="swapAmt" type="number" min="0" step="0.01" placeholder="0.0" />
+            <input id="swapAmt" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0.0" />
+            <button class="swap-max" id="swapMax" type="button" data-i18n="swapMax">MAX</button>
           </div>
           <small id="swapBal">—</small>
         </label>
-        <button class="swap-flip" id="swapFlip" type="button" aria-label="Flip">⇅</button>
+        <button class="swap-flip" id="swapFlip" type="button" data-i18n-aria="swapFlip" aria-label="Flip pair">⇅</button>
         <label class="swap-field">
           <span data-i18n="swapGet">YOU GET</span>
           <div class="swap-out">
@@ -448,6 +449,8 @@
             <input id="swapOut" readonly value="0" />
           </div>
         </label>
+        <p class="swap-rate" id="swapRate"></p>
+        <p class="swap-slip" data-i18n="swapSlipHint">Buy allows a 1% price move. Sell allows 5%.</p>
         <p class="tx-line" id="swapStatus"></p>
         <button class="primary pulse-cta" id="swapGo" type="button" data-i18n="swapGo">SWAP</button>
       </div>
@@ -465,8 +468,8 @@
     <script src="./config.js?v=29"></script>
     <script src="https://cdn.jsdelivr.net/npm/ethers@6.13.5/dist/ethers.umd.min.js"></script>
     <script src="./chain.js?v=76"></script>
-    <script src="./i18n.js?v=80"></script>
-    <script src="./game.js?v=89"></script>
+    <script src="./i18n.js?v=81"></script>
+    <script src="./game.js?v=90"></script>
     <script src="./bgm.js?v=26"></script>
   </body>
 </html>

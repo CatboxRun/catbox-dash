@@ -883,11 +883,29 @@ function bootNoticeCarousel() {
 
 let quoteTimer = 0;
 
+function parseSwapAmt(raw) {
+  const s = String(raw || "").trim().replace(",", ".");
+  if (!s || Number(s) <= 0) return 0n;
+  try {
+    return ethers.parseUnits(s, 18);
+  } catch (_) {
+    return null;
+  }
+}
+
+function paintSwapGo() {
+  const btn = $("swapGo");
+  if (!btn) return;
+  const from = $("swapFrom")?.value;
+  btn.textContent = from === "LIM" ? t("swapGoSell") : t("swapGoBuy");
+}
+
 function bootSwap() {
   const modal = $("swapModal");
   if (!modal || !$("swapBtn")) return;
   $("swapBtn").onclick = () => {
     modal.classList.remove("hidden");
+    paintSwapGo();
     refreshSwap();
   };
   $("swapClose").onclick = () => modal.classList.add("hidden");
@@ -897,11 +915,13 @@ function bootSwap() {
   $("swapFrom").onchange = () => {
     $("swapStatus")?.classList.remove("ok");
     syncSwapPair("from");
+    paintSwapGo();
     refreshSwap();
   };
   $("swapTo").onchange = () => {
     $("swapStatus")?.classList.remove("ok");
     syncSwapPair("to");
+    paintSwapGo();
     refreshSwap();
   };
   $("swapFlip").onclick = () => {
@@ -911,6 +931,7 @@ function bootSwap() {
     $("swapFrom").value = to;
     $("swapTo").value = from;
     syncSwapPair("from");
+    paintSwapGo();
     refreshSwap();
   };
   $("swapAmt").oninput = () => {
@@ -918,6 +939,7 @@ function bootSwap() {
     clearTimeout(quoteTimer);
     quoteTimer = setTimeout(refreshSwap, 280);
   };
+  if ($("swapMax")) $("swapMax").onclick = fillSwapMax;
   $("swapGo").onclick = doSwap;
 }
 
@@ -938,6 +960,29 @@ function syncSwapPair(changed) {
   }
 }
 
+async function fillSwapMax() {
+  if (!window.CatboxChain?.account) {
+    const status = $("swapStatus");
+    if (status) {
+      status.classList.remove("ok");
+      status.textContent = t("connectFirst");
+    }
+    return;
+  }
+  const from = $("swapFrom").value;
+  try {
+    let bal = await CatboxChain.tokenBalance(from);
+    if (from === "BNB") {
+      const gas = ethers.parseUnits("0.002", 18);
+      if (bal > gas) bal -= gas;
+      else bal = 0n;
+    }
+    $("swapAmt").value = ethers.formatUnits(bal, 18);
+    $("swapStatus")?.classList.remove("ok");
+    await refreshSwap();
+  } catch (_) {}
+}
+
 async function refreshSwap() {
   const modal = $("swapModal");
   if (!modal || modal.classList.contains("hidden")) return;
@@ -945,6 +990,13 @@ async function refreshSwap() {
   const to = $("swapTo")?.value || "LIM";
   const raw = $("swapAmt").value;
   const status = $("swapStatus");
+  const rateEl = $("swapRate");
+  const go = $("swapGo");
+  paintSwapGo();
+  const flip = $("swapFlip");
+  if (flip) flip.setAttribute("aria-label", t("swapFlip"));
+  if (rateEl) rateEl.textContent = "";
+  if (go) go.disabled = false;
   try {
     if (CatboxChain.account) {
       const bal = await CatboxChain.tokenBalance(from);
@@ -952,11 +1004,27 @@ async function refreshSwap() {
     } else {
       $("swapBal").textContent = t("connectFirst");
     }
-    if (!raw || Number(raw) <= 0) {
+    const amt = parseSwapAmt(raw);
+    if (amt === null) {
       $("swapOut").value = "0";
+      if (status && !status.classList.contains("ok")) status.textContent = t("swapNeedAmt");
       return;
     }
-    const q = await CatboxChain.quoteSwap(from, to, ethers.parseUnits(String(raw), 18));
+    if (amt === 0n) {
+      $("swapOut").value = "0";
+      if (status && !status.classList.contains("ok")) status.textContent = "";
+      return;
+    }
+    if (CatboxChain.account) {
+      const bal = await CatboxChain.tokenBalance(from);
+      if (bal < amt) {
+        $("swapOut").value = "0";
+        if (status && !status.classList.contains("ok")) status.textContent = t("swapLowBal", { sym: from });
+        if (go) go.disabled = true;
+        return;
+      }
+    }
+    const q = await CatboxChain.quoteSwap(from, to, amt);
     if (!q.path || q.out === 0n) {
       $("swapOut").value = "0";
       if (status && !status.classList.contains("ok")) status.textContent = t("swapNoLiq");
@@ -964,6 +1032,11 @@ async function refreshSwap() {
     }
     if (status && !status.classList.contains("ok")) status.textContent = "";
     $("swapOut").value = CatboxChain.formatLim(q.out);
+    if (rateEl && amt > 0n) {
+      const rate = Number(ethers.formatUnits((q.out * 10n ** 18n) / amt, 18));
+      const rateTxt = rate >= 1000 ? rate.toFixed(2) : rate >= 1 ? rate.toFixed(4) : rate.toFixed(6);
+      rateEl.textContent = t("swapRate", { from, to, rate: rateTxt });
+    }
   } catch (_) {
     $("swapOut").value = "0";
     if (status && !status.classList.contains("ok")) status.textContent = t("swapNoLiq");
@@ -1087,7 +1160,14 @@ function bootShare() {
 async function doSwap() {
   const status = $("swapStatus");
   const raw = $("swapAmt").value;
-  if (!raw || Number(raw) <= 0) return;
+  const amt = parseSwapAmt(raw);
+  if (amt === null || amt === 0n) {
+    if (status) {
+      status.classList.remove("ok");
+      status.textContent = t("swapNeedAmt");
+    }
+    return;
+  }
   if (window._swapBusy) return;
   window._swapBusy = true;
   const from = $("swapFrom").value;
@@ -1095,8 +1175,14 @@ async function doSwap() {
   const expect = $("swapOut")?.value;
   status.classList.remove("ok");
   try {
+    if (!CatboxChain.account) await CatboxChain.connect();
+    const bal = await CatboxChain.tokenBalance(from);
+    if (bal < amt) {
+      status.textContent = t("swapLowBal", { sym: from });
+      return;
+    }
     status.textContent = t("swapping");
-    const hash = await CatboxChain.swapExact(from, to, ethers.parseUnits(String(raw), 18), (step) => {
+    const hash = await CatboxChain.swapExact(from, to, amt, (step) => {
       status.textContent = t(step);
     });
     const n = expect && expect !== "0" ? expect : "";

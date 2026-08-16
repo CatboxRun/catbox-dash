@@ -191,6 +191,25 @@ body {
 }
 .swap-in input, .swap-out input { flex: 1; min-width: 0; }
 .swap-in select, .swap-out select { color: var(--gold); }
+.swap-max {
+  flex-shrink: 0;
+  font: inherit;
+  font-size: 10px;
+  font-weight: 700;
+  color: #1a1204;
+  background: var(--gold);
+  border: 2px solid #000;
+  padding: 4px 8px;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.swap-rate, .swap-slip {
+  margin: 6px 0 0;
+  font-size: 8px;
+  color: var(--dim);
+  min-height: 1.2em;
+}
+.swap-slip { margin-top: 4px; }
 .swap-arrow { text-align: center; color: var(--gold); margin: 4px 0; }
 .swap-flip {
   display: flex;
@@ -208,8 +227,11 @@ body {
   touch-action: manipulation;
 }
 .swap-card .primary { width: 100%; margin-top: 10px; }
+.swap-card .primary:disabled { opacity: 0.45; cursor: not-allowed; }
 body:not([data-lang="en"]) .swap-note,
-body:not([data-lang="en"]) .swap-field span { font-size: 13px; }
+body:not([data-lang="en"]) .swap-field span,
+body:not([data-lang="en"]) .swap-rate,
+body:not([data-lang="en"]) .swap-slip { font-size: 13px; }
 body:not([data-lang="en"]) .swap-head h2 { font-size: 18px; }
 .wallet-line {
   display: flex;
