@@ -676,11 +676,12 @@ const CatboxChain = (() => {
     return rec.hash;
   }
 
-  function collectedWei(got, ticket) {
+  function collectedWei(got, ticket, capAtTicket) {
     const paid = ethers.parseUnits(String(ticket), 18);
-    if (got + 1e-9 >= ticket) return paid;
-    const wei = ethers.parseUnits(Number(got).toFixed(6), 18);
-    return wei > paid ? paid : wei;
+    const wei = ethers.parseUnits(Number(Math.max(0, got)).toFixed(6), 18);
+    const cap = capAtTicket ? paid : paid <= 10n ** 18n ? paid * 2n : (paid * 15n) / 10n;
+    if (wei > cap) return cap;
+    return wei;
   }
 
   async function settleRun(got, ticket, score) {
@@ -689,17 +690,33 @@ const CatboxChain = (() => {
     const game = gameContract(s);
     const pending = await game.activeRun(account);
     if (pending === 0n) return null;
-    const tx = await game.settle(collectedWei(got, ticket), BigInt(score || 0));
+    const capAtTicket = !(await isV6());
+    const tx = await game.settle(collectedWei(got, ticket, capAtTicket), BigInt(score || 0));
     const rec = await tx.wait();
     let burned = 0n;
+    let settledPayout = 0n;
     let payout = 0n;
+    const limI = new ethers.Interface(["event Transfer(address indexed from, address indexed to, uint256 value)"]);
     for (const log of rec.logs || []) {
       try {
         const parsed = game.interface.parseLog(log);
         if (parsed?.name === "Burned") burned = parsed.args.amount;
-        if (parsed?.name === "RunSettled") payout = parsed.args.payout;
+        if (parsed?.name === "RunSettled" && parsed.args.payout != null) settledPayout = parsed.args.payout;
+      } catch (_) {}
+      try {
+        if (String(log.address).toLowerCase() !== String(cfg.lim).toLowerCase()) continue;
+        const ev = limI.parseLog(log);
+        if (
+          ev?.name === "Transfer" &&
+          account &&
+          ev.args.to &&
+          String(ev.args.to).toLowerCase() === String(account).toLowerCase()
+        ) {
+          payout += ev.args.value;
+        }
       } catch (_) {}
     }
+    if (payout === 0n) payout = settledPayout;
     return { hash: rec.hash, burned, payout };
   }
 

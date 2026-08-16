@@ -1107,57 +1107,66 @@ const imgCat = new Image();
 imgCat.src = "./assets/catbox.png?v=3";
 let coinMark = null;
 function punchCoinMark() {
-  if (!imgCoin.naturalWidth) return;
-  const w = imgCoin.naturalWidth;
-  const h = imgCoin.naturalHeight;
-  const c = document.createElement("canvas");
-  c.width = w;
-  c.height = h;
-  const g = c.getContext("2d");
-  g.drawImage(imgCoin, 0, 0);
-  const img = g.getImageData(0, 0, w, h);
-  const d = img.data;
-  const isBg = (i) => {
-    const r = d[i];
-    const gv = d[i + 1];
-    const b = d[i + 2];
-    const mx = r > gv ? (r > b ? r : b) : gv > b ? gv : b;
-    const mn = r < gv ? (r < b ? r : b) : gv < b ? gv : b;
-    return mx < 28 || (mn > 232 && mx - mn < 18);
-  };
-  const seen = new Uint8Array(w * h);
-  const q = [];
-  const push = (x, y) => {
-    if (x < 0 || y < 0 || x >= w || y >= h) return;
-    const idx = y * w + x;
-    if (seen[idx]) return;
-    seen[idx] = 1;
-    q.push(idx);
-  };
-  for (let x = 0; x < w; x++) {
-    push(x, 0);
-    push(x, h - 1);
+  try {
+    if (!imgCoin.naturalWidth) return;
+    const w = imgCoin.naturalWidth;
+    const h = imgCoin.naturalHeight;
+    const c = document.createElement("canvas");
+    c.width = w;
+    c.height = h;
+    const g = c.getContext("2d");
+    g.drawImage(imgCoin, 0, 0);
+    const img = g.getImageData(0, 0, w, h);
+    const d = img.data;
+    const isBg = (i) => {
+      const r = d[i];
+      const gv = d[i + 1];
+      const b = d[i + 2];
+      const mx = r > gv ? (r > b ? r : b) : gv > b ? gv : b;
+      const mn = r < gv ? (r < b ? r : b) : gv < b ? gv : b;
+      return mx < 28 || (mn > 232 && mx - mn < 18);
+    };
+    const seen = new Uint8Array(w * h);
+    const q = [];
+    const push = (x, y) => {
+      if (x < 0 || y < 0 || x >= w || y >= h) return;
+      const idx = y * w + x;
+      if (seen[idx]) return;
+      seen[idx] = 1;
+      q.push(idx);
+    };
+    for (let x = 0; x < w; x++) {
+      push(x, 0);
+      push(x, h - 1);
+    }
+    for (let y = 0; y < h; y++) {
+      push(0, y);
+      push(w - 1, y);
+    }
+    while (q.length) {
+      const idx = q.pop();
+      const i = idx * 4;
+      if (!isBg(i)) continue;
+      d[i + 3] = 0;
+      const x = idx % w;
+      const y = (idx / w) | 0;
+      push(x + 1, y);
+      push(x - 1, y);
+      push(x, y + 1);
+      push(x, y - 1);
+    }
+    g.putImageData(img, 0, 0);
+    coinMark = c;
+  } catch (_) {
+    coinMark = imgCoin;
   }
-  for (let y = 0; y < h; y++) {
-    push(0, y);
-    push(w - 1, y);
-  }
-  while (q.length) {
-    const idx = q.pop();
-    const i = idx * 4;
-    if (!isBg(i)) continue;
-    d[i + 3] = 0;
-    const x = idx % w;
-    const y = (idx / w) | 0;
-    push(x + 1, y);
-    push(x - 1, y);
-    push(x, y + 1);
-    push(x, y - 1);
-  }
-  g.putImageData(img, 0, 0);
-  coinMark = c;
 }
 imgCoin.addEventListener("load", punchCoinMark);
+imgCoin.addEventListener("error", () => {
+  if (imgCoin.dataset.retried) return;
+  imgCoin.dataset.retried = "1";
+  imgCoin.src = `./assets/coin.png?v=4&r=${Date.now()}`;
+});
 if (imgCoin.complete) punchCoinMark();
 
 let selected = null;
@@ -2260,7 +2269,7 @@ function tick() {
     if (o.kind === "coin" && !o.hit) {
       o.bob = (o.bob || 0) + 0.14;
       const mag = dist(px, py, o.x, o.y);
-      const reach = run.magnet || 56;
+      const reach = o.gold ? Math.max(72, run.magnet || 56) : run.magnet || 56;
       const pull = run.magnetPull || 0.16;
       if (mag < reach && mag > 2) {
         o.x += (px - o.x) * pull;
@@ -2271,7 +2280,7 @@ function tick() {
       }
     }
 
-    if (o.kind === "coin" && !o.hit && dist(px, py, o.x, o.y) < (o.gold ? 48 : 40)) {
+    if (o.kind === "coin" && !o.hit && dist(px, py, o.x, o.y) < (o.gold ? 56 : 40)) {
       o.hit = true;
       run.coins += 1;
       run.combo += 1;
@@ -2802,23 +2811,6 @@ function drawLedges(pal) {
   }
 }
 
-function drawLimMark(s) {
-  const rings = [
-    [-0.16, -0.16, "#e8a84a", -0.55],
-    [0.16, -0.16, "#4ec4e8", 0.55],
-    [-0.16, 0.16, "#c45ec8", 0.55],
-    [0.16, 0.16, "#9ad84a", -0.55],
-  ];
-  ctx.lineWidth = Math.max(3, s * 0.11);
-  ctx.lineCap = "round";
-  for (const [dx, dy, col, rot] of rings) {
-    ctx.strokeStyle = col;
-    ctx.beginPath();
-    ctx.ellipse(dx * s, dy * s, s * 0.26, s * 0.16, rot, 0, Math.PI * 2);
-    ctx.stroke();
-  }
-}
-
 function drawCoin(o) {
   const s = o.gold ? 48 : 36;
   const bob = Math.sin((o.bob || 0)) * 3;
@@ -2829,8 +2821,19 @@ function drawCoin(o) {
   ctx.translate(x, y);
   ctx.scale(spin, 1);
   ctx.imageSmoothingEnabled = true;
-  if (coinMark) ctx.drawImage(coinMark, -s / 2, -s / 2, s, s);
-  else drawLimMark(s);
+  const spr = coinMark || (imgCoin.complete && imgCoin.naturalWidth ? imgCoin : null);
+  if (spr) {
+    ctx.drawImage(spr, -s / 2, -s / 2, s, s);
+  } else {
+    ctx.fillStyle = "#c9a227";
+    ctx.beginPath();
+    ctx.arc(0, 0, s / 2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "#f0d36a";
+    ctx.beginPath();
+    ctx.arc(0, 0, s / 2 - 3, 0, Math.PI * 2);
+    ctx.fill();
+  }
   ctx.restore();
   ctx.imageSmoothingEnabled = false;
 }
@@ -3003,6 +3006,9 @@ async function settleOnchain(got, ticket, score) {
       lastFinish.tx = rec.hash;
       lastFinish.burnHash = rec.burned > 0n ? rec.hash : "";
       if (rec.burned > 0n) lastFinish.burned = Number(ethers.formatUnits(rec.burned, 18));
+      if (rec.payout != null && rec.payout > 0n) {
+        lastFinish.payout = Number(ethers.formatUnits(rec.payout, 18));
+      }
       el.innerHTML = `<a href="${CatboxChain.txUrl(rec.hash)}" target="_blank" rel="noopener">${rec.hash.slice(0, 10)}…</a>`;
       refreshOver();
     } else {
