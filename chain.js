@@ -126,6 +126,86 @@ const CatboxChain = (() => {
     return tx.hash;
   }
 
+  function extraCfg() {
+    return cfg.extra || null;
+  }
+
+  function extraContract(s) {
+    const e = extraCfg();
+    if (!e?.address || !e?.abi) throw new Error("NO_EXTRA");
+    return new ethers.Contract(e.address, e.abi, s);
+  }
+
+  async function isExtraDeployed() {
+    const e = extraCfg();
+    if (!e?.address) return false;
+    try {
+      const p = await publicReadProvider();
+      const code = await withTimeout(p.getCode(e.address), 4000);
+      return Boolean(code && code !== "0x");
+    } catch (_) {
+      return false;
+    }
+  }
+
+  async function deployExtra() {
+    await connect();
+    if (!isOwner()) throw new Error("NOT_OWNER");
+    const e = extraCfg();
+    if (!e?.salt || !e?.bytecode) throw new Error("NO_EXTRA");
+    const s = await signer();
+    const data = e.salt + e.bytecode.slice(2);
+    const tx = await s.sendTransaction({ to: cfg.factory, data });
+    await tx.wait();
+    return tx.hash;
+  }
+
+  async function extraPoolAmt() {
+    try {
+      if (!(await isExtraDeployed())) return 0n;
+      return await extraContract(await publicReadProvider()).pool();
+    } catch (_) {
+      return 0n;
+    }
+  }
+
+  async function fundExtra(limAmount) {
+    await connect();
+    const s = await signer();
+    const extra = extraContract(s);
+    const extraAddr = extraCfg().address;
+    const lim = limContract(s);
+    const amt = ethers.parseUnits(String(limAmount), 18);
+    if (amt <= 0n) throw new Error("NO_LIM");
+    const bal = await lim.balanceOf(account);
+    if (bal < amt) throw new Error("NO_LIM");
+    const allow = await lim.allowance(account, extraAddr);
+    if (allow < amt) {
+      const txA = await lim.approve(extraAddr, ethers.MaxUint256);
+      await txA.wait();
+    }
+    const tx = await extra.fund(amt);
+    return (await tx.wait()).hash;
+  }
+
+  async function withdrawExtra(amountWei) {
+    await connect();
+    if (!isOwner()) throw new Error("NOT_OWNER");
+    const extra = extraContract(await signer());
+    const tx = await extra.withdraw(amountWei);
+    return (await tx.wait()).hash;
+  }
+
+  async function payRunExtra(runId, extraWei) {
+    if (!runId || extraWei <= 0n) return null;
+    if (!(await isExtraDeployed())) return null;
+    const extra = extraContract(await signer());
+    const [pool, already] = await Promise.all([extra.pool(), extra.paidExtra(runId)]);
+    if (already > 0n || pool < extraWei) return null;
+    const tx = await extra.pay(runId, extraWei);
+    return (await tx.wait()).hash;
+  }
+
   const RPCS = [
     cfg.rpc,
     "https://bsc-dataseed1.binance.org",
@@ -684,14 +764,23 @@ const CatboxChain = (() => {
     return wei;
   }
 
+  function extraWeiFromGot(got, ticket) {
+    const paid = ethers.parseUnits(String(ticket), 18);
+    const wei = ethers.parseUnits(Number(Math.max(0, got)).toFixed(6), 18);
+    if (wei <= paid) return 0n;
+    const cap = paid <= 10n ** 18n ? paid : paid / 2n;
+    const extra = wei - paid;
+    return extra > cap ? cap : extra;
+  }
+
   async function settleRun(got, ticket, score) {
     await connect();
     const s = await signer();
     const game = gameContract(s);
     const pending = await game.activeRun(account);
     if (pending === 0n) return null;
-    const capAtTicket = !(await isV6());
-    const tx = await game.settle(collectedWei(got, ticket, capAtTicket), BigInt(score || 0));
+    const extraAmt = extraWeiFromGot(got, ticket);
+    const tx = await game.settle(collectedWei(got, ticket, false), BigInt(score || 0));
     const rec = await tx.wait();
     let burned = 0n;
     let settledPayout = 0n;
@@ -717,7 +806,7 @@ const CatboxChain = (() => {
       } catch (_) {}
     }
     if (payout === 0n) payout = settledPayout;
-    return { hash: rec.hash, burned, payout };
+    return { hash: rec.hash, burned, payout: payout + extraAmt, extraQueued: extraAmt };
   }
 
   async function withdrawWeekly(amountWei) {
@@ -1625,6 +1714,11 @@ const CatboxChain = (() => {
     claimXBonus,
     fundFreePool,
     settleRun,
+    isExtraDeployed,
+    deployExtra,
+    extraPoolAmt,
+    fundExtra,
+    withdrawExtra,
     withdrawWeekly,
     setTicketPrice,
     txUrl,

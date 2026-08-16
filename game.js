@@ -265,6 +265,7 @@ async function syncOnchainPool() {
     if ($("freePoolAmt") && freeShown != null) {
       $("freePoolAmt").textContent = `${CatboxChain.formatLim(freeShown)} LIM`;
     }
+    await refreshExtraUi();
     if (Date.now() - pricesAt > 60000) {
       pricesAt = Date.now();
       const prices = await Promise.all(TIERS.map((tier) => CatboxChain.ticketPrice(tier.id)));
@@ -282,6 +283,23 @@ async function syncOnchainPool() {
 }
 
 let chainReady = false;
+
+async function refreshExtraUi() {
+  const amt = $("extraPoolAmt");
+  const need = $("extraNeedDeploy");
+  const dep = $("extraDeployBtn");
+  if (!amt && !need && !dep) return;
+  if (!window.CatboxChain || !CatboxChain.isOwner()) return;
+  try {
+    const deployed = await CatboxChain.isExtraDeployed();
+    if (need) need.classList.toggle("hidden", deployed);
+    if (dep) dep.classList.toggle("hidden", deployed);
+    if (amt) {
+      if (!deployed) amt.textContent = "—";
+      else amt.textContent = `${CatboxChain.formatLim(await CatboxChain.extraPoolAmt())} LIM`;
+    }
+  } catch (_) {}
+}
 
 async function refreshWalletUi() {
   const btn = $("walletBtn");
@@ -1073,6 +1091,54 @@ async function bootWallet() {
         renderTickets();
       } catch (e) {
         if (status) status.textContent = e?.message === "NO_LIM" ? t("noLim") : t("txFail");
+      }
+    };
+  }
+  if ($("extraDeployBtn")) {
+    $("extraDeployBtn").onclick = async () => {
+      const status = $("extraStatus");
+      try {
+        if (status) status.textContent = t("deploying");
+        const hash = await CatboxChain.deployExtra();
+        if (status) {
+          status.innerHTML = `<a href="${CatboxChain.txUrl(hash)}" target="_blank" rel="noopener">${hash.slice(0, 10)}…</a>`;
+        }
+        await refreshExtraUi();
+      } catch (_) {
+        if (status) status.textContent = t("txFail");
+      }
+    };
+  }
+  if ($("extraFundBtn")) {
+    $("extraFundBtn").onclick = async () => {
+      const status = $("extraStatus");
+      const n = Number($("extraFundInput")?.value);
+      if (!n || n <= 0) return;
+      try {
+        if (status) status.textContent = t("approve");
+        const hash = await CatboxChain.fundExtra(n);
+        if (status) {
+          status.innerHTML = `<a href="${CatboxChain.txUrl(hash)}" target="_blank" rel="noopener">${hash.slice(0, 10)}…</a>`;
+        }
+        await refreshExtraUi();
+      } catch (e) {
+        if (status) status.textContent = e?.message === "NO_LIM" ? t("noLim") : t("txFail");
+      }
+    };
+  }
+  if ($("extraWithdrawBtn")) {
+    $("extraWithdrawBtn").onclick = async () => {
+      const status = $("extraStatus");
+      try {
+        const pool = await CatboxChain.extraPoolAmt();
+        if (pool <= 0n) return;
+        const hash = await CatboxChain.withdrawExtra(pool);
+        if (status) {
+          status.innerHTML = `<a href="${CatboxChain.txUrl(hash)}" target="_blank" rel="noopener">${hash.slice(0, 10)}…</a>`;
+        }
+        await refreshExtraUi();
+      } catch (_) {
+        if (status) status.textContent = t("txFail");
       }
     };
   }
