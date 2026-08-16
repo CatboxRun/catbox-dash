@@ -1815,7 +1815,8 @@ async function payAndStart() {
     }
     free = freeForTier(selected);
     teach = shouldTeach(selected);
-    const stuck = await CatboxChain.activeRun(account);
+    const me = CatboxChain.account;
+    const stuck = me ? await CatboxChain.activeRun(me) : 0n;
     if (stuck && stuck !== 0n) {
       status.textContent = t("clearingRun");
       await CatboxChain.clearActiveRun();
@@ -1828,6 +1829,11 @@ async function payAndStart() {
     refreshInviteUi();
   } catch (e) {
     const msg = e?.message || "";
+    const rejected =
+      e?.code === 4001 ||
+      e?.code === "ACTION_REJECTED" ||
+      /user rejected|user denied|rejected the request/i.test(msg) ||
+      /user rejected|user denied|rejected the request/i.test(String(e?.shortMessage || ""));
     if (msg === "NO_WALLET") status.textContent = t("noWallet");
     else if (msg === "NO_LIM") status.textContent = t("noLim");
     else if (msg === "ACTIVE_RUN") {
@@ -1843,13 +1849,18 @@ async function payAndStart() {
         return;
       } catch (err) {
         const em = err?.message || "";
+        const rej2 =
+          err?.code === 4001 ||
+          err?.code === "ACTION_REJECTED" ||
+          /user rejected|user denied|rejected the request/i.test(em);
         if (em === "NO_LIM") status.textContent = t("noLim");
         else if (em === "ACTIVE_RUN") status.textContent = t("activeRun");
-        else status.textContent = t("runCleared");
+        else if (rej2) status.textContent = t("txRejected");
+        else status.textContent = t("txFail");
       }
     }
     else if (msg === "PAID_NOT_READY") status.textContent = t("paidNotReady") || "Paid lane not ready yet";
-    else if (msg.includes("user rejected") || e.code === 4001) status.textContent = t("txFail");
+    else if (rejected) status.textContent = t("txRejected");
     else status.textContent = t("txFail");
     go.disabled = false;
   } finally {

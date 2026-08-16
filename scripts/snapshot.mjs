@@ -246,11 +246,14 @@ try {
   prices = await Promise.all([0, 1, 2, 3].map((i) => boardGame.ticketPrice(i)));
 } catch {}
 
-async function loadRunsFrom(label, addr, iface, contract) {
+async function loadRunsFrom(label, addr, iface, contract, opts = {}) {
   const next = Number(await withTimeout(contract.nextRunId(), 8000));
-  console.error("runs", label, "nextRunId", next);
+  const fromId = Math.max(1, Number(opts.fromId || 1));
+  const toExclusive = Math.min(next, Number(opts.toIdExclusive || next));
+  console.error("runs", label, "nextRunId", next, "scan", fromId, "..", toExclusive - 1);
   const ids = [];
-  for (let i = 1; i < next; i++) ids.push(i);
+  for (let i = fromId; i < toExclusive; i++) ids.push(i);
+  if (!ids.length) return { next, rows: [] };
   const runRows = await multicall(p, iface, "runs", ids, 40, addr);
   const out = [];
   for (let i = 0; i < ids.length; i++) {
@@ -297,12 +300,38 @@ async function loadRunsFrom(label, addr, iface, contract) {
   return { next, rows: out };
 }
 
+function loadPrevBoardAddrs() {
+  try {
+    const prev = JSON.parse(readFileSync(join(root, "data/snapshot.json"), "utf8"));
+    const out = new Set();
+    for (const row of prev.week || []) if (row?.addr) out.add(getAddress(row.addr));
+    for (const row of prev.invite || []) if (row?.addr) out.add(getAddress(row.addr));
+    for (const row of prev.runs || []) if (row?.player) out.add(getAddress(row.player));
+    return out;
+  } catch {
+    return new Set();
+  }
+}
+
 const paidPack = paidAddr
   ? await loadRunsFrom("v6", paidAddr, boardIface, boardGame)
   : { next: 0, rows: [] };
-const freePack = await loadRunsFrom("v5", freeAddr, freeIface, freeGame);
 
-// V6 live: all V6 runs + V5 SCOUT-ticket candidates (≤1 LIM). Free/paid flags finalized after FreeEnter + freeUsed.
+// After V6 cutover, do NOT full-scan V5 history (3000+ runs) — it times out Actions.
+// Keep recent V5 window for free SCOUT admin + Extra; boards read from V6 + prior snapshot wallets.
+const V5_RECENT = Number(process.env.V5_RECENT || 120);
+let freePack;
+if (paidAddr) {
+  const nextFree = Number(await withTimeout(freeGame.nextRunId(), 8000));
+  const fromId = Math.max(1, nextFree - V5_RECENT);
+  freePack = await loadRunsFrom("v5", freeAddr, freeIface, freeGame, {
+    fromId,
+    toIdExclusive: nextFree,
+  });
+} else {
+  freePack = await loadRunsFrom("v5", freeAddr, freeIface, freeGame);
+}
+
 let rows;
 if (paidAddr) {
   rows = [
@@ -316,6 +345,7 @@ if (paidAddr) {
 }
 
 const seen = new Set(rows.map((r) => r.player));
+for (const a of loadPrevBoardAddrs()) seen.add(a);
 const addrs = [...seen];
 const nextRunId = paidAddr ? paidPack.next : freePack.next;
 console.error("runs merged", rows.length, "wallets", addrs.length);
@@ -353,10 +383,16 @@ if (missingRefs.length) {
 }
 
 console.error("fetching logs");
+const logChunksPaid = Number(process.env.LOG_CHUNKS_PAID || 40);
+const logChunksFree = Number(process.env.LOG_CHUNKS_FREE || (paidAddr ? 12 : 80));
 const logsPaid = paidAddr
-  ? await collectLogs(paidAddr, boardIface, ["RunStarted", "RunSettled", "Burned"], latest)
+  ? await collectLogs(paidAddr, boardIface, ["RunStarted", "RunSettled", "Burned"], latest, logChunksPaid)
   : [];
-const logsFree = await collectLogs(freeAddr, freeIface, ["RunStarted", "RunSettled", "FreeEnter", "Burned"], latest);
+// V6 live: skip heavy V5 Burned history; only recent FreeEnter + settles for free SCOUT rows.
+const freeLogNames = paidAddr
+  ? ["RunSettled", "FreeEnter"]
+  : ["RunStarted", "RunSettled", "FreeEnter", "Burned"];
+const logsFree = await collectLogs(freeAddr, freeIface, freeLogNames, latest, logChunksFree);
 const logs = [...logsPaid.map((l) => ({ ...l, lane: "v6" })), ...logsFree.map((l) => ({ ...l, lane: "v5" }))];
 const byKey = new Map(rows.map((r) => [r.key, r]));
 const burnsByHash = new Map();
@@ -509,7 +545,13 @@ if (extraAddr && cfg.extra?.abi) {
       extraSinceRunId = Number(await extra.sinceRunId());
     } catch {}
     console.error("fetching extra logs", extraAddr);
-    const extraLogs = await collectLogs(extraAddr, extraIface, ["ExtraPaid", "Funded", "Withdrawn"], latest, 40);
+    const extraLogs = await collectLogs(
+      extraAddr,
+      extraIface,
+      ["ExtraPaid", "Funded", "Withdrawn"],
+      latest,
+      Number(process.env.LOG_CHUNKS_EXTRA || (paidAddr ? 16 : 40)),
+    );
     for (const log of extraLogs) {
       if (log.name === "ExtraPaid") {
         const id = Number(log.args.runId);
@@ -604,6 +646,26 @@ for (const row of rows) {
   const s = socialByAddr[row.player];
   row.xClaimed = Boolean(s?.x);
   row.tgClaimed = Boolean(s?.tg);
+}
+
+if (paidAddr) {
+  try {
+    const prev = JSON.parse(readFileSync(join(root, "data/snapshot.json"), "utf8"));
+    for (const b of prev.burns || []) {
+      const hash = b.hash || "";
+      const key = hash || `${b.blockNumber || 0}-${b.player || ""}-${b.amount || ""}`;
+      if (!key || burnsByHash.has(key)) continue;
+      burnsByHash.set(key, {
+        player: b.player,
+        tag: b.tag || short(b.player),
+        amount: BigInt(b.amount || 0),
+        hash,
+        runId: b.runId ?? null,
+        blockNumber: Number(b.blockNumber || 0),
+        lane: b.lane || "v5",
+      });
+    }
+  } catch (_) {}
 }
 
 const burns = [...burnsByHash.values()]
