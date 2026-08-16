@@ -1799,6 +1799,8 @@ async function payAndStart() {
   if (!selected || enterBusy || window._settleBusy) return;
   enterBusy = true;
   go.disabled = true;
+  let free = false;
+  let teach = false;
   try {
     if (!window.ethereum) throw new Error("NO_WALLET");
     status.textContent = t("connecting");
@@ -1811,8 +1813,8 @@ async function payAndStart() {
       }
       chainReady = true;
     }
-    const free = freeForTier(selected);
-    const teach = shouldTeach(selected);
+    free = freeForTier(selected);
+    teach = shouldTeach(selected);
     status.textContent = free ? t("paying") : t("approve");
     const hash = await CatboxChain.approveAndEnter(selected.id);
     status.innerHTML = `<a href="${CatboxChain.txUrl(hash)}" target="_blank" rel="noopener">${hash.slice(0, 10)}…</a>`;
