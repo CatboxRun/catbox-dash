@@ -300,17 +300,50 @@ async function loadRunsFrom(label, addr, iface, contract, opts = {}) {
   return { next, rows: out };
 }
 
-function loadPrevBoardAddrs() {
+function readJsonFile(path) {
   try {
-    const prev = JSON.parse(readFileSync(join(root, "data/snapshot.json"), "utf8"));
-    const out = new Set();
+    const buf = readFileSync(path);
+    let text = buf.toString("utf8");
+    if (text.charCodeAt(0) === 0xfeff) text = text.slice(1);
+    // Windows tools sometimes rewrite as UTF-16; recover instead of dropping wallets.
+    if (text.includes("\u0000")) {
+      text = buf.toString("utf16le");
+      if (text.charCodeAt(0) === 0xfeff) text = text.slice(1);
+    }
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
+}
+
+function loadPrevBoardAddrs() {
+  const out = new Set();
+  const prev = readJsonFile(join(root, "data/snapshot.json"));
+  if (prev) {
     for (const row of prev.week || []) if (row?.addr) out.add(getAddress(row.addr));
     for (const row of prev.invite || []) if (row?.addr) out.add(getAddress(row.addr));
     for (const row of prev.runs || []) if (row?.player) out.add(getAddress(row.player));
-    return out;
-  } catch {
-    return new Set();
   }
+  const book = readJsonFile(join(root, "data/board-wallets.json"));
+  if (book?.addrs) {
+    for (const a of book.addrs) {
+      try {
+        out.add(getAddress(a));
+      } catch {}
+    }
+  }
+  return out;
+}
+
+function saveBoardWallets(addrs) {
+  const file = join(root, "data/board-wallets.json");
+  const prev = readJsonFile(file);
+  const set = new Set(prev?.addrs || []);
+  for (const a of addrs) set.add(a);
+  const list = [...set].sort((a, b) => a.localeCompare(b));
+  writeFileSync(file, `${JSON.stringify({ at: new Date().toISOString(), addrs: list })}\n`);
+  console.error("board-wallets", list.length);
+  return list;
 }
 
 const paidPack = paidAddr
@@ -346,7 +379,7 @@ if (paidAddr) {
 
 const seen = new Set(rows.map((r) => r.player));
 for (const a of loadPrevBoardAddrs()) seen.add(a);
-const addrs = [...seen];
+const addrs = saveBoardWallets([...seen]);
 const nextRunId = paidAddr ? paidPack.next : freePack.next;
 console.error("runs merged", rows.length, "wallets", addrs.length);
 
@@ -388,11 +421,45 @@ const logChunksFree = Number(process.env.LOG_CHUNKS_FREE || (paidAddr ? 12 : 80)
 const logsPaid = paidAddr
   ? await collectLogs(paidAddr, boardIface, ["RunStarted", "RunSettled", "Burned"], latest, logChunksPaid)
   : [];
-// V6 live: skip heavy V5 Burned history; only recent FreeEnter + settles for free SCOUT rows.
+// V6 live: recent free settles + FreeEnter only (full V5 Burned history is filled incrementally below).
 const freeLogNames = paidAddr
   ? ["RunSettled", "FreeEnter"]
   : ["RunStarted", "RunSettled", "FreeEnter", "Burned"];
 const logsFree = await collectLogs(freeAddr, freeIface, freeLogNames, latest, logChunksFree);
+
+// Incrementally backfill V5 Burned logs so the burn board grows over time without timing out.
+const prevSnap = readJsonFile(join(root, "data/snapshot.json")) || {};
+const burnChunks = Number(process.env.BURN_CHUNKS || 10);
+let burnScanBefore = Number(prevSnap.burnScanBefore || latest);
+if (!Number.isFinite(burnScanBefore) || burnScanBefore <= 0) burnScanBefore = latest;
+if (burnScanBefore > latest) burnScanBefore = latest;
+const burnSpan = 1000;
+const burnFrom = Math.max(0, burnScanBefore - burnChunks * burnSpan);
+if (paidAddr && burnScanBefore > 0) {
+  console.error("burn backfill", burnFrom, "..", burnScanBefore);
+  const topic = freeIface.getEvent("Burned").topicHash;
+  for (let toBlock = burnScanBefore; toBlock > burnFrom; toBlock -= burnSpan) {
+    const fromBlock = Math.max(burnFrom, toBlock - burnSpan + 1);
+    const got = await getLogsChunk(RPCS, {
+      address: freeAddr,
+      topics: [topic],
+      fromBlock,
+      toBlock,
+    });
+    for (const log of got || []) {
+      try {
+        const parsed = freeIface.parseLog(log);
+        logsFree.push({
+          name: parsed.name,
+          args: parsed.args,
+          blockNumber: log.blockNumber,
+          transactionHash: log.transactionHash,
+        });
+      } catch {}
+    }
+  }
+  burnScanBefore = burnFrom;
+}
 const logs = [...logsPaid.map((l) => ({ ...l, lane: "v6" })), ...logsFree.map((l) => ({ ...l, lane: "v5" }))];
 const byKey = new Map(rows.map((r) => [r.key, r]));
 const burnsByHash = new Map();
@@ -507,6 +574,7 @@ let weekPool = 0n;
 let invitePool = 0n;
 let freePool = 0n;
 let burnedTotal = 0n;
+let strandedBurn = 0n;
 try {
   const boardPools = await Promise.all([
     boardGame.weekPool(),
@@ -526,6 +594,39 @@ try {
     burnedTotal += freeBurned;
   }
 } catch {}
+
+// After V6 cutover, V5 board leftovers (+ accounting dust beyond freePool/ticketFloat) are
+// no longer the live claim pools — fold into displayed burned total. Keep freePool intact.
+try {
+  if (paidAddr) {
+    const lim = new Contract(cfg.lim, ["function balanceOf(address) view returns (uint256)"], p);
+    const [v5Bal, v5Week, v5Invite, ticketFloat] = await Promise.all([
+      lim.balanceOf(freeAddr),
+      freeGame.weekPool().catch(() => 0n),
+      freeGame.invitePool().catch(() => 0n),
+      freeGame.ticketFloat().catch(() => 0n),
+    ]);
+    const accounted = freePool + v5Week + v5Invite + ticketFloat;
+    const dust = v5Bal > accounted ? v5Bal - accounted : 0n;
+    // Leftover V5 day/invite boards + unaccounted dust (not free scout reserve, not live tickets).
+    strandedBurn = v5Week + v5Invite + dust;
+    if (strandedBurn > 0n) {
+      burnedTotal += strandedBurn;
+      console.error(
+        "strandedBurn",
+        formatUnits(strandedBurn, 18),
+        "v5Week",
+        formatUnits(v5Week, 18),
+        "v5Invite",
+        formatUnits(v5Invite, 18),
+        "dust",
+        formatUnits(dust, 18),
+      );
+    }
+  }
+} catch (e) {
+  console.error("strandedBurn fail", e?.message || e);
+}
 
 let extraPool = 0n;
 let extraPaused = false;
@@ -595,6 +696,23 @@ if (extraAddr && cfg.extra?.abi) {
 let xClaimCount = 0;
 let tgClaimCount = 0;
 const socialByAddr = {};
+// Carry forward prior social flags so we do not re-multicall thousands of wallets every 10 minutes.
+for (const row of prevSnap.social || []) {
+  if (!row?.addr) continue;
+  try {
+    const player = getAddress(row.addr);
+    socialByAddr[player] = {
+      addr: player,
+      tag: row.tag || short(player),
+      x: Boolean(row.x),
+      tg: Boolean(row.tg),
+      xTx: row.xTx || "",
+      tgTx: row.tgTx || "",
+      xBlock: row.xBlock || 0,
+      tgBlock: row.tgBlock || 0,
+    };
+  } catch {}
+}
 const socialAddr = cfg.social?.address;
 if (socialAddr && cfg.social?.abi) {
   try {
@@ -603,7 +721,13 @@ if (socialAddr && cfg.social?.abi) {
     const code = await withTimeout(p.getCode(socialAddr), 4000);
     if (code && code !== "0x") {
       console.error("fetching social logs", socialAddr);
-      const socialLogs = await collectLogs(socialAddr, socialIface, ["XBonus", "TgBonus"], latest, 80);
+      const socialLogs = await collectLogs(
+        socialAddr,
+        socialIface,
+        ["XBonus", "TgBonus"],
+        latest,
+        Number(process.env.LOG_CHUNKS_SOCIAL || 12),
+      );
       for (const log of socialLogs) {
         const player = getAddress(log.args.player);
         if (!socialByAddr[player]) socialByAddr[player] = { addr: player, tag: short(player), x: false, tg: false };
@@ -616,20 +740,6 @@ if (socialAddr && cfg.social?.abi) {
           socialByAddr[player].tgTx = log.transactionHash;
           socialByAddr[player].tgBlock = log.blockNumber;
         }
-      }
-      if (addrs.length) {
-        const [xRows, tgRows] = await Promise.all([
-          multicall(p, socialIface, "xClaimed", addrs, 40, socialAddr),
-          multicall(p, socialIface, "tgClaimed", addrs, 40, socialAddr),
-        ]);
-        addrs.forEach((a, j) => {
-          const xv = Boolean(xRows[j] ? xRows[j][0] : false);
-          const tv = Boolean(tgRows[j] ? tgRows[j][0] : false);
-          if (!xv && !tv) return;
-          if (!socialByAddr[a]) socialByAddr[a] = { addr: a, tag: short(a), x: false, tg: false };
-          if (xv) socialByAddr[a].x = true;
-          if (tv) socialByAddr[a].tg = true;
-        });
       }
     } else {
       console.error("social not deployed", socialAddr);
@@ -650,7 +760,7 @@ for (const row of rows) {
 
 if (paidAddr) {
   try {
-    const prev = JSON.parse(readFileSync(join(root, "data/snapshot.json"), "utf8"));
+    const prev = readJsonFile(join(root, "data/snapshot.json")) || {};
     for (const b of prev.burns || []) {
       const hash = b.hash || "";
       const key = hash || `${b.blockNumber || 0}-${b.player || ""}-${b.amount || ""}`;
@@ -670,7 +780,7 @@ if (paidAddr) {
 
 const burns = [...burnsByHash.values()]
   .sort((a, b) => (b.blockNumber || 0) - (a.blockNumber || 0) || (b.runId || 0) - (a.runId || 0))
-  .slice(0, 1000)
+  .slice(0, 5000)
   .map((b) => ({
     player: b.player,
     tag: b.tag,
@@ -702,6 +812,7 @@ const snapshot = {
   invitePool: weiStr(invitePool),
   freePool: weiStr(freePool),
   burnedTotal: weiStr(burnedTotal),
+  strandedBurn: weiStr(strandedBurn),
   extraPool: weiStr(extraPool),
   extraPaused,
   extraSinceRunId,
@@ -716,8 +827,9 @@ const snapshot = {
   freeCount: rows.filter((r) => r.free === true).length,
   paidCount: rows.filter((r) => r.free === false).length,
   unknownPay: rows.filter((r) => r.free == null).length,
+  burnScanBefore,
   week: toRows(week, addrs),
-  invite: toRows(invite),
+  invite: toRows(invite, addrs),
   burns,
   social,
   runs: rows

@@ -407,16 +407,27 @@ const CatboxChain = (() => {
     } catch (_) {}
     if (hasPaidLane() && (await isPaidDeployed())) {
       const c = paidGameContract(p);
+      const freeGame = freeGameContract(p);
       try {
-        const [d, eq, i, burned, players, topN] = await Promise.all([
-          c.dayPool(),
-          c.dayEqPool(),
-          c.invitePool(),
-          c.burnedTotal(),
-          c.dayPlayerCount().catch(() => 0n),
-          c.topLen().catch(() => 0n),
-        ]);
+        const [d, eq, i, burnedPaid, burnedFree, players, topN, v5Bal, v5Week, v5Invite, ticketFloat] =
+          await Promise.all([
+            c.dayPool(),
+            c.dayEqPool(),
+            c.invitePool(),
+            c.burnedTotal(),
+            freeGame.burnedTotal().catch(() => 0n),
+            c.dayPlayerCount().catch(() => 0n),
+            c.topLen().catch(() => 0n),
+            limContract(p).balanceOf(freeAddr()).catch(() => 0n),
+            freeGame.weekPool().catch(() => 0n),
+            freeGame.invitePool().catch(() => 0n),
+            freeGame.ticketFloat().catch(() => 0n),
+          ]);
         const daily = d + (eq || 0n);
+        const accounted = free + (v5Week || 0n) + (v5Invite || 0n) + (ticketFloat || 0n);
+        const dust = v5Bal > accounted ? v5Bal - accounted : 0n;
+        const stranded = (v5Week || 0n) + (v5Invite || 0n) + dust;
+        const burned = (burnedPaid || 0n) + (burnedFree || 0n) + stranded;
         return {
           week: daily,
           day: daily,
@@ -427,6 +438,7 @@ const CatboxChain = (() => {
           v6: true,
           invite: i,
           burned,
+          strandedBurn: stranded,
           free,
           total: daily + i,
         };
@@ -444,6 +456,7 @@ const CatboxChain = (() => {
       v6: false,
       invite,
       burned,
+      strandedBurn: 0n,
       free,
       total: week + invite,
     };
