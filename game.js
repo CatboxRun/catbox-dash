@@ -76,20 +76,13 @@ function renderList(id, rows, emptyKey) {
   const explorer = window.CatboxChain?.cfg?.explorer || "https://bscscan.com";
   const open = Boolean(boardOpen[id]);
   const shown = open || rows.length <= BOARD_PREVIEW ? rows : rows.slice(0, BOARD_PREVIEW);
-  const unit = id === "inviteList" ? t("boardPtsUnit") : "";
   const items = shown.map((r, i) => {
     const tag = r.addr
       ? `<a href="${explorer}/address/${r.addr}" target="_blank" rel="noopener">${r.tag}</a>`
       : r.tag;
     const name = r.you ? `${tag} · ${t("you")}` : tag;
-    const pts = unit ? `${rowPts(r)} ${unit}` : String(rowPts(r));
-    return `<li class="${r.you ? "you" : ""}"><span class="tag">${i + 1}. ${name}</span><span class="board-pts">${pts}</span></li>`;
+    return `<li class="${r.you ? "you" : ""}"><span class="tag">${i + 1}. ${name}</span><span class="board-pts">${rowPts(r)}</span></li>`;
   });
-  if (id === "inviteList") {
-    items.unshift(
-      `<li class="board-head"><span>${t("boardWalletCol")}</span><span class="board-pts">${t("boardPtsUnit")}</span></li>`,
-    );
-  }
   if (rows.length > BOARD_PREVIEW) {
     const label = open ? t("boardCollapse") : t("boardExpand", { n: String(rows.length) });
     items.push(
