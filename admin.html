@@ -151,6 +151,15 @@
       table.runs .free { color: var(--gold-hi); }
       .status-line { color: var(--dim); min-height: 1.4em; margin: 8px 0; }
       .empty { color: var(--dim); padding: 24px; text-align: center; }
+      .social-panel { margin-top: 18px; }
+      .social-panel h2 {
+        font-family: "Press Start 2P", monospace;
+        font-size: 11px;
+        color: var(--gold-hi);
+        margin: 0 0 10px;
+      }
+      table.social { min-width: 720px; }
+      .admin-toolbar .ghost.deploy { border-color: var(--gold); color: var(--gold-hi); }
     </style>
   </head>
   <body>
@@ -177,6 +186,7 @@
         <div class="admin-toolbar">
           <input id="filter" type="search" placeholder="按地址筛选" autocomplete="off" />
           <button class="ghost" id="refreshBtn" type="button">刷新</button>
+          <button class="ghost deploy hidden" id="socialDeployBtn" type="button">部署社交登记</button>
         </div>
         <p class="status-line" id="status"></p>
         <div class="chips" id="chips"></div>
@@ -188,6 +198,8 @@
                 <th data-key="player">玩家</th>
                 <th data-key="tierId">档位 / 门票</th>
                 <th data-key="free">付费</th>
+                <th data-key="xClaimed">推文</th>
+                <th data-key="tgClaimed">TG</th>
                 <th data-key="collected">捡到</th>
                 <th data-key="payout">结算</th>
                 <th data-key="extraPaid">加时</th>
@@ -206,17 +218,38 @@
             </thead>
             <tbody id="rows">
               <tr>
-                <td colspan="18" class="empty">等待扫描…</td>
+                <td colspan="20" class="empty">等待扫描…</td>
               </tr>
             </tbody>
           </table>
         </div>
+
+        <div class="social-panel">
+          <h2>推文 / TG 登记</h2>
+          <p class="status-line" id="socialStatus">链上登记后出现在这里（本地点击不会进后台）。</p>
+          <div class="table-wrap">
+            <table class="runs social">
+              <thead>
+                <tr>
+                  <th>钱包</th>
+                  <th>推文</th>
+                  <th>TG</th>
+                  <th>推文哈希</th>
+                  <th>TG 哈希</th>
+                </tr>
+              </thead>
+              <tbody id="socialRows">
+                <tr><td colspan="5" class="empty">暂无</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
       </section>
     </div>
 
-    <script src="./config.js?v=29"></script>
+    <script src="./config.js?v=30"></script>
     <script src="https://cdn.jsdelivr.net/npm/ethers@6.13.5/dist/ethers.umd.min.js"></script>
-    <script src="./chain.js?v=72"></script>
-    <script src="./admin.js?v=7"></script>
+    <script src="./chain.js?v=77"></script>
+    <script src="./admin.js?v=8"></script>
   </body>
 </html>

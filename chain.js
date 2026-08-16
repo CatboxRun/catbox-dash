@@ -689,8 +689,53 @@ const CatboxChain = (() => {
     }
   }
 
+  function socialCfg() {
+    return cfg.social || null;
+  }
+
+  function socialContract(s) {
+    const sc = socialCfg();
+    if (!sc?.address || !sc?.abi) throw new Error("NO_SOCIAL");
+    return new ethers.Contract(sc.address, sc.abi, s);
+  }
+
+  async function isSocialDeployed() {
+    const sc = socialCfg();
+    if (!sc?.address) return false;
+    try {
+      const p = await publicReadProvider();
+      const code = await withTimeout(p.getCode(sc.address), 4000);
+      return Boolean(code && code !== "0x");
+    } catch (_) {
+      return false;
+    }
+  }
+
+  async function deploySocial() {
+    await connect();
+    if (!isOwner()) throw new Error("NOT_OWNER");
+    const sc = socialCfg();
+    if (!sc?.salt || !sc?.bytecode) throw new Error("NO_SOCIAL");
+    const s = await signer();
+    const data = sc.salt + sc.bytecode.slice(2);
+    const tx = await s.sendTransaction({ to: cfg.factory, data });
+    await tx.wait();
+    return tx.hash;
+  }
+
+  async function socialClaimed(kind, addr = account) {
+    if (!addr || !(await isSocialDeployed())) return false;
+    try {
+      const c = socialContract(await publicReadProvider());
+      return kind === "x" ? Boolean(await c.xClaimed(addr)) : Boolean(await c.tgClaimed(addr));
+    } catch (_) {
+      return false;
+    }
+  }
+
   async function hasTgBonus(addr = account) {
     if (!addr) return false;
+    if (await socialClaimed("tg", addr)) return true;
     try {
       const c = gameContract(await readProvider());
       return Boolean(await c.tgClaimed(addr));
@@ -699,7 +744,39 @@ const CatboxChain = (() => {
     }
   }
 
+  async function hasXBonus(addr = account) {
+    if (!addr) return false;
+    if (await socialClaimed("x", addr)) return true;
+    try {
+      const c = gameContract(await readProvider());
+      return Boolean(await c.xClaimed(addr));
+    } catch (_) {
+      return false;
+    }
+  }
+
+  async function claimSocialBonus(kind) {
+    await connect();
+    if (!(await isSocialDeployed())) return false;
+    const s = await signer();
+    const social = socialContract(s);
+    try {
+      const already = kind === "x" ? await social.xClaimed(account) : await social.tgClaimed(account);
+      if (already) return true;
+    } catch (_) {
+      return false;
+    }
+    try {
+      const tx = kind === "x" ? await social.claimXBonus() : await social.claimTgBonus();
+      await tx.wait();
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
   async function claimTgBonus() {
+    if (await claimSocialBonus("tg")) return true;
     await connect();
     const s = await signer();
     const game = gameContract(s);
@@ -718,6 +795,7 @@ const CatboxChain = (() => {
   }
 
   async function claimXBonus() {
+    if (await claimSocialBonus("x")) return true;
     await connect();
     const s = await signer();
     const game = gameContract(s);
@@ -1931,6 +2009,9 @@ const CatboxChain = (() => {
         ...b,
         amount: reviveWei(b.amount) ?? 0n,
       })),
+      social: raw.social || [],
+      xClaimCount: Number(raw.xClaimCount || 0),
+      tgClaimCount: Number(raw.tgClaimCount || 0),
       runs: (raw.runs || []).map((r) => ({
         ...r,
         paid: reviveWei(r.paid) ?? 0n,
@@ -1941,6 +2022,8 @@ const CatboxChain = (() => {
         weekPts: reviveWei(r.weekPts) ?? 0n,
         invitePts: reviveWei(r.invitePts) ?? 0n,
         extraPaid: reviveWei(r.extraPaid) ?? 0n,
+        xClaimed: Boolean(r.xClaimed),
+        tgClaimed: Boolean(r.tgClaimed),
       })),
     };
   }
@@ -1991,8 +2074,11 @@ const CatboxChain = (() => {
     approveAndEnter,
     freeStatus,
     hasTgBonus,
+    hasXBonus,
     claimTgBonus,
     claimXBonus,
+    isSocialDeployed,
+    deploySocial,
     fundFreePool,
     settleRun,
     isExtraDeployed,

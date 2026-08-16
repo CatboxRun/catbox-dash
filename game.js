@@ -568,7 +568,9 @@ async function refreshFreeUi() {
       try { localStorage.setItem(TUTORIAL_KEY, "1"); } catch (_) {}
     }
     try {
-      if (await CatboxChain.hasTgBonus(acc)) markTgLocal(acc);
+      if (await CatboxChain.hasTgBonus(acc)) markBonusLocal("tg", acc);
+      if (await CatboxChain.hasXBonus?.(acc)) markBonusLocal("x", acc);
+      paintShareCtas();
     } catch (_) {}
     paintFreeUi(st);
   } catch (_) {

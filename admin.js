@@ -6,6 +6,7 @@ const ZERO = "0x0000000000000000000000000000000000000000";
 const $ = (id) => document.getElementById(id);
 
 let allRows = [];
+let socialRows = [];
 let sortKey = "id";
 let sortDir = "desc";
 let filterText = "";
@@ -101,7 +102,7 @@ function cmp(a, b, key) {
     const nb = vb === true ? 0 : vb === false ? 1 : 2;
     return na - nb;
   }
-  if (key === "settled") return Number(!!va) - Number(!!vb);
+  if (key === "settled" || key === "xClaimed" || key === "tgClaimed") return Number(!!va) - Number(!!vb);
   if (key === "player" || key === "referrer") {
     return String(va || "").localeCompare(String(vb || ""), undefined, { sensitivity: "accent" });
   }
@@ -167,6 +168,8 @@ function renderChips(summary) {
     ["加时存入", `${lim(extraDeposited(s))} LIM`],
     ["加时提取", s.extraWithdrawnTotal != null ? `${lim(s.extraWithdrawnTotal)} LIM` : "—"],
     ["加时状态", s.extraPaused ? "暂停" : s.extraSinceRunId != null ? `自 #${s.extraSinceRunId}` : "—"],
+    ["已发推文", s.xClaimCount ?? 0],
+    ["已进 TG", s.tgClaimCount ?? 0],
   ]
     .map(([k, v]) => `<div class="chip"><span>${k}</span><b>${v}</b></div>`)
     .join("");
@@ -191,18 +194,20 @@ function txCell(hash) {
   return `<a href="${href}" target="_blank" rel="noopener noreferrer">${shortHash}</a>`;
 }
 
+function yn(v) {
+  return v ? `<span class="yes">是</span>` : `<span class="no">否</span>`;
+}
+
 function renderTable() {
   const rows = visibleRows();
   const body = $("rows");
   if (!rows.length) {
-    body.innerHTML = `<tr><td colspan="18" class="empty">${allRows.length ? "无匹配地址" : "暂无对局"}</td></tr>`;
+    body.innerHTML = `<tr><td colspan="20" class="empty">${allRows.length ? "无匹配地址" : "暂无对局"}</td></tr>`;
     return;
   }
   body.innerHTML = rows
     .map((r) => {
-      const settled = r.settled
-        ? `<span class="yes">是</span>`
-        : `<span class="no">否</span>`;
+      const settled = yn(r.settled);
       const pay = r.free === true ? `<span class="free">免费</span>` : payLabel(r.free);
       const score = r.score != null ? fmtPts(r.score) : "—";
       return `<tr>
@@ -210,6 +215,8 @@ function renderTable() {
         <td>${addrCell(r.player)}</td>
         <td>${r.tierName || "—"} · ${Number(r.ticketLim || 0)} LIM</td>
         <td>${pay}</td>
+        <td>${yn(r.xClaimed)}</td>
+        <td>${yn(r.tgClaimed)}</td>
         <td>${lim(r.collected)}</td>
         <td>${lim(r.payout)}</td>
         <td>${r.extraTx ? `${lim(r.extraPaid)} · ${txCell(r.extraTx)}` : r.extraPaid && r.extraPaid !== 0n ? lim(r.extraPaid) : "—"}</td>
@@ -226,6 +233,35 @@ function renderTable() {
         <td>${txCell(r.tx)}</td>
       </tr>`;
     })
+    .join("");
+}
+
+function renderSocial() {
+  const body = $("socialRows");
+  const status = $("socialStatus");
+  const q = filterText.trim().toLowerCase();
+  let rows = socialRows.slice();
+  if (q) rows = rows.filter((r) => String(r.addr || "").toLowerCase().includes(q));
+  if (status) {
+    status.textContent = socialRows.length
+      ? `链上登记 ${socialRows.length} 个钱包 · 推文 ${socialRows.filter((r) => r.x).length} · TG ${socialRows.filter((r) => r.tg).length}`
+      : "暂无链上登记。玩家点推文/进群并签名后会出现在这里。";
+  }
+  if (!body) return;
+  if (!rows.length) {
+    body.innerHTML = `<tr><td colspan="5" class="empty">${socialRows.length ? "无匹配地址" : "暂无"}</td></tr>`;
+    return;
+  }
+  body.innerHTML = rows
+    .map(
+      (r) => `<tr>
+        <td>${addrCell(r.addr)}</td>
+        <td>${yn(r.x)}</td>
+        <td>${yn(r.tg)}</td>
+        <td>${txCell(r.xTx)}</td>
+        <td>${txCell(r.tgTx)}</td>
+      </tr>`,
+    )
     .join("");
 }
 
@@ -281,11 +317,27 @@ function paintGate() {
 
 function applySnapshot(snap) {
   allRows = snap.runs || [];
+  socialRows = snap.social || [];
   renderChips(snap);
   paintSortHeaders();
   renderTable();
+  renderSocial();
   const when = snap.at ? new Date(snap.at).toLocaleString() : "";
-  setStatus(`快照 ${when} · 共 ${snap.totalRuns} 局 · ${snap.uniqueWallets} 个钱包 · 约每 10 分钟更新，点刷新重新读取`);
+  setStatus(`快照 ${when} · 共 ${snap.totalRuns} 局 · ${snap.uniqueWallets} 个钱包 · 推文 ${snap.xClaimCount ?? 0} · TG ${snap.tgClaimCount ?? 0} · 约每 10 分钟更新，点刷新重新读取`);
+}
+
+async function refreshSocialDeployBtn() {
+  const btn = $("socialDeployBtn");
+  if (!btn || !CatboxChain.isOwner?.()) {
+    if (btn) show(btn, false);
+    return;
+  }
+  try {
+    const deployed = await CatboxChain.isSocialDeployed();
+    show(btn, !deployed);
+  } catch (_) {
+    show(btn, false);
+  }
 }
 
 async function loadRuns() {
@@ -297,6 +349,7 @@ async function loadRuns() {
     const snap = await CatboxChain.loadSnapshot(true);
     if (!snap?.runs?.length) throw new Error("NO_SNAP");
     applySnapshot(snap);
+    await refreshSocialDeployBtn();
   } catch (e) {
     const msg =
       e?.message === "NOT_OWNER"
@@ -338,7 +391,20 @@ function boot() {
   $("filter").addEventListener("input", (e) => {
     filterText = e.target.value || "";
     renderTable();
+    renderSocial();
   });
+  if ($("socialDeployBtn")) {
+    $("socialDeployBtn").onclick = async () => {
+      try {
+        setStatus("部署社交登记合约…");
+        const hash = await CatboxChain.deploySocial();
+        setStatus(`社交合约已部署 ${hash.slice(0, 10)}… 下一轮快照会开始收录`);
+        await refreshSocialDeployBtn();
+      } catch (e) {
+        setStatus(`部署失败：${e?.shortMessage || e?.message || "请重试"}`);
+      }
+    };
+  }
   document.querySelector("table.runs thead").addEventListener("click", (e) => {
     const th = e.target.closest("th[data-key]");
     if (!th) return;
@@ -360,8 +426,10 @@ function boot() {
     if (paintGate()) loadRuns();
     else {
       allRows = [];
+      socialRows = [];
       renderChips({});
       renderTable();
+      renderSocial();
     }
   });
 

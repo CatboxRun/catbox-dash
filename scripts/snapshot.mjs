@@ -475,6 +475,62 @@ if (extraAddr && cfg.extra?.abi) {
   if (extraFundedTotal < extraIn) extraFundedTotal = extraIn;
 }
 
+let xClaimCount = 0;
+let tgClaimCount = 0;
+const socialByAddr = {};
+const socialAddr = cfg.social?.address;
+if (socialAddr && cfg.social?.abi) {
+  try {
+    const social = new Contract(socialAddr, cfg.social.abi, p);
+    const socialIface = social.interface;
+    const code = await withTimeout(p.getCode(socialAddr), 4000);
+    if (code && code !== "0x") {
+      console.error("fetching social logs", socialAddr);
+      const socialLogs = await collectLogs(socialAddr, socialIface, ["XBonus", "TgBonus"], latest, 80);
+      for (const log of socialLogs) {
+        const player = getAddress(log.args.player);
+        if (!socialByAddr[player]) socialByAddr[player] = { addr: player, tag: short(player), x: false, tg: false };
+        if (log.name === "XBonus") {
+          socialByAddr[player].x = true;
+          socialByAddr[player].xTx = log.transactionHash;
+          socialByAddr[player].xBlock = log.blockNumber;
+        } else if (log.name === "TgBonus") {
+          socialByAddr[player].tg = true;
+          socialByAddr[player].tgTx = log.transactionHash;
+          socialByAddr[player].tgBlock = log.blockNumber;
+        }
+      }
+      if (addrs.length) {
+        const [xRows, tgRows] = await Promise.all([
+          multicall(p, socialIface, "xClaimed", addrs, 40, socialAddr),
+          multicall(p, socialIface, "tgClaimed", addrs, 40, socialAddr),
+        ]);
+        addrs.forEach((a, j) => {
+          const xv = Boolean(xRows[j] ? xRows[j][0] : false);
+          const tv = Boolean(tgRows[j] ? tgRows[j][0] : false);
+          if (!xv && !tv) return;
+          if (!socialByAddr[a]) socialByAddr[a] = { addr: a, tag: short(a), x: false, tg: false };
+          if (xv) socialByAddr[a].x = true;
+          if (tv) socialByAddr[a].tg = true;
+        });
+      }
+    } else {
+      console.error("social not deployed", socialAddr);
+    }
+  } catch (e) {
+    console.error("social fail", e?.message || e);
+  }
+}
+for (const row of Object.values(socialByAddr)) {
+  if (row.x) xClaimCount += 1;
+  if (row.tg) tgClaimCount += 1;
+}
+for (const row of rows) {
+  const s = socialByAddr[row.player];
+  row.xClaimed = Boolean(s?.x);
+  row.tgClaimed = Boolean(s?.tg);
+}
+
 const burns = [...burnsByHash.values()]
   .sort((a, b) => (b.blockNumber || 0) - (a.blockNumber || 0) || (b.runId || 0) - (a.runId || 0))
   .slice(0, 1000)
@@ -485,6 +541,20 @@ const burns = [...burnsByHash.values()]
     hash: b.hash || "",
     runId: b.runId ?? null,
     blockNumber: b.blockNumber || 0,
+  }));
+
+const social = Object.values(socialByAddr)
+  .sort((a, b) => Number(b.x) + Number(b.tg) - (Number(a.x) + Number(a.tg)) || a.addr.localeCompare(b.addr))
+  .slice(0, 5000)
+  .map((r) => ({
+    addr: r.addr,
+    tag: r.tag,
+    x: Boolean(r.x),
+    tg: Boolean(r.tg),
+    xTx: r.xTx || "",
+    tgTx: r.tgTx || "",
+    xBlock: r.xBlock || 0,
+    tgBlock: r.tgBlock || 0,
   }));
 
 const snapshot = {
@@ -502,6 +572,8 @@ const snapshot = {
   extraPaidCount,
   extraFundedTotal: weiStr(extraFundedTotal),
   extraWithdrawnTotal: weiStr(extraWithdrawnTotal),
+  xClaimCount,
+  tgClaimCount,
   totalRuns: rows.length,
   uniqueWallets: addrs.length,
   freeCount: rows.filter((r) => r.free === true).length,
@@ -510,6 +582,7 @@ const snapshot = {
   week: toRows(week, addrs),
   invite: toRows(invite),
   burns,
+  social,
   runs: rows
     .sort((a, b) => b.id - a.id)
     .map((r) => ({
@@ -534,6 +607,8 @@ const snapshot = {
       invitePts: weiStr(r.invitePts),
       extraPaid: weiStr(r.extraPaid),
       extraTx: r.extraTx,
+      xClaimed: Boolean(r.xClaimed),
+      tgClaimed: Boolean(r.tgClaimed),
       referrer: r.referrer,
       tx: r.tx,
     })),
@@ -554,4 +629,8 @@ console.error(
   snapshot.invite.length,
   "burns",
   snapshot.burns.length,
+  "x",
+  xClaimCount,
+  "tg",
+  tgClaimCount,
 );
