@@ -747,6 +747,12 @@ h1 { font-size: 16px; line-height: 1.6; margin: 0 0 14px; }
 }
 .board-list li.you { color: var(--gold); }
 .board-list .tag { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.board-list .board-pts { flex-shrink: 0; white-space: nowrap; }
+.board-list li.board-head {
+  color: var(--dim);
+  border-bottom-color: var(--line);
+  font-weight: 700;
+}
 .board-list li.board-more {
   border: 0;
   justify-content: center;
