@@ -115,7 +115,8 @@ function tierOfPaid(paid, prices) {
   return { id: best, name: TIER_NAMES[best] || `T${best}`, lim: n };
 }
 
-async function multicall(p, iface, fn, items, batch = 40, target = cfg.address) {
+async function multicall(p, iface, fn, items, batch = 40, target) {
+  if (!target) target = gameAddr || cfg.address;
   const multi = new Contract(
     MULTICALL3,
     [
@@ -214,7 +215,13 @@ function toRows(map, allAddrs) {
 }
 
 const { p } = await pickProvider();
-const game = new Contract(cfg.address, cfg.abi, p);
+const gameAddr =
+  cfg.v6?.address && (await withTimeout(p.getCode(cfg.v6.address), 4000)) !== "0x"
+    ? cfg.v6.address
+    : cfg.address;
+const gameAbi = gameAddr === cfg.v6?.address ? cfg.v6.abi : cfg.abi;
+console.error("snapshot game", gameAddr, gameAddr === cfg.v6?.address ? "v6" : "v5");
+const game = new Contract(gameAddr, gameAbi, p);
 const iface = game.interface;
 const latest = Number(await withTimeout(p.getBlockNumber(), 4000));
 const nextRunId = Number(await withTimeout(game.nextRunId(), 8000));
@@ -304,7 +311,7 @@ if (missingRefs.length) {
 }
 
 console.error("fetching logs");
-const logs = await collectLogs(cfg.address, iface, ["RunStarted", "RunSettled", "FreeEnter", "Burned"], latest);
+const logs = await collectLogs(gameAddr, iface, ["RunStarted", "RunSettled", "FreeEnter", "Burned"], latest);
 const byId = new Map(rows.map((r) => [r.id, r]));
 const burnsByHash = new Map();
 for (const log of logs) {

@@ -49,6 +49,9 @@ const CatboxChain = (() => {
     "function inviteCount(address) view returns (uint256)",
     "function rewardBps(address) view returns (uint256)",
     "function withdrawDaily(uint256)",
+    "function withdrawWeekly(uint256)",
+    "function fundBoards(uint256,uint256)",
+    "function migratePlayers(address[],uint256[],uint256[],uint256[],address[],uint256[])",
     "function currentDay() view returns (uint256)",
     "function playedDay(address) view returns (uint256)",
     "function inviteDay(address) view returns (uint256)",
@@ -59,14 +62,56 @@ const CatboxChain = (() => {
     "function freeScoutUsed(address) view returns (uint8)",
     "function scoutIsFree(address) view returns (bool)",
     "function playCount(address) view returns (uint256)",
+    "function weekPts(address) view returns (uint256)",
+    "function weekPtsTotal() view returns (uint256)",
   ];
 
+  function freeAddr() {
+    return cfg.freeAddress || cfg.address;
+  }
+
+  function paidAddr() {
+    return cfg.v6?.address || cfg.address;
+  }
+
+  function freeAbi() {
+    return cfg.abi;
+  }
+
+  function paidAbi() {
+    return cfg.v6?.abi || cfg.abi;
+  }
+
+  function hasPaidLane() {
+    return Boolean(cfg.v6?.address);
+  }
+
+  function freeGameContract(s) {
+    return new ethers.Contract(freeAddr(), freeAbi(), s);
+  }
+
+  function paidGameContract(s) {
+    return new ethers.Contract(paidAddr(), [...paidAbi(), ...V6_READ_ABI], s);
+  }
+
+  /** Default = paid lane (boards / claim / paid enter). */
   function gameContract(s) {
-    return new ethers.Contract(cfg.address, [...cfg.abi, ...V6_READ_ABI], s);
+    return hasPaidLane() ? paidGameContract(s) : freeGameContract(s);
   }
 
   function limContract(s) {
     return new ethers.Contract(cfg.lim, ERC20_ABI, s);
+  }
+
+  async function isPaidDeployed() {
+    if (!hasPaidLane()) return false;
+    try {
+      const p = await publicReadProvider();
+      const code = await withTimeout(p.getCode(paidAddr()), 4000);
+      return Boolean(code && code !== "0x");
+    } catch (_) {
+      return false;
+    }
   }
 
   async function ensureBsc() {
@@ -112,7 +157,7 @@ const CatboxChain = (() => {
   async function isDeployed() {
     if (deployedCached === true) return true;
     const p = await publicReadProvider();
-    const code = await p.getCode(cfg.address);
+    const code = await p.getCode(freeAddr());
     deployedCached = Boolean(code && code !== "0x");
     return deployedCached;
   }
@@ -349,58 +394,63 @@ const CatboxChain = (() => {
   }
 
   async function poolBalance() {
-    const c = gameContract(await readProvider());
-    const v6 = await isV6();
-    if (!v6) {
-      const [week, invite, burned, free] = await Promise.all([
-        c.weekPool(),
-        c.invitePool(),
-        c.burnedTotal(),
-        c.freePool(),
-      ]);
-      return {
-        week,
-        day: week,
-        dayScore: week,
-        dayEq: null,
-        dayPlayers: null,
-        topLen: null,
-        v6: false,
-        invite,
-        burned,
-        free,
-        total: week + invite,
-      };
+    const p = await readProvider();
+    let free = 0n;
+    try {
+      free = await freeGameContract(p).freePool();
+    } catch (_) {}
+    if (hasPaidLane() && (await isPaidDeployed())) {
+      const c = paidGameContract(p);
+      try {
+        const [d, eq, i, burned, players, topN] = await Promise.all([
+          c.dayPool(),
+          c.dayEqPool(),
+          c.invitePool(),
+          c.burnedTotal(),
+          c.dayPlayerCount().catch(() => 0n),
+          c.topLen().catch(() => 0n),
+        ]);
+        const daily = d + (eq || 0n);
+        return {
+          week: daily,
+          day: daily,
+          dayScore: d,
+          dayEq: eq,
+          dayPlayers: players,
+          topLen: topN,
+          v6: true,
+          invite: i,
+          burned,
+          free,
+          total: daily + i,
+        };
+      } catch (_) {}
     }
-    const [d, eq, i, burned, free, players, topN] = await Promise.all([
-      c.dayPool(),
-      c.dayEqPool(),
-      c.invitePool(),
-      c.burnedTotal(),
-      c.freePool(),
-      c.dayPlayerCount().catch(() => 0n),
-      c.topLen().catch(() => 0n),
-    ]);
-    const daily = d + (eq || 0n);
+    const c = freeGameContract(p);
+    const [week, invite, burned] = await Promise.all([c.weekPool(), c.invitePool(), c.burnedTotal()]);
     return {
-      week: daily,
-      day: daily,
-      dayScore: d,
-      dayEq: eq,
-      dayPlayers: players,
-      topLen: topN,
-      v6: true,
-      invite: i,
+      week,
+      day: week,
+      dayScore: week,
+      dayEq: null,
+      dayPlayers: null,
+      topLen: null,
+      v6: false,
+      invite,
       burned,
       free,
-      total: daily + i,
+      total: week + invite,
     };
   }
 
   async function isV6() {
+    if (hasPaidLane()) {
+      if (v6Cached == null) v6Cached = await isPaidDeployed();
+      return v6Cached;
+    }
     if (v6Cached != null) return v6Cached;
     try {
-      const c = gameContract(await readProvider());
+      const c = freeGameContract(await readProvider());
       await c.dayEqPool();
       v6Cached = true;
     } catch (_) {
@@ -409,11 +459,29 @@ const CatboxChain = (() => {
     return v6Cached;
   }
 
+  async function activeLane(addr = account) {
+    if (!addr) return null;
+    const p = await readProvider();
+    if (hasPaidLane() && (await isPaidDeployed())) {
+      try {
+        const id = await paidGameContract(p).activeRun(addr);
+        if (id && id !== 0n) return { lane: "paid", runId: id, game: paidGameContract };
+      } catch (_) {}
+    }
+    try {
+      const id = await freeGameContract(p).activeRun(addr);
+      if (id && id !== 0n) return { lane: "free", runId: id, game: freeGameContract };
+    } catch (_) {}
+    return null;
+  }
+
   async function pendingOf(addr = account) {
     if (!addr) return { inv: 0n, wk: 0n, total: 0n };
-    const c = gameContract(await readProvider());
-    const p = await c.pending(addr);
-    return { inv: p[0], wk: p[1], total: p[2] };
+    const p = await readProvider();
+    const c =
+      hasPaidLane() && (await isPaidDeployed()) ? paidGameContract(p) : freeGameContract(p);
+    const pend = await c.pending(addr);
+    return { inv: pend[0], wk: pend[1], total: pend[2] };
   }
 
   async function invitePoints(addr = account) {
@@ -633,8 +701,9 @@ const CatboxChain = (() => {
 
   async function claim() {
     await connect();
+    if (hasPaidLane() && !(await isPaidDeployed())) throw new Error("PAID_NOT_READY");
     const s = await signer();
-    const tx = await gameContract(s).claim();
+    const tx = await paidGameContract(s).claim();
     return (await tx.wait()).hash;
   }
 
@@ -666,8 +735,44 @@ const CatboxChain = (() => {
 
   async function activeRun(addr = account) {
     if (!addr) return 0n;
-    const c = gameContract(await readProvider());
-    return c.activeRun(addr);
+    const lane = await activeLane(addr);
+    return lane?.runId || 0n;
+  }
+
+  async function deployPaid() {
+    await connect();
+    if (!isOwner()) throw new Error("NOT_OWNER");
+    const v = cfg.v6;
+    if (!v?.salt || !v?.bytecode) throw new Error("NO_V6");
+    if (await isPaidDeployed()) return null;
+    const s = await signer();
+    const data = v.salt + v.bytecode.slice(2);
+    const tx = await s.sendTransaction({ to: cfg.factory, data });
+    await tx.wait();
+    v6Cached = true;
+    return tx.hash;
+  }
+
+  async function fundBoards(toDayLim, toInviteLim) {
+    await connect();
+    if (!isOwner()) throw new Error("NOT_OWNER");
+    if (!(await isPaidDeployed())) throw new Error("PAID_NOT_READY");
+    const s = await signer();
+    const game = paidGameContract(s);
+    const lim = limContract(s);
+    const toDay = ethers.parseUnits(String(toDayLim || 0), 18);
+    const toInvite = ethers.parseUnits(String(toInviteLim || 0), 18);
+    const amt = toDay + toInvite;
+    if (amt <= 0n) throw new Error("NO_LIM");
+    const bal = await lim.balanceOf(account);
+    if (bal < amt) throw new Error("NO_LIM");
+    const allow = await lim.allowance(account, paidAddr());
+    if (allow < amt) {
+      const txA = await lim.approve(paidAddr(), ethers.MaxUint256);
+      await txA.wait();
+    }
+    const tx = await game.fundBoards(toDay, toInvite);
+    return (await tx.wait()).hash;
   }
 
   function assumedFree() {
@@ -677,7 +782,7 @@ const CatboxChain = (() => {
   async function freeStatus(addr = account) {
     if (!addr) return assumedFree();
     try {
-      const c = gameContract(await readProvider());
+      const c = freeGameContract(await readProvider());
       const s = await c.freeStatus(addr);
       const used = Number(s[0]);
       const left = Number(s[1]);
@@ -816,15 +921,15 @@ const CatboxChain = (() => {
   async function fundFreePool(limAmount) {
     await connect();
     const s = await signer();
-    const game = gameContract(s);
+    const game = freeGameContract(s);
     const lim = limContract(s);
     const amt = ethers.parseUnits(String(limAmount), 18);
     if (amt <= 0n) throw new Error("NO_LIM");
     const bal = await lim.balanceOf(account);
     if (bal < amt) throw new Error("NO_LIM");
-    const allow = await lim.allowance(account, cfg.address);
+    const allow = await lim.allowance(account, freeAddr());
     if (allow < amt) {
-      const txA = await lim.approve(cfg.address, ethers.MaxUint256);
+      const txA = await lim.approve(freeAddr(), ethers.MaxUint256);
       await txA.wait();
     }
     const tx = await game.fund(amt);
@@ -834,32 +939,41 @@ const CatboxChain = (() => {
   async function approveAndEnter(tierId = 0) {
     await connect();
     const s = await signer();
-    const game = gameContract(s);
     const lim = limContract(s);
-    const price = await game.ticketPrice(tierId);
-    let useFree = false;
     const id = Number(tierId);
+    let useFree = false;
     try {
       const st = await freeStatus(account);
       if (id === 0) {
         useFree = st.scoutFree != null ? Boolean(st.scoutFree) : Boolean(st.eligible) || Number(st.left) > 0;
-      } else if (id === 3) {
-        useFree = st.vaultFree === true;
       }
     } catch (_) {
-      useFree = id === 0;
+      useFree = false;
     }
-    if (!useFree) {
-      const bal = await lim.balanceOf(account);
-      if (bal < price) throw new Error("NO_LIM");
-      const allow = await lim.allowance(account, cfg.address);
-      if (allow < price) {
-        const txA = await lim.approve(cfg.address, ethers.MaxUint256);
-        await txA.wait();
-      }
+
+    const busy = await activeLane(account);
+    if (busy) throw new Error("ACTIVE_RUN");
+
+    if (useFree) {
+      const game = freeGameContract(s);
+      let ref = referrer();
+      if (!ref || ref.toLowerCase() === account.toLowerCase()) ref = ethers.ZeroAddress;
+      const tx = await game.enter(ref, tierId);
+      const rec = await tx.wait();
+      notePlay(account);
+      return rec.hash;
     }
-    const pending = await game.activeRun(account);
-    if (pending !== 0n) throw new Error("ACTIVE_RUN");
+
+    if (hasPaidLane() && !(await isPaidDeployed())) throw new Error("PAID_NOT_READY");
+    const game = paidGameContract(s);
+    const price = await game.ticketPrice(tierId);
+    const bal = await lim.balanceOf(account);
+    if (bal < price) throw new Error("NO_LIM");
+    const allow = await lim.allowance(account, paidAddr());
+    if (allow < price) {
+      const txA = await lim.approve(paidAddr(), ethers.MaxUint256);
+      await txA.wait();
+    }
     let ref = referrer();
     if (!ref || ref.toLowerCase() === account.toLowerCase()) ref = ethers.ZeroAddress;
     const tx = await game.enter(ref, tierId);
@@ -888,11 +1002,12 @@ const CatboxChain = (() => {
   async function settleRun(got, ticket, score, onExtra) {
     await connect();
     const s = await signer();
-    const game = gameContract(s);
-    const pending = await game.activeRun(account);
-    if (pending === 0n) return null;
-    const runId = pending;
-    const capAtTicket = !(await isV6());
+    const lane = await activeLane(account);
+    if (!lane) return null;
+    const freeLane = lane.lane === "free";
+    const game = freeLane ? freeGameContract(s) : paidGameContract(s);
+    const runId = lane.runId;
+    const capAtTicket = freeLane;
     const extraAmt = capAtTicket ? extraWeiFromGot(got, ticket) : 0n;
     const tx = await game.settle(collectedWei(got, ticket, capAtTicket), BigInt(score || 0));
     const rec = await tx.wait();
@@ -922,14 +1037,14 @@ const CatboxChain = (() => {
     if (payout === 0n) payout = settledPayout;
     let extraHash = "";
     let extraPaid = 0n;
-    if (extraAmt > 0n) {
+    if (extraAmt > 0n && freeLane) {
       try {
         if (typeof onExtra === "function") onExtra();
         extraHash = (await payRunExtra(runId, extraAmt)) || "";
         if (extraHash) extraPaid = extraAmt;
       } catch (_) {}
     }
-    return { hash: rec.hash, burned, payout: payout + extraPaid, extraHash, extraPaid };
+    return { hash: rec.hash, burned, payout: payout + extraPaid, extraHash, extraPaid, lane: lane.lane };
   }
 
   async function withdrawWeekly(amountWei) {
@@ -2055,6 +2170,12 @@ const CatboxChain = (() => {
     poolBalance,
     pendingOf,
     isV6,
+    isPaidDeployed,
+    deployPaid,
+    fundBoards,
+    freeAddr,
+    paidAddr,
+    activeLane,
     invitePoints,
     weekPoints,
     boardPointsOf,

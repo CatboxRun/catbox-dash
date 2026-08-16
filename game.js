@@ -1824,6 +1824,7 @@ async function payAndStart() {
     if (msg === "NO_WALLET") status.textContent = t("noWallet");
     else if (msg === "NO_LIM") status.textContent = t("noLim");
     else if (msg === "ACTIVE_RUN") status.textContent = t("activeRun");
+    else if (msg === "PAID_NOT_READY") status.textContent = t("paidNotReady") || "Paid lane not ready yet";
     else if (msg.includes("user rejected") || e.code === 4001) status.textContent = t("txFail");
     else status.textContent = t("txFail");
     go.disabled = false;

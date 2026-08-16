@@ -328,15 +328,27 @@ function applySnapshot(snap) {
 
 async function refreshSocialDeployBtn() {
   const btn = $("socialDeployBtn");
-  if (!btn || !CatboxChain.isOwner?.()) {
+  const paidBtn = $("paidDeployBtn");
+  if (!CatboxChain.isOwner?.()) {
     if (btn) show(btn, false);
+    if (paidBtn) show(paidBtn, false);
     return;
   }
   try {
-    const deployed = await CatboxChain.isSocialDeployed();
-    show(btn, !deployed);
+    if (btn) {
+      const deployed = await CatboxChain.isSocialDeployed();
+      show(btn, !deployed);
+    }
   } catch (_) {
-    show(btn, false);
+    if (btn) show(btn, false);
+  }
+  try {
+    if (paidBtn && CatboxChain.isPaidDeployed) {
+      const deployed = await CatboxChain.isPaidDeployed();
+      show(paidBtn, !deployed);
+    }
+  } catch (_) {
+    if (paidBtn) show(paidBtn, false);
   }
 }
 
@@ -399,6 +411,18 @@ function boot() {
         setStatus("部署社交登记合约…");
         const hash = await CatboxChain.deploySocial();
         setStatus(`社交合约已部署 ${hash.slice(0, 10)}… 下一轮快照会开始收录`);
+        await refreshSocialDeployBtn();
+      } catch (e) {
+        setStatus(`部署失败：${e?.shortMessage || e?.message || "请重试"}`);
+      }
+    };
+  }
+  if ($("paidDeployBtn")) {
+    $("paidDeployBtn").onclick = async () => {
+      try {
+        setStatus("部署付费 V6…");
+        const hash = await CatboxChain.deployPaid();
+        setStatus(hash ? `V6 已部署 ${hash.slice(0, 10)}… 请再跑迁移/注资脚本` : "V6 已在链上");
         await refreshSocialDeployBtn();
       } catch (e) {
         setStatus(`部署失败：${e?.shortMessage || e?.message || "请重试"}`);
