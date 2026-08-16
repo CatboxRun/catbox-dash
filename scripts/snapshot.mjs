@@ -184,17 +184,9 @@ async function collectLogs(p, iface, names, latest) {
         fromBlock,
         toBlock,
       });
-      if (!got) {
-        quiet += 1;
-        if (quiet >= 4) break;
-        continue;
-      }
-      if (!got.length) {
-        quiet += 1;
-        if (quiet >= 4 && out.some((e) => e.name === name)) break;
-      } else {
-        quiet = 0;
-      }
+      if (!got) continue;
+      if (got.length) quiet = 0;
+      else quiet += 1;
       for (const log of got) {
         try {
           const ev = iface.parseLog(log);
@@ -284,14 +276,16 @@ for (let i = 0; i < ids.length; i++) {
 
 const addrs = [...seen];
 console.error("runs", rows.length, "wallets", addrs.length);
-const [weekRows, invRows, refRows] = await Promise.all([
+const [weekRows, invRows, refRows, usedRows] = await Promise.all([
   multicall(p, iface, "weekPts", addrs),
   multicall(p, iface, "invitePts", addrs),
   multicall(p, iface, "refOf", addrs),
+  multicall(p, iface, "freeUsed", addrs),
 ]);
 const week = {};
 const invite = {};
 const refs = {};
+const freeUsed = {};
 addrs.forEach((a, j) => {
   const w = weekRows[j] ? weekRows[j][0] || 0n : 0n;
   const inv = invRows[j] ? invRows[j][0] || 0n : 0n;
@@ -299,6 +293,7 @@ addrs.forEach((a, j) => {
   if (inv > 0n) invite[a] = inv;
   const refRaw = refRows[j] ? refRows[j][0] : ZERO;
   refs[a] = refRaw && refRaw !== ZERO ? getAddress(refRaw) : ZERO;
+  freeUsed[a] = Number(usedRows[j] ? usedRows[j][0] || 0n : 0n);
 });
 const missingRefs = [...new Set(Object.values(refs).filter((a) => a !== ZERO && invite[a] == null))];
 if (missingRefs.length) {
@@ -366,12 +361,38 @@ for (const log of logs) {
 
 const playN = {};
 const invitees = {};
+const byPlayer = {};
 for (const row of rows) {
   playN[row.player] = (playN[row.player] || 0) + 1;
   if (!row.referrer || row.referrer === ZERO) row.referrer = refs[row.player] || ZERO;
   if (row.referrer && row.referrer !== ZERO) {
     if (!invitees[row.referrer]) invitees[row.referrer] = new Set();
     invitees[row.referrer].add(row.player);
+  }
+  if (!byPlayer[row.player]) byPlayer[row.player] = [];
+  byPlayer[row.player].push(row);
+}
+for (const list of Object.values(byPlayer)) {
+  list.sort((a, b) => a.id - b.id);
+  const oneLim = list.filter((r) => r.paid <= 10n ** 18n);
+  let left = freeUsed[list[0].player] || 0;
+  for (const r of list) {
+    if (r.paid > 10n ** 18n) {
+      r.free = false;
+      continue;
+    }
+  }
+  for (const r of oneLim) {
+    if (r.free === true) {
+      if (left > 0) left -= 1;
+      continue;
+    }
+    if (left > 0) {
+      r.free = true;
+      left -= 1;
+    } else {
+      r.free = false;
+    }
   }
 }
 for (const row of rows) {

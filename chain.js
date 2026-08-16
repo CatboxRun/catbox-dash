@@ -1861,17 +1861,16 @@ const CatboxChain = (() => {
     };
   }
 
-  async function loadSnapshot() {
-    if (snapshotCache) return snapshotCache;
-    if (snapshotTried) return null;
+  async function loadSnapshot(force) {
+    if (!force && snapshotCache) return snapshotCache;
     snapshotTried = true;
     try {
-      const res = await fetch("./data/snapshot.json", { cache: "no-store" });
-      if (!res.ok) return null;
+      const res = await fetch(`./data/snapshot.json?t=${Date.now()}`, { cache: "no-store" });
+      if (!res.ok) return snapshotCache;
       snapshotCache = reviveSnapshot(await res.json());
       return snapshotCache;
     } catch (_) {
-      return null;
+      return snapshotCache;
     }
   }
 

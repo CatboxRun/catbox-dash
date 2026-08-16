@@ -260,47 +260,27 @@ function applySnapshot(snap) {
   paintSortHeaders();
   renderTable();
   const when = snap.at ? new Date(snap.at).toLocaleString() : "";
-  setStatus(`快照 ${when} · 共 ${snap.totalRuns} 局 · ${snap.uniqueWallets} 个钱包 · 点刷新可链上重扫`);
+  setStatus(`快照 ${when} · 共 ${snap.totalRuns} 局 · ${snap.uniqueWallets} 个钱包 · 约每 10 分钟更新，点刷新重新读取`);
 }
 
-async function loadRuns(forceLive) {
+async function loadRuns() {
   if (!paintGate()) return;
   if (loading) return;
-  if (!forceLive) {
-    setStatus("读取快照…");
-    try {
-      const snap = await CatboxChain.loadSnapshot();
-      if (snap?.runs?.length) {
-        applySnapshot(snap);
-        return;
-      }
-    } catch (_) {}
-  }
   loading = true;
-  setStatus("正在扫描全部对局…");
+  setStatus("读取快照…");
   try {
-    const data = await fetchAllRuns((p) => {
-      if (p.phase === "partial" && p.data) {
-        allRows = p.data.runs || [];
-        renderChips(p.data);
-        paintSortHeaders();
-        renderTable();
-        setStatus(`已列出 ${p.data.totalRuns} 局，正在补齐结算…`);
-      } else if (p.phase === "runs") setStatus(`读取对局 ${p.done}/${p.total}…`);
-      else if (p.phase === "logs") setStatus("补齐结算 / 推荐人日志…");
-    });
-    allRows = data.runs || [];
-    renderChips(data);
-    paintSortHeaders();
-    renderTable();
-    setStatus(`共 ${data.totalRuns} 局 · ${data.uniqueWallets} 个钱包`);
+    const snap = await CatboxChain.loadSnapshot(true);
+    if (!snap?.runs?.length) throw new Error("NO_SNAP");
+    applySnapshot(snap);
   } catch (e) {
     const msg =
       e?.message === "NOT_OWNER"
         ? "无权限：请切换到 owner 钱包"
         : e?.message === "NO_WALLET"
           ? "请先连接钱包"
-          : `读取失败：${e?.shortMessage || e?.message || "请重试"}`;
+          : e?.message === "NO_SNAP"
+            ? "快照还没生成，请稍后再打开。"
+            : `读取失败：${e?.shortMessage || e?.message || "请重试"}`;
     setStatus(msg);
     if (e?.message === "NOT_OWNER") {
       show($("denied"), true);
@@ -329,7 +309,7 @@ async function connectWallet() {
 function boot() {
   $("walletBtn").onclick = connectWallet;
   $("gateConnect").onclick = connectWallet;
-  $("refreshBtn").onclick = () => loadRuns(true);
+  $("refreshBtn").onclick = () => loadRuns();
   $("filter").addEventListener("input", (e) => {
     filterText = e.target.value || "";
     renderTable();
