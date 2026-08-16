@@ -1060,11 +1060,23 @@ const CatboxChain = (() => {
     const lane = await activeLane(account);
     if (!lane) return null;
     const game = lane.lane === "free" ? freeGameContract(s) : paidGameContract(s);
-    const raw = await game.runs(lane.runId);
-    const paid = raw.paid != null ? raw.paid : raw[1];
-    const ticket = paid && paid > 0n ? paid : 0n;
-    const tx = await game.settle(ticket, 0n);
-    return (await tx.wait()).hash;
+    let ticket = 0n;
+    try {
+      const raw = await game.runs(lane.runId);
+      const paid = raw?.paid != null ? raw.paid : raw?.[1];
+      if (paid && paid > 0n) ticket = paid;
+    } catch (_) {
+      ticket = 0n;
+    }
+    // Prefer refunding the ticket; fall back to zero-collect settle if runs() ABI mismatches.
+    try {
+      const tx = await game.settle(ticket > 0n ? ticket : 0n, 0n);
+      return (await tx.wait()).hash;
+    } catch (e) {
+      if (ticket === 0n) throw e;
+      const tx = await game.settle(0n, 0n);
+      return (await tx.wait()).hash;
+    }
   }
 
   async function withdrawWeekly(amountWei) {

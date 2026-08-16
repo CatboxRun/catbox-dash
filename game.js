@@ -1815,6 +1815,11 @@ async function payAndStart() {
     }
     free = freeForTier(selected);
     teach = shouldTeach(selected);
+    const stuck = await CatboxChain.activeRun(account);
+    if (stuck && stuck !== 0n) {
+      status.textContent = t("clearingRun");
+      await CatboxChain.clearActiveRun();
+    }
     status.textContent = free ? t("paying") : t("approve");
     const hash = await CatboxChain.approveAndEnter(selected.id);
     status.innerHTML = `<a href="${CatboxChain.txUrl(hash)}" target="_blank" rel="noopener">${hash.slice(0, 10)}…</a>`;
