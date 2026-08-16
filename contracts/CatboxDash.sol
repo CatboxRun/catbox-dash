@@ -7,15 +7,13 @@ interface IERC20 {
     function balanceOf(address account) external view returns (uint256);
 }
 
-/// Catbox Dash V6 on BSC (local — live Pages still points at V5).
+/// Catbox Dash V6 (paid lane). Live V5 keeps free SCOUT only.
 /// Ticket: SCOUT 1 / RUNNER 3 / PHANTOM 6 / VAULT 10 LIM.
 /// Leftover: daily board 50% / invite board 20% / burn 30%.
-/// Daily 50%: 100% equal among that day's paid players (snapshot/pull at SGT 00:00). No score weight.
-/// Invite 20%: equal among top 200 inviters (O(200) list + equal accumulator). Same day-boundary as daily.
-/// Coin payout: collected * (105% + 5% per invited friend + 0.1% per extra run), cap 200% of ticket.
-/// Both boards: Singapore 00:00 rollover (UTC+8 / BJ_OFFSET). Yesterday only — today's leftover is not claimable until then.
-/// Free: 2× SCOUT (tier 0, 1 LIM) per address. No free VAULT.
-/// TG/X extras are local/social on live V5. Free runs: board score 0, skipped from _markPlayed / prize share. Extra over collected from freePool.
+/// Daily 50%: yesterday's pool by dayPts share. Claim clears that day's shards.
+/// Invite 20%: top 200. Claim clears invitePts for that wallet.
+/// Coin payout: collected * (105%+…), cap ×2 / ×1.5; over-ticket from freePool (bonus reserve).
+/// No free runs here — free SCOUT stays on V5 in parallel.
 contract CatboxDash {
     address public constant LIM = 0x1D6430FDFC63ea481fE157017B47530663C96001;
     address public constant OWNER = 0x252B70B928B0cEF1326305cB6eb065852d0F76Eb;
@@ -106,6 +104,8 @@ contract CatboxDash {
     event FreeEnter(address indexed player, uint256 indexed runId, uint8 used);
     event TgBonus(address indexed player);
     event XBonus(address indexed player);
+    event Migrated(address indexed player, uint256 dayPtsSet, uint256 invitePtsSet);
+    event BoardsFunded(address indexed from, uint256 toDay, uint256 toInvite);
 
     constructor() {
         _ticketPrice[0] = 1 ether;
@@ -157,17 +157,53 @@ contract CatboxDash {
         return dayPool + dayEqPool;
     }
 
+    /// Frontend / snapshot aliases (V5 names).
+    function weekPts(address u) external view returns (uint256) {
+        return dayPts[u];
+    }
+
+    function weekPtsTotal() external view returns (uint256) {
+        return dayPtsTotal;
+    }
+
+    function weekAcc() external view returns (uint256) {
+        return dayAcc;
+    }
+
+    function weekDebt(address u) external view returns (uint256) {
+        return dayDebt[u];
+    }
+
+    function freeUsed(address u) external view returns (uint8) {
+        return freeScoutUsed[u];
+    }
+
     function fund(uint256 amount) external {
         require(amount > 0, "amount");
-        _syncFree();
         _pull(msg.sender, amount);
         freePool += amount;
         emit Funded(msg.sender, amount);
     }
 
-    /// Two SCOUT frees. TG/X do not add extra free runs.
-    function extraFreeCap(address) public view returns (uint8) {
-        return FREE_CAP;
+    /// Seed daily / invite pools after migrating LIM from V5.
+    function fundBoards(uint256 toDay, uint256 toInvite) external {
+        require(toDay > 0 || toInvite > 0, "amount");
+        uint256 total = toDay + toInvite;
+        _pull(msg.sender, total);
+        if (toDay > 0) {
+            if (dayPtsTotal > 0) dayAcc += toDay * ACC / dayPtsTotal;
+            dayPool += toDay;
+        }
+        if (toInvite > 0) {
+            if (topLen > 0) inviteAcc += toInvite * ACC / topLen;
+            invitePool += toInvite;
+        }
+        emit BoardsFunded(msg.sender, toDay, toInvite);
+    }
+
+    /// Paid lane: no free SCOUT (free stays on V5).
+    function extraFreeCap(address) public pure returns (uint8) {
+        return 0;
     }
 
     function tgFreeCap(address player) public view returns (uint8) {
@@ -186,39 +222,30 @@ contract CatboxDash {
         emit XBonus(msg.sender);
     }
 
-    function scoutIsFree(address player) public view returns (bool) {
-        return freeScoutUsed[player] < extraFreeCap(player) && _freeAvailable() >= _ticketPrice[0];
-    }
-
-    function vaultIsFree(address) public view returns (bool) {
+    function scoutIsFree(address) public pure returns (bool) {
         return false;
     }
 
-    function freeForTier(address player, uint256 tierId) public view returns (bool) {
-        if (tierId == 0) return scoutIsFree(player);
+    function vaultIsFree(address) public pure returns (bool) {
         return false;
     }
 
-    function freeStatus(address player) external view returns (uint8 used, uint8 left, uint256 pool, bool eligible) {
-        used = freeScoutUsed[player];
-        uint8 cap = extraFreeCap(player);
-        left = used >= cap ? 0 : uint8(cap - used);
-        pool = _freeAvailable();
-        eligible = left > 0 && pool >= _ticketPrice[0];
+    function freeForTier(address, uint256) public pure returns (bool) {
+        return false;
+    }
+
+    function freeStatus(address) external view returns (uint8 used, uint8 left, uint256 pool, bool eligible) {
+        used = 0;
+        left = 0;
+        pool = freePool;
+        eligible = false;
     }
 
     function enter(address referrer, uint256 tierId) external returns (uint256 runId) {
         require(activeRun[msg.sender] == 0, "active run");
         uint256 price = ticketPrice(tierId);
         _rollDay();
-        _syncFree();
-        bool free = tierId == 0 && freeScoutUsed[msg.sender] < extraFreeCap(msg.sender) && freePool >= price;
-        if (free) {
-            freePool -= price;
-            freeScoutUsed[msg.sender] += 1;
-        } else {
-            _pull(msg.sender, price);
-        }
+        _pull(msg.sender, price);
 
         if (refOf[msg.sender] == address(0) && referrer != address(0) && referrer != msg.sender) {
             refOf[msg.sender] = referrer;
@@ -228,12 +255,11 @@ contract CatboxDash {
         if (ref != address(0)) _addInvite(ref, 10);
 
         runId = nextRunId++;
-        runs[runId] = Run(msg.sender, price, uint64(block.timestamp), false, free);
+        runs[runId] = Run(msg.sender, price, uint64(block.timestamp), false, false);
         activeRun[msg.sender] = runId;
         playCount[msg.sender] += 1;
         ticketFloat += price;
         emit RunStarted(runId, msg.sender, ref, price);
-        if (free) emit FreeEnter(msg.sender, runId, freeScoutUsed[msg.sender]);
     }
 
     function settle(uint256 collected, uint256 score) external {
@@ -274,6 +300,7 @@ contract CatboxDash {
     }
 
     function claim() external {
+        uint256 invBefore = _invitePending(msg.sender);
         _syncUser(msg.sender);
         _harvestInvite(msg.sender);
         uint256 tot = claimable[msg.sender];
@@ -281,11 +308,21 @@ contract CatboxDash {
         claimable[msg.sender] = 0;
         if (owed >= tot) owed -= tot;
         else owed = 0;
+        // Past-day shards cleared in _syncUser. Only clear invite pts if invite rewards were due.
+        if (invBefore > 0) _clearInvitePts(msg.sender);
         _push(msg.sender, tot);
         emit Claimed(msg.sender, tot);
     }
 
     function withdrawDaily(uint256 amount) external onlyOwner {
+        _withdrawBoards(amount);
+    }
+
+    function withdrawWeekly(uint256 amount) external onlyOwner {
+        _withdrawBoards(amount);
+    }
+
+    function _withdrawBoards(uint256 amount) internal {
         uint256 avail = dayPool + dayEqPool + invitePool;
         require(amount > 0 && amount <= avail, "pool");
         uint256 left = amount;
@@ -302,32 +339,76 @@ contract CatboxDash {
         emit DailyWithdraw(VAULT, amount);
     }
 
+    /// One-shot migration from V5 snapshot. Sets refs / plays / invite board / today's dayPts.
+    function migratePlayers(
+        address[] calldata users,
+        uint256[] calldata dayScores,
+        uint256[] calldata inviteScores,
+        uint256[] calldata plays,
+        address[] calldata refs,
+        uint256[] calldata invCounts
+    ) external onlyOwner {
+        uint256 n = users.length;
+        require(
+            dayScores.length == n &&
+                inviteScores.length == n &&
+                plays.length == n &&
+                refs.length == n &&
+                invCounts.length == n,
+            "len"
+        );
+        _rollDay();
+        for (uint256 i = 0; i < n; i++) {
+            address u = users[i];
+            if (u == address(0)) continue;
+            if (refOf[u] == address(0) && refs[i] != address(0) && refs[i] != u) {
+                refOf[u] = refs[i];
+            }
+            if (plays[i] > playCount[u]) playCount[u] = plays[i];
+            if (invCounts[i] > inviteCount[u]) inviteCount[u] = invCounts[i];
+            if (inviteScores[i] > invitePts[u]) {
+                invitePtsTotal += inviteScores[i] - invitePts[u];
+                invitePts[u] = inviteScores[i];
+                _touchTop(u);
+            }
+            if (dayScores[i] > 0) {
+                uint256 add = dayScores[i];
+                if (dayPts[u] < add) {
+                    uint256 delta = add - dayPts[u];
+                    _addDay(u, delta);
+                }
+            }
+            emit Migrated(u, dayPts[u], invitePts[u]);
+        }
+    }
+
     function _settle(uint256 runId, uint256 collected, uint256 score) internal {
         Run storage r = runs[runId];
         require(!r.settled, "settled");
         require(block.timestamp >= uint256(r.startedAt) + 5, "too soon");
-        if (collected > r.paid) collected = r.paid;
+        uint256 ticketPaid = r.paid;
+        uint256 cap = ticketPaid <= 1 ether ? ticketPaid * 2 : ticketPaid * 15 / 10;
+        if (collected > cap) collected = cap;
+        uint256 fromTicket = collected > ticketPaid ? ticketPaid : collected;
         r.settled = true;
         activeRun[r.player] = 0;
         ticketFloat -= r.paid;
 
         _rollDay();
         uint256 bps = rewardBps(r.player);
-        uint256 payout = collected * bps / BASE_BPS;
-        uint256 cap = r.paid * 2;
+        uint256 payout = fromTicket * bps / BASE_BPS;
+        if (collected > fromTicket) payout += collected - fromTicket;
         if (payout > cap) payout = cap;
-        uint256 bonus = payout > collected ? payout - collected : 0;
+        uint256 bonus = payout > fromTicket ? payout - fromTicket : 0;
         if (bonus > freePool) bonus = freePool;
-        payout = collected + bonus;
+        payout = fromTicket + bonus;
         if (bonus > 0) freePool -= bonus;
 
-        uint256 leftover = r.paid - collected;
+        uint256 leftover = ticketPaid - fromTicket;
         uint256 burned = 0;
         if (payout > 0) _push(r.player, payout);
-        if (!r.free) {
-            _markPlayed(r.player);
-            if (score > 0) _addDay(r.player, score);
-        }
+        _markPlayed(r.player);
+        if (score > 0) _addDay(r.player, score);
         if (leftover > 0) {
             uint256 toInvite = leftover * 20 / 100;
             uint256 toDay = leftover * 50 / 100;
@@ -416,7 +497,10 @@ contract CatboxDash {
             invitePool += i;
         }
         if (w > 0) {
-            dayEqPool += w;
+            if (dayPtsTotal > 0) {
+                dayAcc += w * ACC / dayPtsTotal;
+            }
+            dayPool += w;
         }
     }
 
@@ -433,6 +517,33 @@ contract CatboxDash {
         dayDebt[u] += pts * dayAcc / ACC;
         dayPts[u] += pts;
         dayPtsTotal += pts;
+    }
+
+    function _clearInvitePts(address u) internal {
+        uint256 pts = invitePts[u];
+        if (pts == 0 && topIndex[u] == 0 && inviteLocked[u] == 0) return;
+        if (pts > 0) {
+            if (invitePtsTotal >= pts) invitePtsTotal -= pts;
+            else invitePtsTotal = 0;
+            invitePts[u] = 0;
+        }
+        inviteLocked[u] = 0;
+        inviteLockDay[u] = 0;
+        inviteDebt[u] = inviteAcc;
+        if (topIndex[u] != 0) {
+            uint256 slot = topIndex[u] - 1;
+            topIndex[u] = 0;
+            if (topLen > 0) {
+                uint256 last = topLen - 1;
+                if (slot != last) {
+                    address moved = topInviters[last];
+                    topInviters[slot] = moved;
+                    topIndex[moved] = slot + 1;
+                }
+                topInviters[last] = address(0);
+                topLen = last;
+            }
+        }
     }
 
     function _addInvite(address u, uint256 pts) internal {
@@ -537,19 +648,7 @@ contract CatboxDash {
     }
 
     function _freeAvailable() internal view returns (uint256) {
-        uint256 bal = IERC20(LIM).balanceOf(address(this));
-        uint256 reserved = dayPool + dayEqPool + frozenDayTotal + invitePool + freePool + ticketFloat + owed;
-        if (bal > reserved) return freePool + (bal - reserved);
         return freePool;
-    }
-
-    function _syncFree() internal {
-        uint256 avail = _freeAvailable();
-        if (avail > freePool) {
-            uint256 extra = avail - freePool;
-            freePool += extra;
-            emit Funded(msg.sender, extra);
-        }
     }
 
     function _pull(address from, uint256 value) internal {

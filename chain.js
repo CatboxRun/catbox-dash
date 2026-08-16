@@ -94,9 +94,10 @@ const CatboxChain = (() => {
     return new ethers.Contract(paidAddr(), [...paidAbi(), ...V6_READ_ABI], s);
   }
 
-  /** Default = paid lane (boards / claim / paid enter). */
+  /** Boards / claim / paid reads. Fall back to V5 until V6 code is live. */
   function gameContract(s) {
-    return hasPaidLane() ? paidGameContract(s) : freeGameContract(s);
+    if (hasPaidLane() && v6Cached === true) return paidGameContract(s);
+    return freeGameContract(s);
   }
 
   function limContract(s) {
@@ -104,13 +105,18 @@ const CatboxChain = (() => {
   }
 
   async function isPaidDeployed() {
-    if (!hasPaidLane()) return false;
+    if (!hasPaidLane()) {
+      v6Cached = false;
+      return false;
+    }
     try {
       const p = await publicReadProvider();
       const code = await withTimeout(p.getCode(paidAddr()), 4000);
-      return Boolean(code && code !== "0x");
+      const ok = Boolean(code && code !== "0x");
+      v6Cached = ok;
+      return ok;
     } catch (_) {
-      return false;
+      return v6Cached === true;
     }
   }
 
@@ -444,19 +450,7 @@ const CatboxChain = (() => {
   }
 
   async function isV6() {
-    if (hasPaidLane()) {
-      if (v6Cached == null) v6Cached = await isPaidDeployed();
-      return v6Cached;
-    }
-    if (v6Cached != null) return v6Cached;
-    try {
-      const c = freeGameContract(await readProvider());
-      await c.dayEqPool();
-      v6Cached = true;
-    } catch (_) {
-      v6Cached = false;
-    }
-    return v6Cached;
+    return isPaidDeployed();
   }
 
   async function activeLane(addr = account) {
@@ -945,7 +939,8 @@ const CatboxChain = (() => {
     try {
       const st = await freeStatus(account);
       if (id === 0) {
-        useFree = st.scoutFree != null ? Boolean(st.scoutFree) : Boolean(st.eligible) || Number(st.left) > 0;
+        // Must be actually eligible (left + freePool), not merely left > 0.
+        useFree = Boolean(st.eligible);
       }
     } catch (_) {
       useFree = false;
