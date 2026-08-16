@@ -130,6 +130,24 @@ function visibleRows() {
   return rows;
 }
 
+function extraDeposited(s) {
+  const pool = s.extraPool ?? 0n;
+  const paid = s.extraPaidTotal ?? 0n;
+  const withdrawn = s.extraWithdrawnTotal ?? 0n;
+  const logged = s.extraFundedTotal ?? 0n;
+  const toWei = (v) => {
+    if (v == null || v === "") return 0n;
+    try {
+      return typeof v === "bigint" ? v : BigInt(v);
+    } catch (_) {
+      return 0n;
+    }
+  };
+  const sum = toWei(pool) + toWei(paid) + toWei(withdrawn);
+  const rec = toWei(logged);
+  return rec > sum ? rec : sum;
+}
+
 function renderChips(summary) {
   const s = summary || {};
   const paidBit =
@@ -146,7 +164,7 @@ function renderChips(summary) {
     ["累计销毁", s.burnedTotal != null ? `${lim(s.burnedTotal)} LIM` : "—"],
     ["加时池", s.extraPool != null ? `${lim(s.extraPool)} LIM` : "—"],
     ["已发加时", s.extraPaidTotal != null ? `${lim(s.extraPaidTotal)} LIM · ${s.extraPaidCount ?? 0} 笔` : "—"],
-    ["加时存入", s.extraFundedTotal != null ? `${lim(s.extraFundedTotal)} LIM` : "—"],
+    ["加时存入", `${lim(extraDeposited(s))} LIM`],
     ["加时提取", s.extraWithdrawnTotal != null ? `${lim(s.extraWithdrawnTotal)} LIM` : "—"],
     ["加时状态", s.extraPaused ? "暂停" : s.extraSinceRunId != null ? `自 #${s.extraSinceRunId}` : "—"],
   ]

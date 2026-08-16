@@ -470,6 +470,10 @@ if (extraAddr && cfg.extra?.abi) {
     console.error("extra fail", e?.message || e);
   }
 }
+{
+  const extraIn = extraPool + extraPaidTotal + extraWithdrawnTotal;
+  if (extraFundedTotal < extraIn) extraFundedTotal = extraIn;
+}
 
 const burns = [...burnsByHash.values()]
   .sort((a, b) => (b.blockNumber || 0) - (a.blockNumber || 0) || (b.runId || 0) - (a.runId || 0))
