@@ -3067,7 +3067,9 @@ async function settleOnchain(got, ticket, score) {
     el.textContent = t("settling");
     const wait = 5500 - (Date.now() - (run?.startedMs || Date.now()));
     if (wait > 0) await new Promise((r) => setTimeout(r, wait));
-    const rec = await CatboxChain.settleRun(got, ticket, score);
+    const rec = await CatboxChain.settleRun(got, ticket, score, () => {
+      el.textContent = t("settlingExtra");
+    });
     if (rec?.hash) {
       lastFinish.tx = rec.hash;
       lastFinish.burnHash = rec.burned > 0n ? rec.hash : "";
@@ -3075,7 +3077,10 @@ async function settleOnchain(got, ticket, score) {
       if (rec.payout != null && rec.payout > 0n) {
         lastFinish.payout = Number(ethers.formatUnits(rec.payout, 18));
       }
-      el.innerHTML = `<a href="${CatboxChain.txUrl(rec.hash)}" target="_blank" rel="noopener">${rec.hash.slice(0, 10)}…</a>`;
+      const settleLink = `<a href="${CatboxChain.txUrl(rec.hash)}" target="_blank" rel="noopener">${rec.hash.slice(0, 10)}…</a>`;
+      el.innerHTML = rec.extraHash
+        ? `${settleLink} · <a href="${CatboxChain.txUrl(rec.extraHash)}" target="_blank" rel="noopener">${rec.extraHash.slice(0, 10)}…</a>`
+        : settleLink;
       refreshOver();
     } else {
       el.textContent = "";

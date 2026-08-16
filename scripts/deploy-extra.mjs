@@ -34,6 +34,21 @@ if (wallet.address.toLowerCase() !== String(cfg.owner).toLowerCase()) {
   process.exit(1);
 }
 
+const oldAddr = process.env.WITHDRAW_OLD;
+if (oldAddr && oldAddr.toLowerCase() !== extraCfg.address.toLowerCase()) {
+  const oldCode = await provider.getCode(oldAddr);
+  if (oldCode && oldCode !== "0x") {
+    const old = new Contract(oldAddr, extraCfg.abi, wallet);
+    const oldPool = await old.pool();
+    console.log("old extra", oldAddr, formatUnits(oldPool, 18));
+    if (oldPool > 0n) {
+      const txW = await old.withdraw(oldPool);
+      console.log("withdraw old", txW.hash);
+      await txW.wait();
+    }
+  }
+}
+
 if (!extraCode || extraCode === "0x") {
   const data = extraCfg.salt + extraCfg.bytecode.slice(2);
   const tx = await wallet.sendTransaction({ to: cfg.factory, data });

@@ -773,14 +773,16 @@ const CatboxChain = (() => {
     return extra > cap ? cap : extra;
   }
 
-  async function settleRun(got, ticket, score) {
+  async function settleRun(got, ticket, score, onExtra) {
     await connect();
     const s = await signer();
     const game = gameContract(s);
     const pending = await game.activeRun(account);
     if (pending === 0n) return null;
-    const extraAmt = extraWeiFromGot(got, ticket);
-    const tx = await game.settle(collectedWei(got, ticket, false), BigInt(score || 0));
+    const runId = pending;
+    const capAtTicket = !(await isV6());
+    const extraAmt = capAtTicket ? extraWeiFromGot(got, ticket) : 0n;
+    const tx = await game.settle(collectedWei(got, ticket, capAtTicket), BigInt(score || 0));
     const rec = await tx.wait();
     let burned = 0n;
     let settledPayout = 0n;
@@ -806,7 +808,16 @@ const CatboxChain = (() => {
       } catch (_) {}
     }
     if (payout === 0n) payout = settledPayout;
-    return { hash: rec.hash, burned, payout: payout + extraAmt, extraQueued: extraAmt };
+    let extraHash = "";
+    let extraPaid = 0n;
+    if (extraAmt > 0n) {
+      try {
+        if (typeof onExtra === "function") onExtra();
+        extraHash = (await payRunExtra(runId, extraAmt)) || "";
+        if (extraHash) extraPaid = extraAmt;
+      } catch (_) {}
+    }
+    return { hash: rec.hash, burned, payout: payout + extraPaid, extraHash, extraPaid };
   }
 
   async function withdrawWeekly(amountWei) {
