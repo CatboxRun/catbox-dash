@@ -86,7 +86,8 @@ for (let i = 0; i < all.length; i += 40) {
 }
 
 const BATCH = Number(process.env.BATCH || 40);
-for (let i = 0; i < all.length; i += BATCH) {
+const START = Number(process.env.START || 0);
+for (let i = START; i < all.length; i += BATCH) {
   const chunk = all.slice(i, i + BATCH);
   const users = chunk.map((c) => c.addr);
   const dayScores = chunk.map((c) => c.day);

@@ -701,9 +701,11 @@ const CatboxChain = (() => {
 
   async function claim() {
     await connect();
-    if (hasPaidLane() && !(await isPaidDeployed())) throw new Error("PAID_NOT_READY");
     const s = await signer();
-    const tx = await paidGameContract(s).claim();
+    // Until V6 is on-chain, keep claiming on V5. After cutover, claim on V6 only.
+    const game =
+      hasPaidLane() && (await isPaidDeployed()) ? paidGameContract(s) : freeGameContract(s);
+    const tx = await game.claim();
     return (await tx.wait()).hash;
   }
 
@@ -842,7 +844,7 @@ const CatboxChain = (() => {
     if (!addr) return false;
     if (await socialClaimed("tg", addr)) return true;
     try {
-      const c = gameContract(await readProvider());
+      const c = freeGameContract(await readProvider());
       return Boolean(await c.tgClaimed(addr));
     } catch (_) {
       return false;
@@ -853,7 +855,7 @@ const CatboxChain = (() => {
     if (!addr) return false;
     if (await socialClaimed("x", addr)) return true;
     try {
-      const c = gameContract(await readProvider());
+      const c = freeGameContract(await readProvider());
       return Boolean(await c.xClaimed(addr));
     } catch (_) {
       return false;
@@ -884,7 +886,8 @@ const CatboxChain = (() => {
     if (await claimSocialBonus("tg")) return true;
     await connect();
     const s = await signer();
-    const game = gameContract(s);
+    // Free-scout bonuses live on V5 free lane, not V6 paid.
+    const game = freeGameContract(s);
     try {
       if (await game.tgClaimed.staticCall(account)) return true;
     } catch (_) {
@@ -903,7 +906,7 @@ const CatboxChain = (() => {
     if (await claimSocialBonus("x")) return true;
     await connect();
     const s = await signer();
-    const game = gameContract(s);
+    const game = freeGameContract(s);
     try {
       if (await game.xClaimed.staticCall(account)) return true;
     } catch (_) {
@@ -965,14 +968,16 @@ const CatboxChain = (() => {
       return rec.hash;
     }
 
-    if (hasPaidLane() && !(await isPaidDeployed())) throw new Error("PAID_NOT_READY");
-    const game = paidGameContract(s);
+    // Paid enter: V6 when live, otherwise keep V5 until cutover deploy.
+    const usePaid = hasPaidLane() && (await isPaidDeployed());
+    const game = usePaid ? paidGameContract(s) : freeGameContract(s);
+    const spender = usePaid ? paidAddr() : freeAddr();
     const price = await game.ticketPrice(tierId);
     const bal = await lim.balanceOf(account);
     if (bal < price) throw new Error("NO_LIM");
-    const allow = await lim.allowance(account, paidAddr());
+    const allow = await lim.allowance(account, spender);
     if (allow < price) {
-      const txA = await lim.approve(paidAddr(), ethers.MaxUint256);
+      const txA = await lim.approve(spender, ethers.MaxUint256);
       await txA.wait();
     }
     let ref = referrer();
@@ -1046,6 +1051,20 @@ const CatboxChain = (() => {
       } catch (_) {}
     }
     return { hash: rec.hash, burned, payout: payout + extraPaid, extraHash, extraPaid, lane: lane.lane };
+  }
+
+  /** Close a stuck on-chain run (refresh / failed start). Settles full ticket as collected so LIM isn't burned. */
+  async function clearActiveRun() {
+    await connect();
+    const s = await signer();
+    const lane = await activeLane(account);
+    if (!lane) return null;
+    const game = lane.lane === "free" ? freeGameContract(s) : paidGameContract(s);
+    const raw = await game.runs(lane.runId);
+    const paid = raw.paid != null ? raw.paid : raw[1];
+    const ticket = paid && paid > 0n ? paid : 0n;
+    const tx = await game.settle(ticket, 0n);
+    return (await tx.wait()).hash;
   }
 
   async function withdrawWeekly(amountWei) {
@@ -1453,6 +1472,12 @@ const CatboxChain = (() => {
       ranges.push({ fromBlock: Math.max(0, toBlock - span + 1), toBlock });
     }
     const topic0 = hashes.length === 1 ? hashes[0] : hashes;
+    const targets = [freeAddr()];
+    try {
+      if (hasPaidLane() && (await isPaidDeployed()) && paidAddr().toLowerCase() !== freeAddr().toLowerCase()) {
+        targets.push(paidAddr());
+      }
+    } catch (_) {}
     const out = [];
     const PARALLEL = 2;
     let fails = 0;
@@ -1460,21 +1485,23 @@ const CatboxChain = (() => {
     for (let i = 0; i < ranges.length; i += PARALLEL) {
       const slice = ranges.slice(i, i + PARALLEL);
       const results = await Promise.all(
-        slice.map(async (r) => {
-          try {
-            return await withTimeout(
-              p.getLogs({
-                address: cfg.address,
-                topics: [topic0],
-                fromBlock: r.fromBlock,
-                toBlock: r.toBlock,
-              }),
-              8000,
-            );
-          } catch (_) {
-            return null;
-          }
-        }),
+        slice.flatMap((r) =>
+          targets.map(async (address) => {
+            try {
+              return await withTimeout(
+                p.getLogs({
+                  address,
+                  topics: [topic0],
+                  fromBlock: r.fromBlock,
+                  toBlock: r.toBlock,
+                }),
+                8000,
+              );
+            } catch (_) {
+              return null;
+            }
+          }),
+        ),
       );
       let parsed = 0;
       let emptyOk = 0;
@@ -1498,7 +1525,7 @@ const CatboxChain = (() => {
           } catch (_) {}
         }
       }
-      if (failed === slice.length) {
+      if (failed === results.length) {
         fails += 1;
         if (fails >= 2) {
           logsProvider = null;
@@ -1508,7 +1535,7 @@ const CatboxChain = (() => {
       } else {
         fails = 0;
       }
-      if (parsed === 0 && emptyOk === slice.length && out.length) {
+      if (parsed === 0 && emptyOk === results.length && out.length) {
         quiet += 1;
         if (quiet >= 2) break;
       } else if (parsed) {
@@ -1544,13 +1571,14 @@ const CatboxChain = (() => {
     return multiIface.decodeFunctionResult("aggregate3", raw)[0];
   }
 
-  async function multicallFn(p, iface, fn, items) {
+  async function multicallFn(p, iface, fn, items, target) {
+    const dest = target || (hasPaidLane() && v6Cached === true ? paidAddr() : freeAddr());
     const out = [];
     const batch = 40;
     for (let i = 0; i < items.length; i += batch) {
       const chunk = items.slice(i, i + batch);
       const calls = chunk.map((item) => ({
-        target: cfg.address,
+        target: dest,
         allowFailure: true,
         callData: iface.encodeFunctionData(fn, [item]),
       }));
@@ -1855,16 +1883,24 @@ const CatboxChain = (() => {
         ranges.push({ fromBlock: Math.max(0, toBlock - span + 1), toBlock });
       }
       let anyOk = false;
+      const burnTargets = [freeAddr()];
+      try {
+        if (hasPaidLane() && (await isPaidDeployed()) && paidAddr().toLowerCase() !== freeAddr().toLowerCase()) {
+          burnTargets.push(paidAddr());
+        }
+      } catch (_) {}
       for (let i = 0; i < ranges.length; i += 2) {
         const slice = ranges.slice(i, i + 2);
         const results = await Promise.all(
-          slice.map((r) =>
-            getLogsChunk({
-              address: cfg.address,
-              topics: [topic],
-              fromBlock: r.fromBlock,
-              toBlock: r.toBlock,
-            }),
+          slice.flatMap((r) =>
+            burnTargets.map((address) =>
+              getLogsChunk({
+                address,
+                topics: [topic],
+                fromBlock: r.fromBlock,
+                toBlock: r.toBlock,
+              }),
+            ),
           ),
         );
         for (const got of results) {
@@ -2203,6 +2239,7 @@ const CatboxChain = (() => {
     deploySocial,
     fundFreePool,
     settleRun,
+    clearActiveRun,
     isExtraDeployed,
     deployExtra,
     extraPoolAmt,

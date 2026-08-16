@@ -210,7 +210,7 @@ function renderTable() {
       const settled = yn(r.settled);
       const pay = r.free === true ? `<span class="free">免费</span>` : payLabel(r.free);
       const score = r.score != null ? fmtPts(r.score) : "—";
-      const lane = r.lane === "paid" ? "付费" : r.lane === "free" ? "免费" : "—";
+      const lane = r.lane === "v6" || r.lane === "paid" ? "V6" : r.lane === "v5" || r.lane === "free" ? "V5" : "—";
       return `<tr>
         <td>${r.id}</td>
         <td>${lane}</td>

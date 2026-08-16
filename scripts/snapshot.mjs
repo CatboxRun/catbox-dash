@@ -298,17 +298,21 @@ async function loadRunsFrom(label, addr, iface, contract) {
 }
 
 const paidPack = paidAddr
-  ? await loadRunsFrom("paid", paidAddr, boardIface, boardGame)
+  ? await loadRunsFrom("v6", paidAddr, boardIface, boardGame)
   : { next: 0, rows: [] };
-const freePack = await loadRunsFrom("free", freeAddr, freeIface, freeGame);
+const freePack = await loadRunsFrom("v5", freeAddr, freeIface, freeGame);
 
-// When paid lane is live, keep all paid runs + free-lane free SCOUT runs (skip V5 paid history duplicates after cutover if desired).
-// Include all free-lane runs for admin; boards still read from paid.
+// V6 live: all V6 runs + V5 SCOUT-ticket candidates (≤1 LIM). Free/paid flags finalized after FreeEnter + freeUsed.
 let rows;
 if (paidAddr) {
-  rows = [...paidPack.rows, ...freePack.rows];
+  rows = [
+    ...paidPack.rows,
+    ...freePack.rows
+      .filter((r) => r.paid <= 10n ** 18n)
+      .map((r) => ({ ...r, lane: "v5" })),
+  ];
 } else {
-  rows = freePack.rows.map((r) => ({ ...r, lane: "free" }));
+  rows = freePack.rows.map((r) => ({ ...r, lane: "v5" }));
 }
 
 const seen = new Set(rows.map((r) => r.player));
@@ -353,11 +357,11 @@ const logsPaid = paidAddr
   ? await collectLogs(paidAddr, boardIface, ["RunStarted", "RunSettled", "Burned"], latest)
   : [];
 const logsFree = await collectLogs(freeAddr, freeIface, ["RunStarted", "RunSettled", "FreeEnter", "Burned"], latest);
-const logs = [...logsPaid.map((l) => ({ ...l, lane: "paid" })), ...logsFree.map((l) => ({ ...l, lane: "free" }))];
+const logs = [...logsPaid.map((l) => ({ ...l, lane: "v6" })), ...logsFree.map((l) => ({ ...l, lane: "v5" }))];
 const byKey = new Map(rows.map((r) => [r.key, r]));
 const burnsByHash = new Map();
 for (const log of logs) {
-  const lane = log.lane || (paidAddr ? "paid" : "free");
+  const lane = log.lane || (paidAddr ? "v6" : "v5");
   const key = `${lane}-${Number(log.args.runId)}`;
   if (log.name === "RunStarted") {
     const row = byKey.get(key);
@@ -426,10 +430,10 @@ for (const row of rows) {
 }
 for (const list of Object.values(byPlayer)) {
   list.sort((a, b) => a.startedAt - b.startedAt || a.id - b.id);
-  const freeLane = list.filter((r) => r.lane === "free" && r.paid <= 10n ** 18n);
+  const freeLane = list.filter((r) => r.lane === "v5" && r.paid <= 10n ** 18n);
   let left = freeUsed[list[0].player] || 0;
   for (const r of list) {
-    if (r.lane === "paid") {
+    if (r.lane === "v6") {
       r.free = false;
       continue;
     }
@@ -449,6 +453,10 @@ for (const list of Object.values(byPlayer)) {
       r.free = false;
     }
   }
+}
+if (paidAddr) {
+  // Drop V5 paid 1 LIM history after cutover; keep only confirmed free SCOUT.
+  rows = rows.filter((r) => r.lane !== "v5" || r.free === true);
 }
 for (const row of rows) {
   row.weekPts = week[row.player] || 0n;
@@ -506,7 +514,7 @@ if (extraAddr && cfg.extra?.abi) {
       if (log.name === "ExtraPaid") {
         const id = Number(log.args.runId);
         const amt = log.args.amount ?? 0n;
-        const row = byKey.get(`free-${id}`);
+        const row = byKey.get(`v5-${id}`);
         if (row) {
           row.extraPaid = amt;
           row.extraTx = log.transactionHash;
@@ -519,7 +527,7 @@ if (extraAddr && cfg.extra?.abi) {
         extraWithdrawnTotal += log.args.amount ?? 0n;
       }
     }
-    const freeIds = rows.filter((r) => r.lane === "free" && r.id >= extraSinceRunId).map((r) => r.id);
+    const freeIds = rows.filter((r) => r.lane === "v5" && r.id >= extraSinceRunId).map((r) => r.id);
     if (freeIds.length) {
       const paidRows = await multicall(p, extraIface, "paidExtra", freeIds, 40, extraAddr);
       extraPaidTotal = 0n;
@@ -527,7 +535,7 @@ if (extraAddr && cfg.extra?.abi) {
       freeIds.forEach((id, j) => {
         const v = paidRows[j] ? paidRows[j][0] || 0n : 0n;
         if (v <= 0n) return;
-        const row = byKey.get(`free-${id}`);
+        const row = byKey.get(`v5-${id}`);
         if (row) row.extraPaid = v;
         extraPaidTotal += v;
         extraPaidCount += 1;
@@ -654,7 +662,7 @@ const snapshot = {
     .sort((a, b) => b.startedAt - a.startedAt || b.id - a.id)
     .map((r) => ({
       id: r.id,
-      lane: r.lane || "free",
+      lane: r.lane || "v5",
       player: r.player,
       paid: weiStr(r.paid),
       ticketLim: r.ticketLim,

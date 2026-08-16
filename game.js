@@ -1823,7 +1823,24 @@ async function payAndStart() {
     const msg = e?.message || "";
     if (msg === "NO_WALLET") status.textContent = t("noWallet");
     else if (msg === "NO_LIM") status.textContent = t("noLim");
-    else if (msg === "ACTIVE_RUN") status.textContent = t("activeRun");
+    else if (msg === "ACTIVE_RUN") {
+      status.textContent = t("clearingRun");
+      try {
+        await CatboxChain.clearActiveRun();
+        status.textContent = t("approve");
+        const hash = await CatboxChain.approveAndEnter(selected.id);
+        status.innerHTML = `<a href="${CatboxChain.txUrl(hash)}" target="_blank" rel="noopener">${hash.slice(0, 10)}…</a>`;
+        enterPlay();
+        startRun(selected, teach, free);
+        refreshInviteUi();
+        return;
+      } catch (err) {
+        const em = err?.message || "";
+        if (em === "NO_LIM") status.textContent = t("noLim");
+        else if (em === "ACTIVE_RUN") status.textContent = t("activeRun");
+        else status.textContent = t("runCleared");
+      }
+    }
     else if (msg === "PAID_NOT_READY") status.textContent = t("paidNotReady") || "Paid lane not ready yet";
     else if (msg.includes("user rejected") || e.code === 4001) status.textContent = t("txFail");
     else status.textContent = t("txFail");
