@@ -119,6 +119,15 @@ const I18N = {
     emptyBoard: "No scores yet",
     boardExpand: "Show all {n}",
     boardCollapse: "Show less",
+    boardAllNote: "Every wallet with remaining points is listed. After you claim, the score drops off.",
+    boardLookupPh: "Paste a wallet to check remaining points",
+    boardLookupGo: "LOOK UP",
+    boardLookupMine: "ME",
+    boardLookupNeed: "Enter a wallet address",
+    boardLookupBad: "Invalid address",
+    boardLookupHit: "{addr} · daily {week} pts{weekRank} · invite {invite} pts{inviteRank}",
+    boardLookupRank: " · #{n}",
+    boardLookupNone: "{addr} · no remaining points",
     loadingBoard: "Loading on-chain data…",
     boardLoadFail: "Board is slow on public RPC. Refresh to try again.",
     emptyBurn: "No burn records yet",
@@ -362,6 +371,15 @@ const I18N = {
     emptyBoard: "暂无成绩",
     boardExpand: "展开全部 · {n}",
     boardCollapse: "收起",
+    boardAllNote: "日榜展示全部仍有积分的钱包。领完后从榜上减少。",
+    boardLookupPh: "输入钱包地址，查询剩余积分",
+    boardLookupGo: "查询",
+    boardLookupMine: "我的",
+    boardLookupNeed: "请输入钱包地址",
+    boardLookupBad: "地址无效",
+    boardLookupHit: "{addr} · 日榜 {week} 分{weekRank} · 邀请 {invite} 分{inviteRank}",
+    boardLookupRank: " · 第 {n} 名",
+    boardLookupNone: "{addr} · 暂无剩余积分",
     loadingBoard: "合约数据加载中…",
     boardLoadFail: "日榜链上拉取较慢，刷新再试。",
     emptyBurn: "还没有销毁记录",
@@ -1212,6 +1230,9 @@ function applyI18n() {
   document.querySelectorAll("[data-i18n]").forEach((el) => {
     const key = el.getAttribute("data-i18n");
     el.innerHTML = t(key).replaceAll("\n", "<br>");
+  });
+  document.querySelectorAll("[data-i18n-placeholder]").forEach((el) => {
+    el.placeholder = t(el.getAttribute("data-i18n-placeholder"));
   });
   document.querySelectorAll(".lang-btn").forEach((b) => {
     b.classList.toggle("on", b.dataset.lang === lang);

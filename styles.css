@@ -763,6 +763,37 @@ h1 { font-size: 16px; line-height: 1.6; margin: 0 0 14px; }
   padding: 6px 8px;
   cursor: pointer;
 }
+.board-lookup {
+  margin: 0 0 12px;
+  border: 2px solid var(--line);
+  background: var(--panel);
+  padding: 10px;
+}
+.board-lookup-note {
+  margin: 0 0 8px;
+  font-size: 8px;
+  color: var(--dim);
+}
+.board-lookup-row { display: flex; gap: 6px; align-items: stretch; }
+.board-lookup-row input {
+  flex: 1;
+  min-width: 0;
+  background: var(--bg);
+  color: var(--ink);
+  border: 2px solid var(--line);
+  padding: 8px;
+  font: inherit;
+  font-size: 8px;
+}
+.board-lookup-out {
+  margin: 8px 0 0;
+  font-size: 9px;
+  color: var(--gold);
+  min-height: 1.2em;
+  word-break: break-all;
+}
+.board-lookup-out.dim { color: var(--dim); }
+.board-lookup-out.bad { color: #c45b4a; }
 
 .tickets { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 4px 0 12px; }
 .ticket {

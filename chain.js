@@ -406,6 +406,19 @@ const CatboxChain = (() => {
     return c.invitePts(addr);
   }
 
+  async function weekPoints(addr = account) {
+    if (!addr) return 0n;
+    const c = gameContract(await readProvider());
+    return c.weekPts(addr);
+  }
+
+  async function boardPointsOf(addr) {
+    if (!addr) return { week: 0n, invite: 0n };
+    const c = gameContract(await readProvider());
+    const [week, invite] = await Promise.all([c.weekPts(addr), c.invitePts(addr)]);
+    return { week, invite };
+  }
+
   let inviteeCache = { addr: "", n: 0, at: 0 };
 
   async function uniqueInviteesOf(addr = account) {
@@ -1951,6 +1964,8 @@ const CatboxChain = (() => {
     pendingOf,
     isV6,
     invitePoints,
+    weekPoints,
+    boardPointsOf,
     inviteCountOf,
     uniqueInviteesOf,
     countPlaysOf,

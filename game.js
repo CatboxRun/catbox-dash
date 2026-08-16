@@ -103,6 +103,89 @@ function bootBoardMore() {
   });
 }
 
+function boardRankOf(list, addr) {
+  if (!list || !addr) return 0;
+  const i = list.findIndex((r) => r.addr && r.addr.toLowerCase() === addr.toLowerCase());
+  return i >= 0 ? i + 1 : 0;
+}
+
+function parseLookupAddr(raw) {
+  const s = String(raw || "").trim();
+  if (!s) return "";
+  try {
+    return ethers.getAddress(s);
+  } catch (_) {
+    return "";
+  }
+}
+
+async function runBoardLookup(fromMine) {
+  const input = $("boardLookup");
+  const out = $("boardLookupOut");
+  if (!input || !out || !window.CatboxChain) return;
+  let raw = input.value.trim();
+  if (fromMine || !raw) {
+    const acc = window.CatboxChain.account;
+    if (acc) {
+      input.value = acc;
+      raw = acc;
+    }
+  }
+  if (!raw) {
+    out.className = "board-lookup-out dim";
+    out.textContent = t("boardLookupNeed");
+    return;
+  }
+  const addr = parseLookupAddr(raw);
+  if (!addr) {
+    out.className = "board-lookup-out bad";
+    out.textContent = t("boardLookupBad");
+    return;
+  }
+  out.className = "board-lookup-out dim";
+  out.textContent = t("loadingBoard");
+  try {
+    const pts = await CatboxChain.boardPointsOf(addr);
+    const week = rowPts({ pts: pts.week });
+    const invite = rowPts({ pts: pts.invite });
+    const weekRank = boardRankOf(window._liveBoards?.week, addr);
+    const inviteRank = boardRankOf(window._liveBoards?.invite, addr);
+    const tag = CatboxChain.short(addr);
+    if (week <= 0 && invite <= 0) {
+      out.className = "board-lookup-out dim";
+      out.textContent = t("boardLookupNone", { addr: tag });
+      return;
+    }
+    out.className = "board-lookup-out";
+    out.textContent = t("boardLookupHit", {
+      addr: tag,
+      week: String(week),
+      invite: String(invite),
+      weekRank: weekRank ? t("boardLookupRank", { n: String(weekRank) }) : "",
+      inviteRank: inviteRank ? t("boardLookupRank", { n: String(inviteRank) }) : "",
+    });
+  } catch (_) {
+    out.className = "board-lookup-out bad";
+    out.textContent = t("boardLoadFail");
+  }
+}
+
+function bootBoardLookup() {
+  const input = $("boardLookup");
+  const go = $("boardLookupBtn");
+  const mine = $("boardLookupMine");
+  if (go) go.onclick = () => runBoardLookup(false);
+  if (mine) mine.onclick = () => runBoardLookup(true);
+  if (input) {
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        runBoardLookup(false);
+      }
+    });
+  }
+}
+
 function renderBurns(rows) {
   const el = $("burnList");
   if (!el) return;
@@ -325,6 +408,8 @@ async function refreshWalletUi() {
   }
   const acc = CatboxChain.account;
   btn.textContent = acc ? CatboxChain.short(acc) : t("connect");
+  const lookup = $("boardLookup");
+  if (lookup && acc && !lookup.value.trim()) lookup.value = acc;
   if (bal) {
     if (!acc) bal.textContent = "LIM —";
     else {
@@ -3113,5 +3198,6 @@ bootTutorial();
 bootLobbyTabs();
 bootNoticeCarousel();
 bootBoardMore();
+bootBoardLookup();
 show(lobby);
 bootWallet();
