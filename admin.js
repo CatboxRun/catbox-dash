@@ -254,9 +254,28 @@ function paintGate() {
   return true;
 }
 
-async function loadRuns() {
+function applySnapshot(snap) {
+  allRows = snap.runs || [];
+  renderChips(snap);
+  paintSortHeaders();
+  renderTable();
+  const when = snap.at ? new Date(snap.at).toLocaleString() : "";
+  setStatus(`快照 ${when} · 共 ${snap.totalRuns} 局 · ${snap.uniqueWallets} 个钱包 · 点刷新可链上重扫`);
+}
+
+async function loadRuns(forceLive) {
   if (!paintGate()) return;
   if (loading) return;
+  if (!forceLive) {
+    setStatus("读取快照…");
+    try {
+      const snap = await CatboxChain.loadSnapshot();
+      if (snap?.runs?.length) {
+        applySnapshot(snap);
+        return;
+      }
+    } catch (_) {}
+  }
   loading = true;
   setStatus("正在扫描全部对局…");
   try {
@@ -310,7 +329,7 @@ async function connectWallet() {
 function boot() {
   $("walletBtn").onclick = connectWallet;
   $("gateConnect").onclick = connectWallet;
-  $("refreshBtn").onclick = () => loadRuns();
+  $("refreshBtn").onclick = () => loadRuns(true);
   $("filter").addEventListener("input", (e) => {
     filterText = e.target.value || "";
     renderTable();
@@ -342,6 +361,7 @@ function boot() {
   });
 
   paintGate();
+  if (CatboxChain.loadSnapshot) CatboxChain.loadSnapshot();
   if (window.ethereum) {
     Promise.race([
       window.ethereum.request({ method: "eth_accounts" }),

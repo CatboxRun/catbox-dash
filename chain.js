@@ -1822,6 +1822,59 @@ const CatboxChain = (() => {
     return pack({ burnedTotal, weekPool, invitePool, freePool });
   }
 
+  let snapshotCache = null;
+  let snapshotTried = false;
+
+  function reviveWei(v) {
+    if (v == null || v === "") return null;
+    try {
+      return typeof v === "bigint" ? v : BigInt(v);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function reviveSnapshot(raw) {
+    if (!raw) return null;
+    return {
+      ...raw,
+      weekPool: reviveWei(raw.weekPool) ?? 0n,
+      invitePool: reviveWei(raw.invitePool) ?? 0n,
+      freePool: reviveWei(raw.freePool) ?? 0n,
+      burnedTotal: reviveWei(raw.burnedTotal) ?? 0n,
+      week: raw.week || [],
+      invite: raw.invite || [],
+      burns: (raw.burns || []).map((b) => ({
+        ...b,
+        amount: reviveWei(b.amount) ?? 0n,
+      })),
+      runs: (raw.runs || []).map((r) => ({
+        ...r,
+        paid: reviveWei(r.paid) ?? 0n,
+        collected: reviveWei(r.collected),
+        leftover: reviveWei(r.leftover),
+        burned: reviveWei(r.burned),
+        payout: reviveWei(r.payout),
+        weekPts: reviveWei(r.weekPts) ?? 0n,
+        invitePts: reviveWei(r.invitePts) ?? 0n,
+      })),
+    };
+  }
+
+  async function loadSnapshot() {
+    if (snapshotCache) return snapshotCache;
+    if (snapshotTried) return null;
+    snapshotTried = true;
+    try {
+      const res = await fetch("./data/snapshot.json", { cache: "no-store" });
+      if (!res.ok) return null;
+      snapshotCache = reviveSnapshot(await res.json());
+      return snapshotCache;
+    } catch (_) {
+      return null;
+    }
+  }
+
   return {
     cfg,
     get account() {
@@ -1874,6 +1927,7 @@ const CatboxChain = (() => {
     fetchLeaderboards,
     fetchBurns,
     fetchOwnerRuns,
+    loadSnapshot,
     formatLim(v) {
       return Number(ethers.formatUnits(v, 18)).toFixed(4);
     },
