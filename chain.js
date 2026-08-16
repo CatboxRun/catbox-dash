@@ -311,6 +311,18 @@ const CatboxChain = (() => {
     return publicProvider;
   }
 
+  async function boardReadProvider() {
+    const urls = [LOG_RPCS[0], LOG_RPCS[1], "https://1rpc.io/bnb", cfg.rpc];
+    for (const url of urls) {
+      try {
+        const p = makePublic(url);
+        await withTimeout(p.getBlockNumber(), 2500);
+        return p;
+      } catch (_) {}
+    }
+    return publicReadProvider();
+  }
+
   async function readProvider() {
     return publicReadProvider();
   }
@@ -1312,13 +1324,13 @@ const CatboxChain = (() => {
 
   async function aggregate3(p, calls) {
     const data = multiIface.encodeFunctionData("aggregate3", [calls]);
-    const raw = await withTimeout(p.call({ to: MULTICALL3, data }), 10000);
+    const raw = await withTimeout(p.call({ to: MULTICALL3, data }), 6000);
     return multiIface.decodeFunctionResult("aggregate3", raw)[0];
   }
 
   async function multicallFn(p, iface, fn, items) {
     const out = [];
-    const batch = 40;
+    const batch = 20;
     for (let i = 0; i < items.length; i += batch) {
       const chunk = items.slice(i, i + batch);
       const calls = chunk.map((item) => ({
@@ -1354,26 +1366,30 @@ const CatboxChain = (() => {
   }
 
   async function fetchLeaderboards(onPartial) {
-    const p = await publicReadProvider();
+    const p = await boardReadProvider();
     const c = gameContract(p);
     const n = Number(await withTimeout(c.nextRunId(), 5000));
     if (!Number.isFinite(n) || n < 2) {
       return { week: [], invite: [] };
     }
     const last = n - 1;
-    const recentFrom = Math.max(1, n - 500);
+    const seen = new Set();
 
     async function playersFrom(fromId, toId) {
       const ids = [];
       for (let i = toId; i >= fromId; i--) ids.push(i);
       const decodedRuns = await multicallFn(p, c.interface, "runs", ids);
-      const set = new Set();
+      const fresh = [];
       for (const decoded of decodedRuns) {
         if (!decoded) continue;
         const player = decoded.player || decoded[0];
-        if (player && player !== ethers.ZeroAddress) set.add(ethers.getAddress(player));
+        if (!player || player === ethers.ZeroAddress) continue;
+        const addr = ethers.getAddress(player);
+        if (seen.has(addr)) continue;
+        seen.add(addr);
+        fresh.push(addr);
       }
-      return [...set];
+      return fresh;
     }
 
     async function inviteFrom(addrs, seed = {}) {
@@ -1420,26 +1436,28 @@ const CatboxChain = (() => {
       };
     }
 
-    const recentAddrs = await playersFrom(recentFrom, last);
-    let week = await ptsFrom("weekPts", recentAddrs);
-    let invite = await inviteFrom(recentAddrs);
-    const first = pack(week, invite);
-    if (typeof onPartial === "function") {
-      try {
-        onPartial(first);
-      } catch (_) {}
-    }
-
-    if (recentFrom > 1) {
-      const olderAddrs = await playersFrom(1, recentFrom - 1);
-      const seen = new Set(recentAddrs);
-      const extra = olderAddrs.filter((a) => !seen.has(a));
-      if (extra.length) {
-        week = await ptsFrom("weekPts", extra, week);
-        invite = await inviteFrom(extra, invite);
+    let week = {};
+    let invite = {};
+    let painted = pack(week, invite);
+    let cursor = last;
+    for (const keep of [60, 240, 600]) {
+      const fromId = Math.max(1, last - keep + 1);
+      if (fromId > cursor) continue;
+      const fresh = await playersFrom(fromId, cursor);
+      cursor = fromId - 1;
+      if (fresh.length) {
+        week = await ptsFrom("weekPts", fresh, week);
+        invite = await inviteFrom(fresh, invite);
       }
+      painted = pack(week, invite);
+      if (typeof onPartial === "function") {
+        try {
+          onPartial(painted);
+        } catch (_) {}
+      }
+      if (cursor < 1) break;
     }
-    return pack(week, invite);
+    return painted;
   }
 
   function asAmt(v) {

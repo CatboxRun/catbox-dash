@@ -140,21 +140,28 @@ function mergeWeekBoard(liveWeek) {
   return liveWeek || [];
 }
 
+let pullingBoards = false;
+let pullingBurns = false;
+
 function renderBoards() {
   if (window._liveBoards) {
     renderList("weekList", mergeWeekBoard(window._liveBoards.week));
     renderList("inviteList", window._liveBoards.invite);
+  } else if (pullingBoards) {
+    renderList("weekList", [], "loadingBoard");
+    renderList("inviteList", [], "loadingBoard");
   } else {
-    renderList("weekList", loadBoard());
-    renderList("inviteList", loadInviteBoard());
+    renderList("weekList", [], "emptyBoard");
+    renderList("inviteList", [], "emptyBoard");
   }
-  renderBurns(window._liveBurns || []);
+  if (window._liveBurns && window._liveBurns.length) {
+    renderBurns(window._liveBurns);
+  } else if (!pullingBurns) {
+    renderBurns([]);
+  }
   syncOnchainPool();
   refreshInviteUi();
 }
-
-let pullingBoards = false;
-let pullingBurns = false;
 
 async function pullLiveBoards() {
   if (!window.CatboxChain) return;
@@ -181,8 +188,8 @@ async function pullLiveBoards() {
       })
       .catch(() => {
         if (!window._liveBoards) {
-          if (weekEl) weekEl.innerHTML = `<li class="empty">${t("emptyBoard")}</li>`;
-          if (inviteEl) inviteEl.innerHTML = `<li class="empty">${t("emptyBoard")}</li>`;
+          if (weekEl) weekEl.innerHTML = `<li class="empty">${t("boardLoadFail")}</li>`;
+          if (inviteEl) inviteEl.innerHTML = `<li class="empty">${t("boardLoadFail")}</li>`;
         }
       })
       .finally(() => {
