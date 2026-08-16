@@ -225,10 +225,10 @@ const CatboxChain = (() => {
   }
 
   const LOG_RPCS = [
-    "https://bsc.rpc.blxrbdn.com",
     "https://bsc-rpc.publicnode.com",
     "https://bsc.publicnode.com",
     "https://1rpc.io/bnb",
+    "https://bsc.rpc.blxrbdn.com",
   ];
   const MULTICALL3 = "0xcA11bde05977b3631167028862bE2a173976CA11";
   const multiIface = new ethers.Interface([
@@ -1141,7 +1141,7 @@ const CatboxChain = (() => {
     const iface = gameContract(p).interface;
     const hashes = names.map((n) => iface.getEvent(n).topicHash);
     const latest = await withTimeout(p.getBlockNumber(), 4000);
-    const span = 4000;
+    const span = 1000;
     const ranges = [];
     for (let i = 0; i < maxChunks; i++) {
       const toBlock = latest - i * span;
@@ -1165,7 +1165,7 @@ const CatboxChain = (() => {
                 fromBlock: r.fromBlock,
                 toBlock: r.toBlock,
               }),
-              4500,
+              8000,
             );
           } catch (_) {
             return null;
@@ -1419,6 +1419,21 @@ const CatboxChain = (() => {
     };
   }
 
+  let logsRpc = "";
+
+  async function getLogsChunk(filter) {
+    const urls = logsRpc ? [logsRpc, ...LOG_RPCS.filter((u) => u !== logsRpc)] : LOG_RPCS.slice();
+    for (const url of urls) {
+      try {
+        const p = makePublic(url);
+        const logs = await withTimeout(p.getLogs(filter), 8000);
+        logsRpc = url;
+        return logs || [];
+      } catch (_) {}
+    }
+    return null;
+  }
+
   async function fetchBurns(onPartial) {
     const byHash = new Map();
     function ingest(logs) {
@@ -1463,17 +1478,62 @@ const CatboxChain = (() => {
         (a, b) => (b.blockNumber || 0) - (a.blockNumber || 0) || (b.runId || 0) - (a.runId || 0),
       );
     }
+    function ingestRaw(rawLogs, iface) {
+      const parsed = [];
+      for (const log of rawLogs || []) {
+        try {
+          const ev = iface.parseLog(log);
+          parsed.push({
+            name: ev.name,
+            args: ev.args,
+            blockNumber: log.blockNumber,
+            transactionHash: log.transactionHash,
+          });
+        } catch (_) {}
+      }
+      ingest(parsed);
+    }
     try {
-      const logs = await fetchEventLogs(["Burned", "RunSettled"], 20, (partial) => {
-        byHash.clear();
-        ingest(partial);
-        if (typeof onPartial === "function") onPartial(snapshot());
-      });
-      byHash.clear();
-      ingest(logs);
-    } catch (_) {
+      const p = await publicReadProvider();
+      const iface = gameContract(p).interface;
+      const topic = iface.getEvent("Burned").topicHash;
+      const latest = await withTimeout(p.getBlockNumber(), 4000);
+      const span = 1000;
+      const ranges = [];
+      for (let i = 0; i < 60; i++) {
+        const toBlock = latest - i * span;
+        if (toBlock < 0) break;
+        ranges.push({ fromBlock: Math.max(0, toBlock - span + 1), toBlock });
+      }
+      let anyOk = false;
+      for (let i = 0; i < ranges.length; i += 2) {
+        const slice = ranges.slice(i, i + 2);
+        const results = await Promise.all(
+          slice.map((r) =>
+            getLogsChunk({
+              address: cfg.address,
+              topics: [topic],
+              fromBlock: r.fromBlock,
+              toBlock: r.toBlock,
+            }),
+          ),
+        );
+        for (const got of results) {
+          if (!got) continue;
+          anyOk = true;
+          ingestRaw(got, iface);
+        }
+        if (typeof onPartial === "function" && byHash.size) {
+          try {
+            onPartial(snapshot());
+          } catch (_) {}
+        }
+      }
+      if (!anyOk) throw new Error("NO_BURN_LOGS");
+    } catch (e) {
       logsProvider = null;
       logsOkAt = 0;
+      if (!byHash.size) throw e;
     }
 
     return snapshot();

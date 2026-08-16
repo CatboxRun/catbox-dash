@@ -202,11 +202,11 @@ async function pullLiveBoards() {
           window._liveBurns = burns;
           renderBurns(burns);
         } else if (!window._liveBurns && burnEl) {
-          burnEl.innerHTML = `<li class="empty">${t("emptyBoard")}</li>`;
+          burnEl.innerHTML = `<li class="empty">${t("emptyBurn")}</li>`;
         }
       })
       .catch(() => {
-        if (!window._liveBurns && burnEl) burnEl.innerHTML = `<li class="empty">${t("emptyBoard")}</li>`;
+        if (!window._liveBurns && burnEl) burnEl.innerHTML = `<li class="empty">${t("burnLoadFail")}</li>`;
       })
       .finally(() => {
         pullingBurns = false;
