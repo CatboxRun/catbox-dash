@@ -166,56 +166,52 @@ function renderBoards() {
 async function pullLiveBoards() {
   if (!window.CatboxChain) return;
   if (window._boardsReady && window._burnsReady) return;
-  if (pullingBoards) return;
-  pullingBoards = true;
-  pullingBurns = true;
   const weekEl = $("weekList");
   const inviteEl = $("inviteList");
   const burnEl = $("burnList");
   if (weekEl && !window._liveBoards) weekEl.innerHTML = `<li class="empty">${t("loadingBoard")}</li>`;
   if (inviteEl && !window._liveBoards) inviteEl.innerHTML = `<li class="empty">${t("loadingBoard")}</li>`;
   if (burnEl && !window._liveBurns) burnEl.innerHTML = `<li class="empty">${t("loadingBoard")}</li>`;
-  try {
-    const snap = await CatboxChain.loadSnapshot();
-    if (snap && (snap.week?.length || snap.invite?.length || snap.burns?.length)) {
-      window._liveBoards = { week: snap.week || [], invite: snap.invite || [] };
-      window._liveBurns = snap.burns || [];
-      window._boardsReady = true;
-      window._burnsReady = true;
-      renderList("weekList", mergeWeekBoard(window._liveBoards.week));
-      renderList("inviteList", window._liveBoards.invite);
-      renderBurns(window._liveBurns);
-      return;
-    }
-    const [boards, burns] = await Promise.all([
-      CatboxChain.fetchLeaderboards().catch(() => null),
-      CatboxChain.fetchBurns().catch(() => null),
-    ]);
-    if (boards) {
-      window._liveBoards = boards;
-      window._boardsReady = true;
-      renderList("weekList", mergeWeekBoard(boards.week));
-      renderList("inviteList", boards.invite);
-    } else if (!window._liveBoards) {
-      if (weekEl) weekEl.innerHTML = `<li class="empty">${t("boardLoadFail")}</li>`;
-      if (inviteEl) inviteEl.innerHTML = `<li class="empty">${t("boardLoadFail")}</li>`;
-    }
-    if (burns && burns.length) {
-      window._liveBurns = burns;
-      window._burnsReady = true;
-      renderBurns(burns);
-    } else if (!window._liveBurns && burnEl) {
-      burnEl.innerHTML = `<li class="empty">${t("burnLoadFail")}</li>`;
-    }
-  } catch (_) {
-    if (!window._liveBoards) {
-      if (weekEl) weekEl.innerHTML = `<li class="empty">${t("boardLoadFail")}</li>`;
-      if (inviteEl) inviteEl.innerHTML = `<li class="empty">${t("boardLoadFail")}</li>`;
-    }
-    if (!window._liveBurns && burnEl) burnEl.innerHTML = `<li class="empty">${t("burnLoadFail")}</li>`;
-  } finally {
-    pullingBoards = false;
-    pullingBurns = false;
+
+  if (!pullingBoards && !window._boardsReady) {
+    pullingBoards = true;
+    CatboxChain.fetchLeaderboards()
+      .then((boards) => {
+        if (!boards) throw new Error("NO_BOARDS");
+        window._liveBoards = boards;
+        window._boardsReady = true;
+        renderList("weekList", mergeWeekBoard(boards.week));
+        renderList("inviteList", boards.invite);
+      })
+      .catch(() => {
+        if (!window._liveBoards) {
+          if (weekEl) weekEl.innerHTML = `<li class="empty">${t("boardLoadFail")}</li>`;
+          if (inviteEl) inviteEl.innerHTML = `<li class="empty">${t("boardLoadFail")}</li>`;
+        }
+      })
+      .finally(() => {
+        pullingBoards = false;
+      });
+  }
+
+  if (!pullingBurns && !window._burnsReady) {
+    pullingBurns = true;
+    CatboxChain.fetchBurns()
+      .then((burns) => {
+        if (burns && burns.length) {
+          window._liveBurns = burns;
+          window._burnsReady = true;
+          renderBurns(burns);
+        } else if (!window._liveBurns && burnEl) {
+          burnEl.innerHTML = `<li class="empty">${t("emptyBurn")}</li>`;
+        }
+      })
+      .catch(() => {
+        if (!window._liveBurns && burnEl) burnEl.innerHTML = `<li class="empty">${t("burnLoadFail")}</li>`;
+      })
+      .finally(() => {
+        pullingBurns = false;
+      });
   }
 }
 
