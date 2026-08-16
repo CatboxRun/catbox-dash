@@ -960,7 +960,9 @@ async function doSwap() {
   status.classList.remove("ok");
   try {
     status.textContent = t("swapping");
-    const hash = await CatboxChain.swapExact(from, to, ethers.parseUnits(String(raw), 18));
+    const hash = await CatboxChain.swapExact(from, to, ethers.parseUnits(String(raw), 18), (step) => {
+      status.textContent = t(step);
+    });
     const n = expect && expect !== "0" ? expect : "";
     const selling = from === "LIM";
     const msg = selling
@@ -979,7 +981,13 @@ async function doSwap() {
     showToast(msg);
   } catch (e) {
     status.classList.remove("ok");
-    status.textContent = e?.message === "NO_LIQ" ? t("swapNoLiq") : t("txFail");
+    const m = e?.message;
+    status.textContent =
+      m === "NO_LIQ" ? t("swapNoLiq")
+      : m === "REJECTED" ? t("swapRejected")
+      : m === "SLIP" ? t("swapSlip")
+      : m === "ALLOW" ? t("swapApproveFail")
+      : t("txFail");
   }
 }
 

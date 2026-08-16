@@ -861,7 +861,7 @@ const CatboxChain = (() => {
   const MSG_SENDER = "0x0000000000000000000000000000000000000001";
   const ADDRESS_THIS = "0x0000000000000000000000000000000000000002";
   const CONTRACT_BALANCE = 1n << 255n;
-  const CMD = { V2_SWAP_EXACT_IN: 0x08, WRAP_ETH: 0x0b, UNWRAP_WETH: 0x0c, INFI_SWAP: 0x10 };
+  const CMD = { PERMIT2_TRANSFER_FROM: 0x02, V2_SWAP_EXACT_IN: 0x08, WRAP_ETH: 0x0b, UNWRAP_WETH: 0x0c, INFI_SWAP: 0x10 };
   const ACT = { CL_SWAP_EXACT_IN_SINGLE: 0x06, SETTLE: 0x0b, SETTLE_ALL: 0x0c, TAKE: 0x0e, TAKE_ALL: 0x0f };
   const POOL_TUPLE =
     "tuple(address currency0,address currency1,address hooks,address poolManager,uint24 fee,bytes32 parameters)";
@@ -941,6 +941,26 @@ const CatboxChain = (() => {
     ]);
   }
 
+  function encodeInfiFromRouterToken(pool, tokenIn, tokenOut, amountIn, minOut) {
+    const coder = ethers.AbiCoder.defaultAbiCoder();
+    const zeroForOne = sameAddr(tokenIn, pool.currency0);
+    return encodePlan([
+      { act: ACT.SETTLE, data: coder.encode(["address", "uint256", "bool"], [tokenIn, amountIn, false]) },
+      { act: ACT.CL_SWAP_EXACT_IN_SINGLE, data: clSwapData(pool, 0, minOut, zeroForOne) },
+      { act: ACT.TAKE_ALL, data: coder.encode(["address", "uint256"], [tokenOut, minOut]) },
+    ]);
+  }
+
+  function encodeInfiTakeToRouterFromBalance(pool, tokenIn, tokenOut, amountIn, minOut) {
+    const coder = ethers.AbiCoder.defaultAbiCoder();
+    const zeroForOne = sameAddr(tokenIn, pool.currency0);
+    return encodePlan([
+      { act: ACT.SETTLE, data: coder.encode(["address", "uint256", "bool"], [tokenIn, amountIn, false]) },
+      { act: ACT.CL_SWAP_EXACT_IN_SINGLE, data: clSwapData(pool, 0, minOut, zeroForOne) },
+      { act: ACT.TAKE, data: coder.encode(["address", "address", "uint256"], [tokenOut, ADDRESS_THIS, 0]) },
+    ]);
+  }
+
   function encodeInfiFromRouterCredit(pool, minOut) {
     const coder = ethers.AbiCoder.defaultAbiCoder();
     const zeroForOne = sameAddr(USDT, pool.currency0);
@@ -949,6 +969,35 @@ const CatboxChain = (() => {
       { act: ACT.CL_SWAP_EXACT_IN_SINGLE, data: clSwapData(pool, 0, minOut, zeroForOne) },
       { act: ACT.TAKE_ALL, data: coder.encode(["address", "uint256"], [cfg.lim, minOut]) },
     ]);
+  }
+
+  function permit2Pull(token, amountIn) {
+    return ethers.AbiCoder.defaultAbiCoder().encode(
+      ["address", "address", "uint160"],
+      [token, ADDRESS_THIS, amountIn],
+    );
+  }
+
+  function isUserReject(e) {
+    const code = e?.code;
+    const msg = String(e?.shortMessage || e?.reason || e?.info?.error?.message || e?.message || "");
+    return code === 4001 || code === "ACTION_REJECTED" || /user rejected|user denied|rejected the request|denied transaction|cancelled/i.test(msg);
+  }
+
+  function swapError(code, cause) {
+    const err = new Error(code);
+    err.cause = cause;
+    return err;
+  }
+
+  function decorateSwapRevert(e) {
+    if (isUserReject(e)) return swapError("REJECTED", e);
+    const msg = String(e?.shortMessage || e?.reason || e?.info?.error?.message || e?.message || "");
+    if (/TooLittleReceived|too little received|INSUFFICIENT_OUTPUT|slippage/i.test(msg)) return swapError("SLIP", e);
+    if (/allowance|insufficient.*allow|TRANSFER_FROM_FAILED|STF|Permit2|TRANSFER_FROM/i.test(msg)) {
+      return swapError("ALLOW", e);
+    }
+    return swapError("TX", e);
   }
 
   function mixedInfiParam(pool) {
@@ -1043,72 +1092,99 @@ const CatboxChain = (() => {
     return t.balanceOf(addr);
   }
 
-  async function ensurePermit2(token, amountIn, s) {
+  async function ensurePermit2(token, amountIn, s, onStatus) {
     const erc = new ethers.Contract(token, ERC20_ABI, s);
+    const bal = await erc.balanceOf(account);
+    const grant = bal > amountIn ? bal : amountIn;
     const allow = await erc.allowance(account, PERMIT2);
     if (allow < amountIn) {
-      const txA = await erc.approve(PERMIT2, ethers.MaxUint256);
+      if (onStatus) onStatus("swapApprove");
+      const txA = await erc.approve(PERMIT2, grant);
       await txA.wait();
     }
     const p2 = new ethers.Contract(PERMIT2, PERMIT2_ABI, s);
     const cur = await p2.allowance(account, token, UR);
     const now = Math.floor(Date.now() / 1000);
-    if (cur[0] < amountIn || Number(cur[1]) < now + 120) {
-      const txB = await p2.approve(token, UR, (1n << 160n) - 1n, (1n << 48n) - 1n);
+    const exp = now + 30 * 24 * 3600;
+    if (cur[0] < amountIn || Number(cur[1]) < now + 600) {
+      if (onStatus) onStatus("swapPermit");
+      const cap160 = (1n << 160n) - 1n;
+      const amt160 = grant > cap160 ? cap160 : grant;
+      const txB = await p2.approve(token, UR, amt160, exp);
       await txB.wait();
     }
   }
 
-  async function swapExact(fromSym, toSym, amountIn) {
+  async function swapExact(fromSym, toSym, amountIn, onStatus) {
     await connect();
     const quoted = await quoteSwap(fromSym, toSym, amountIn);
     if (!quoted.path || quoted.out === 0n) throw new Error("NO_LIQ");
     const pool = quoted.pool || limPool();
     if (!pool?.currency0) throw new Error("NO_LIQ");
-    const minOut = (quoted.out * 99n) / 100n;
+    const selling = fromSym === "LIM";
+    const minOut = selling ? (quoted.out * 95n) / 100n : (quoted.out * 99n) / 100n;
     const deadline = BigInt(Math.floor(Date.now() / 1000) + 180);
     const s = await signer();
     const p = s.provider;
     const ur = new ethers.Contract(UR, UR_ABI, s);
     const coder = ethers.AbiCoder.defaultAbiCoder();
+    const value = fromSym === "BNB" ? amountIn : 0n;
     let commands;
     let inputs;
-    if (fromSym === "USDT" && toSym === "LIM") {
-      await ensurePermit2(USDT, amountIn, s);
-      commands = cmds(CMD.INFI_SWAP);
-      inputs = [encodeInfiFromUser(pool, USDT, cfg.lim, amountIn, minOut)];
-    } else if (fromSym === "BNB" && toSym === "LIM") {
-      const usdtOut = await quoteV2(WBNB, USDT, amountIn, p);
-      if (usdtOut === 0n) throw new Error("NO_LIQ");
-      const minUsdt = (usdtOut * 99n) / 100n;
-      commands = cmds(CMD.WRAP_ETH, CMD.V2_SWAP_EXACT_IN, CMD.INFI_SWAP);
-      inputs = [
-        coder.encode(["address", "uint256"], [ADDRESS_THIS, amountIn]),
-        coder.encode(["address", "uint256", "uint256", "address[]", "bool"], [ADDRESS_THIS, amountIn, minUsdt, [WBNB, USDT], false]),
-        encodeInfiFromRouterCredit(pool, minOut),
-      ];
-    } else if (fromSym === "LIM" && toSym === "USDT") {
-      await ensurePermit2(cfg.lim, amountIn, s);
-      commands = cmds(CMD.INFI_SWAP);
-      inputs = [encodeInfiFromUser(pool, cfg.lim, USDT, amountIn, minOut)];
-    } else if (fromSym === "LIM" && toSym === "BNB") {
-      const usdtOut = await quoteInfi(cfg.lim, amountIn, p);
-      if (usdtOut === 0n) throw new Error("NO_LIQ");
-      const minUsdt = (usdtOut * 99n) / 100n;
-      await ensurePermit2(cfg.lim, amountIn, s);
-      commands = cmds(CMD.INFI_SWAP, CMD.V2_SWAP_EXACT_IN, CMD.UNWRAP_WETH);
-      inputs = [
-        encodeInfiTakeToRouter(pool, cfg.lim, USDT, amountIn, minUsdt),
-        coder.encode(["address", "uint256", "uint256", "address[]", "bool"], [ADDRESS_THIS, CONTRACT_BALANCE, minOut, [USDT, WBNB], false]),
-        coder.encode(["address", "uint256"], [MSG_SENDER, minOut]),
-      ];
-    } else {
-      throw new Error("NO_LIQ");
+    try {
+      if (fromSym === "USDT" && toSym === "LIM") {
+        await ensurePermit2(USDT, amountIn, s, onStatus);
+        commands = cmds(CMD.INFI_SWAP);
+        inputs = [encodeInfiFromUser(pool, USDT, cfg.lim, amountIn, minOut)];
+      } else if (fromSym === "BNB" && toSym === "LIM") {
+        const usdtOut = await quoteV2(WBNB, USDT, amountIn, p);
+        if (usdtOut === 0n) throw new Error("NO_LIQ");
+        const minUsdt = (usdtOut * 99n) / 100n;
+        commands = cmds(CMD.WRAP_ETH, CMD.V2_SWAP_EXACT_IN, CMD.INFI_SWAP);
+        inputs = [
+          coder.encode(["address", "uint256"], [ADDRESS_THIS, amountIn]),
+          coder.encode(["address", "uint256", "uint256", "address[]", "bool"], [ADDRESS_THIS, amountIn, minUsdt, [WBNB, USDT], false]),
+          encodeInfiFromRouterCredit(pool, minOut),
+        ];
+      } else if (fromSym === "LIM" && toSym === "USDT") {
+        await ensurePermit2(cfg.lim, amountIn, s, onStatus);
+        commands = cmds(CMD.PERMIT2_TRANSFER_FROM, CMD.INFI_SWAP);
+        inputs = [
+          permit2Pull(cfg.lim, amountIn),
+          encodeInfiFromRouterToken(pool, cfg.lim, USDT, amountIn, minOut),
+        ];
+      } else if (fromSym === "LIM" && toSym === "BNB") {
+        const usdtOut = await quoteInfi(cfg.lim, amountIn, p);
+        if (usdtOut === 0n) throw new Error("NO_LIQ");
+        const minUsdt = (usdtOut * 95n) / 100n;
+        await ensurePermit2(cfg.lim, amountIn, s, onStatus);
+        commands = cmds(CMD.PERMIT2_TRANSFER_FROM, CMD.INFI_SWAP, CMD.V2_SWAP_EXACT_IN, CMD.UNWRAP_WETH);
+        inputs = [
+          permit2Pull(cfg.lim, amountIn),
+          encodeInfiTakeToRouterFromBalance(pool, cfg.lim, USDT, amountIn, minUsdt),
+          coder.encode(["address", "uint256", "uint256", "address[]", "bool"], [ADDRESS_THIS, CONTRACT_BALANCE, minOut, [USDT, WBNB], false]),
+          coder.encode(["address", "uint256"], [MSG_SENDER, minOut]),
+        ];
+      } else {
+        throw new Error("NO_LIQ");
+      }
+      if (onStatus) onStatus("swapping");
+      try {
+        await ur.execute.staticCall(commands, inputs, deadline, { value });
+      } catch (e) {
+        const decorated = decorateSwapRevert(e);
+        if (decorated.message === "SLIP" || decorated.message === "ALLOW" || decorated.message === "REJECTED") {
+          throw decorated;
+        }
+      }
+      const tx = await ur.execute(commands, inputs, deadline, { value });
+      return (await tx.wait()).hash;
+    } catch (e) {
+      if (e?.message === "NO_LIQ" || e?.message === "REJECTED" || e?.message === "SLIP" || e?.message === "ALLOW" || e?.message === "TX") {
+        throw e;
+      }
+      throw decorateSwapRevert(e);
     }
-    const tx = await ur.execute(commands, inputs, deadline, {
-      value: fromSym === "BNB" ? amountIn : 0n,
-    });
-    return (await tx.wait()).hash;
   }
 
   async function swapToLim(fromSym, amountIn) {
