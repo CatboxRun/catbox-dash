@@ -1339,13 +1339,13 @@ const CatboxChain = (() => {
         callData: iface.encodeFunctionData(fn, [item]),
       }));
       let rows = null;
-      try {
-        rows = await aggregate3(p, calls);
-      } catch (_) {
-        await sleep(180);
+      for (let attempt = 0; attempt < 3 && !rows; attempt++) {
+        if (attempt) await sleep(160 * attempt);
         try {
           rows = await aggregate3(p, calls);
-        } catch (_) {}
+        } catch (_) {
+          rows = null;
+        }
       }
       chunk.forEach((_, j) => {
         const row = rows && rows[j];
@@ -1362,10 +1362,41 @@ const CatboxChain = (() => {
         }
       });
     }
+    const missed = [];
+    out.forEach((row, i) => {
+      if (!row) missed.push(i);
+    });
+    if (missed.length && missed.length <= 80) {
+      const retryItems = missed.map((i) => items[i]);
+      const retryCalls = retryItems.map((item) => ({
+        target: cfg.address,
+        allowFailure: true,
+        callData: iface.encodeFunctionData(fn, [item]),
+      }));
+      try {
+        const retryRows = await aggregate3(p, retryCalls);
+        missed.forEach((orig, j) => {
+          const row = retryRows && retryRows[j];
+          const ok = row && (row.success === true || row[0] === true);
+          const bytes = row ? row.returnData || row[1] : "0x";
+          if (!ok || !bytes || bytes === "0x") return;
+          try {
+            out[orig] = iface.decodeFunctionResult(fn, bytes);
+          } catch (_) {}
+        });
+      } catch (_) {}
+    }
     return out;
   }
 
+  let boardCache = { lastId: 0, seen: [], week: {}, invite: {} };
+
+  function ptsSum(map) {
+    return Object.values(map).reduce((a, b) => a + (b || 0n), 0n);
+  }
+
   async function fetchLeaderboards(onPartial) {
+    const opts = onPartial && typeof onPartial === "object" ? onPartial : { onPartial };
     const p = await boardReadProvider();
     const c = gameContract(p);
     const n = Number(await withTimeout(c.nextRunId(), 5000));
@@ -1373,12 +1404,23 @@ const CatboxChain = (() => {
       return { week: [], invite: [] };
     }
     const last = n - 1;
-    const seen = new Set();
+    const seen = new Set(opts.incremental && boardCache.lastId ? boardCache.seen : []);
+    let fromId = 1;
+    if (opts.incremental && boardCache.lastId && last >= boardCache.lastId) {
+      fromId = boardCache.lastId + 1;
+    }
 
-    async function playersFrom(fromId, toId) {
+    async function playersFrom(startId, toId) {
+      if (startId > toId) return [];
       const ids = [];
-      for (let i = toId; i >= fromId; i--) ids.push(i);
-      const decodedRuns = await multicallFn(p, c.interface, "runs", ids);
+      for (let i = toId; i >= startId; i--) ids.push(i);
+      let decodedRuns = await multicallFn(p, c.interface, "runs", ids);
+      const retry = ids.filter((_, j) => !decodedRuns[j]);
+      if (retry.length) {
+        const extra = await multicallFn(p, c.interface, "runs", retry);
+        const byId = new Map(retry.map((id, j) => [id, extra[j]]));
+        decodedRuns = decodedRuns.map((row, j) => row || byId.get(ids[j]) || null);
+      }
       const fresh = [];
       for (const decoded of decodedRuns) {
         if (!decoded) continue;
@@ -1401,8 +1443,11 @@ const CatboxChain = (() => {
       ]);
       const refs = new Set();
       addrs.forEach((a, j) => {
-        const pts = ptsRows[j] ? ptsRows[j][0] || 0n : 0n;
-        if (pts > 0n) invite[a] = pts;
+        if (ptsRows[j]) {
+          const pts = ptsRows[j][0] || 0n;
+          if (pts > 0n) invite[a] = pts;
+          else delete invite[a];
+        }
         const refDec = refRows[j];
         const ref = refDec ? refDec[0] : ethers.ZeroAddress;
         if (ref && ref !== ethers.ZeroAddress) refs.add(ethers.getAddress(ref));
@@ -1423,22 +1468,34 @@ const CatboxChain = (() => {
       if (!addrs.length) return map;
       const rows = await multicallFn(p, c.interface, fn, addrs);
       addrs.forEach((a, j) => {
-        const v = rows[j] ? rows[j][0] || 0n : 0n;
+        if (!rows[j]) return;
+        const v = rows[j][0] || 0n;
         if (v > 0n) map[a] = v;
+        else delete map[a];
       });
       return map;
     }
 
     function pack(weekMap, inviteMap) {
+      boardCache = { lastId: last, seen: [...seen], week: weekMap, invite: inviteMap };
       return {
         week: toRows(weekMap, account).filter((r) => r.pts > 0).slice(0, 1000),
         invite: toRows(inviteMap, account).filter((r) => r.pts > 0).slice(0, 1000),
       };
     }
 
-    const fresh = await playersFrom(1, last);
-    const week = await ptsFrom("weekPts", fresh);
-    const invite = await inviteFrom(fresh);
+    await playersFrom(fromId, last);
+    const addrs = [...seen];
+    const week = await ptsFrom("weekPts", addrs, opts.incremental ? boardCache.week : {});
+    const invite = await inviteFrom(addrs, opts.incremental ? boardCache.invite : {});
+    try {
+      const [weekTotal, inviteTotal] = await Promise.all([c.weekPtsTotal(), c.invitePtsTotal()]);
+      const weekGap = weekTotal > 0n && ptsSum(week) * 100n < weekTotal * 90n;
+      const inviteGap = inviteTotal > 0n && ptsSum(invite) * 100n < inviteTotal * 90n;
+      if ((weekGap || inviteGap) && opts.incremental) {
+        return fetchLeaderboards({ incremental: false });
+      }
+    } catch (_) {}
     return pack(week, invite);
   }
 

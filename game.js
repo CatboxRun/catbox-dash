@@ -163,9 +163,9 @@ function renderBoards() {
   refreshInviteUi();
 }
 
-async function pullLiveBoards() {
+async function pullLiveBoards(forceBoards) {
   if (!window.CatboxChain) return;
-  if (window._boardsReady && window._burnsReady) return;
+  if (!forceBoards && window._boardsReady && window._burnsReady) return;
   const weekEl = $("weekList");
   const inviteEl = $("inviteList");
   const burnEl = $("burnList");
@@ -173,9 +173,9 @@ async function pullLiveBoards() {
   if (inviteEl && !window._liveBoards) inviteEl.innerHTML = `<li class="empty">${t("loadingBoard")}</li>`;
   if (burnEl && !window._liveBurns) burnEl.innerHTML = `<li class="empty">${t("loadingBoard")}</li>`;
 
-  if (!pullingBoards && !window._boardsReady) {
+  if (!pullingBoards && (!window._boardsReady || forceBoards)) {
     pullingBoards = true;
-    CatboxChain.fetchLeaderboards()
+    CatboxChain.fetchLeaderboards({ incremental: Boolean(window._boardsReady) })
       .then((boards) => {
         if (!boards) throw new Error("NO_BOARDS");
         window._liveBoards = boards;
@@ -684,7 +684,7 @@ function bootLobbyTabs() {
   tabs.forEach((btn) => {
     btn.onclick = () => {
       setTab(btn.dataset.tab);
-      if (btn.dataset.tab === "pool") pullLiveBoards();
+      if (btn.dataset.tab === "pool") pullLiveBoards(true);
     };
   });
   const open = $("openRules");
@@ -1004,10 +1004,11 @@ let pricesAt = 0;
 
 async function liveRefresh() {
   liveTick += 1;
-  const onPool = document.querySelector(".lobby-tab.on")?.dataset.tab === "pool";
   const jobs = [syncOnchainPool(), refreshClaimUi(), refreshFreeUi()];
-  if (onPool || liveTick === 1 || liveTick % 3 === 0) {
-    if (!window._boardsReady || !window._burnsReady) pullLiveBoards();
+  if (!window._boardsReady || !window._burnsReady) {
+    pullLiveBoards();
+  } else if (liveTick % 3 === 0) {
+    pullLiveBoards(true);
   }
   await Promise.all(jobs.map((p) => Promise.resolve(p).catch(() => {})));
   refreshInviteUi();
@@ -3100,7 +3101,7 @@ async function settleOnchain(got, ticket, score) {
     refreshInviteUi();
     refreshClaimUi();
     await refreshFreeUi();
-    pullLiveBoards();
+    pullLiveBoards(true);
   } catch (e) {
     el.textContent = t("txFail");
   }
