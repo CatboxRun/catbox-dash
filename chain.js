@@ -636,22 +636,28 @@ const CatboxChain = (() => {
     if (playCountCache.addr === key && Date.now() - playCountCache.at < 120000) {
       return Math.max(playCountCache.n, local);
     }
-    let chain = 0;
+    let paidPlays = 0;
+    let freePlays = 0;
     try {
-      const c = gameContract(await publicReadProvider());
-      let fromAbi = false;
+      const p = await publicReadProvider();
+      if (await isPaidDeployed()) {
+        try {
+          paidPlays = Number(await paidGameContract(p).playCount(addr));
+        } catch (_) {}
+      }
       try {
-        if (await isV6()) {
-          const v = await c.playCount(addr);
-          if (v != null) {
-            chain = Number(v);
-            fromAbi = true;
-          }
-        }
-      } catch (_) {}
-      if (!fromAbi) chain = await scanPlayCount(addr);
+        freePlays = Number(await freeGameContract(p).freeUsed(addr));
+        if (!Number.isFinite(freePlays) || freePlays < 0) freePlays = 0;
+        if (freePlays > 2) freePlays = 2;
+      } catch (_) {
+        freePlays = 0;
+      }
+      if (!paidPlays && !(await isPaidDeployed())) {
+        paidPlays = await scanPlayCount(addr);
+        freePlays = 0;
+      }
     } catch (_) {}
-    const n = Math.max(chain || 0, local);
+    const n = Math.max((paidPlays || 0) + (freePlays || 0), local);
     rememberPlayCount(addr, n);
     playCountCache = { addr: key, n, at: Date.now() };
     return n;

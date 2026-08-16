@@ -27,6 +27,7 @@ if (wallet.address.toLowerCase() !== String(cfg.owner).toLowerCase()) {
 }
 
 const paid = new Contract(v6.address, v6.abi, wallet);
+const free = new Contract(cfg.freeAddress || cfg.address, cfg.abi, wallet);
 const code = await provider.getCode(v6.address);
 if (!code || code === "0x") {
   console.error("v6 not deployed");
@@ -41,6 +42,7 @@ for (const r of snap.runs || []) {
     day: 0n,
     invite: 0n,
     plays: 0,
+    freeUsed: 0,
     ref: ZeroAddress,
     invCount: 0,
   };
@@ -53,14 +55,14 @@ for (const r of snap.runs || []) {
 }
 for (const row of snap.week || []) {
   const a = getAddress(row.addr);
-  const cur = byPlayer.get(a) || { addr: a, day: 0n, invite: 0n, plays: 0, ref: ZeroAddress, invCount: 0 };
+  const cur = byPlayer.get(a) || { addr: a, day: 0n, invite: 0n, plays: 0, freeUsed: 0, ref: ZeroAddress, invCount: 0 };
   const pts = BigInt(row.pts || 0);
   if (pts > cur.day) cur.day = pts;
   byPlayer.set(a, cur);
 }
 for (const row of snap.invite || []) {
   const a = getAddress(row.addr);
-  const cur = byPlayer.get(a) || { addr: a, day: 0n, invite: 0n, plays: 0, ref: ZeroAddress, invCount: 0 };
+  const cur = byPlayer.get(a) || { addr: a, day: 0n, invite: 0n, plays: 0, freeUsed: 0, ref: ZeroAddress, invCount: 0 };
   const pts = BigInt(row.pts || 0);
   if (pts > cur.invite) cur.invite = pts;
   byPlayer.set(a, cur);
@@ -69,13 +71,30 @@ for (const row of snap.invite || []) {
 const all = [...byPlayer.values()].filter((x) => x.day > 0n || x.invite > 0n || x.plays > 0 || x.ref !== ZeroAddress);
 console.log("migrate wallets", all.length);
 
+// Pull freeUsed from V5 so playCount migration does not double-count free SCOUT.
+for (let i = 0; i < all.length; i += 40) {
+  const chunk = all.slice(i, i + 40);
+  await Promise.all(
+    chunk.map(async (c) => {
+      try {
+        c.freeUsed = Number(await free.freeUsed(c.addr));
+      } catch (_) {
+        c.freeUsed = 0;
+      }
+    }),
+  );
+}
+
 const BATCH = Number(process.env.BATCH || 40);
 for (let i = 0; i < all.length; i += BATCH) {
   const chunk = all.slice(i, i + BATCH);
   const users = chunk.map((c) => c.addr);
   const dayScores = chunk.map((c) => c.day);
   const inviteScores = chunk.map((c) => c.invite);
-  const plays = chunk.map((c) => BigInt(c.plays));
+  const plays = chunk.map((c) => {
+    const freeN = Math.min(2, Math.max(0, Number(c.freeUsed || 0)));
+    return BigInt(Math.max(0, c.plays - freeN));
+  });
   const refs = chunk.map((c) => c.ref);
   const invCounts = chunk.map((c) => BigInt(c.invCount));
   const tx = await paid.migratePlayers(users, dayScores, inviteScores, plays, refs, invCounts);

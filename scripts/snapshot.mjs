@@ -215,17 +215,26 @@ function toRows(map, allAddrs) {
 }
 
 const { p } = await pickProvider();
-const gameAddr =
-  cfg.v6?.address && (await withTimeout(p.getCode(cfg.v6.address), 4000)) !== "0x"
-    ? cfg.v6.address
-    : cfg.address;
-const gameAbi = gameAddr === cfg.v6?.address ? cfg.v6.abi : cfg.abi;
-console.error("snapshot game", gameAddr, gameAddr === cfg.v6?.address ? "v6" : "v5");
-const game = new Contract(gameAddr, gameAbi, p);
-const iface = game.interface;
+const freeAddr = cfg.freeAddress || cfg.address;
+const freeAbi = cfg.abi;
+let paidAddr = null;
+let paidAbi = null;
+if (cfg.v6?.address) {
+  const code = await withTimeout(p.getCode(cfg.v6.address), 4000);
+  if (code && code !== "0x") {
+    paidAddr = cfg.v6.address;
+    paidAbi = cfg.v6.abi;
+  }
+}
+const boardAddr = paidAddr || freeAddr;
+const boardAbi = paidAddr ? paidAbi : freeAbi;
+console.error("snapshot free", freeAddr, "paid", paidAddr || "(none)", "boards", boardAddr);
+
+const freeGame = new Contract(freeAddr, freeAbi, p);
+const boardGame = new Contract(boardAddr, boardAbi, p);
+const freeIface = freeGame.interface;
+const boardIface = boardGame.interface;
 const latest = Number(await withTimeout(p.getBlockNumber(), 4000));
-const nextRunId = Number(await withTimeout(game.nextRunId(), 8000));
-console.error("block", latest, "nextRunId", nextRunId);
 
 let prices = [
   10n ** 18n,
@@ -234,60 +243,89 @@ let prices = [
   10n * 10n ** 18n,
 ];
 try {
-  prices = await Promise.all([0, 1, 2, 3].map((i) => game.ticketPrice(i)));
+  prices = await Promise.all([0, 1, 2, 3].map((i) => boardGame.ticketPrice(i)));
 } catch {}
 
-const ids = [];
-for (let i = 1; i < nextRunId; i++) ids.push(i);
-const runRows = await multicall(p, iface, "runs", ids);
-const rows = [];
-const seen = new Set();
-for (let i = 0; i < ids.length; i++) {
-  const decoded = runRows[i];
-  if (!decoded) continue;
-  const playerRaw = decoded.player || decoded[0];
-  if (!playerRaw || playerRaw === ZERO) continue;
-  const player = getAddress(playerRaw);
-  const paid = decoded.paid ?? decoded[1] ?? 0n;
-  const startedAt = Number(decoded.startedAt ?? decoded[2] ?? 0);
-  const settled = Boolean(decoded.settled ?? decoded[3]);
-  const tier = tierOfPaid(paid, prices);
-  seen.add(player);
-  rows.push({
-    id: ids[i],
-    player,
-    paid,
-    ticketLim: tier.lim,
-    tierId: tier.id,
-    tierName: tier.name,
-    startedAt,
-    settled,
-    free: null,
-    collected: null,
-    leftover: null,
-    burned: null,
-    score: null,
-    payout: null,
-    rewardBps: 10500,
-    invites: 0,
-    plays: 0,
-    weekPts: 0n,
-    invitePts: 0n,
-    extraPaid: 0n,
-    extraTx: null,
-    referrer: ZERO,
-    tx: null,
-  });
+async function loadRunsFrom(label, addr, iface, contract) {
+  const next = Number(await withTimeout(contract.nextRunId(), 8000));
+  console.error("runs", label, "nextRunId", next);
+  const ids = [];
+  for (let i = 1; i < next; i++) ids.push(i);
+  const runRows = await multicall(p, iface, "runs", ids, 40, addr);
+  const out = [];
+  for (let i = 0; i < ids.length; i++) {
+    const decoded = runRows[i];
+    if (!decoded) continue;
+    const playerRaw = decoded.player || decoded[0];
+    if (!playerRaw || playerRaw === ZERO) continue;
+    const player = getAddress(playerRaw);
+    const paid = decoded.paid ?? decoded[1] ?? 0n;
+    const startedAt = Number(decoded.startedAt ?? decoded[2] ?? 0);
+    const settled = Boolean(decoded.settled ?? decoded[3]);
+    let freeFlag = null;
+    if (decoded.free != null) freeFlag = Boolean(decoded.free);
+    else if (decoded.length > 4 && decoded[4] != null) freeFlag = Boolean(decoded[4]);
+    const tier = tierOfPaid(paid, prices);
+    out.push({
+      id: ids[i],
+      lane: label,
+      key: `${label}-${ids[i]}`,
+      player,
+      paid,
+      ticketLim: tier.lim,
+      tierId: tier.id,
+      tierName: tier.name,
+      startedAt,
+      settled,
+      free: freeFlag,
+      collected: null,
+      leftover: null,
+      burned: null,
+      score: null,
+      payout: null,
+      rewardBps: 10500,
+      invites: 0,
+      plays: 0,
+      weekPts: 0n,
+      invitePts: 0n,
+      extraPaid: 0n,
+      extraTx: null,
+      referrer: ZERO,
+      tx: null,
+    });
+  }
+  return { next, rows: out };
 }
 
+const paidPack = paidAddr
+  ? await loadRunsFrom("paid", paidAddr, boardIface, boardGame)
+  : { next: 0, rows: [] };
+const freePack = await loadRunsFrom("free", freeAddr, freeIface, freeGame);
+
+// When paid lane is live, keep all paid runs + free-lane free SCOUT runs (skip V5 paid history duplicates after cutover if desired).
+// Include all free-lane runs for admin; boards still read from paid.
+let rows;
+if (paidAddr) {
+  rows = [...paidPack.rows, ...freePack.rows];
+} else {
+  rows = freePack.rows.map((r) => ({ ...r, lane: "free" }));
+}
+
+const seen = new Set(rows.map((r) => r.player));
 const addrs = [...seen];
-console.error("runs", rows.length, "wallets", addrs.length);
-const [weekRows, invRows, refRows, usedRows] = await Promise.all([
-  multicall(p, iface, "weekPts", addrs),
-  multicall(p, iface, "invitePts", addrs),
-  multicall(p, iface, "refOf", addrs),
-  multicall(p, iface, "freeUsed", addrs),
+const nextRunId = paidAddr ? paidPack.next : freePack.next;
+console.error("runs merged", rows.length, "wallets", addrs.length);
+
+const gameAddr = boardAddr;
+const iface = boardIface;
+const game = boardGame;
+
+const [weekRows, invRows, refRows] = await Promise.all([
+  multicall(p, boardIface, "weekPts", addrs, 40, boardAddr),
+  multicall(p, boardIface, "invitePts", addrs, 40, boardAddr),
+  multicall(p, boardIface, "refOf", addrs, 40, boardAddr),
 ]);
+let usedRows = await multicall(p, freeIface, "freeUsed", addrs, 40, freeAddr);
 const week = {};
 const invite = {};
 const refs = {};
@@ -303,7 +341,7 @@ addrs.forEach((a, j) => {
 });
 const missingRefs = [...new Set(Object.values(refs).filter((a) => a !== ZERO && invite[a] == null))];
 if (missingRefs.length) {
-  const extra = await multicall(p, iface, "invitePts", missingRefs);
+  const extra = await multicall(p, boardIface, "invitePts", missingRefs, 40, boardAddr);
   missingRefs.forEach((a, j) => {
     const pts = extra[j] ? extra[j][0] || 0n : 0n;
     if (pts > 0n) invite[a] = pts;
@@ -311,18 +349,24 @@ if (missingRefs.length) {
 }
 
 console.error("fetching logs");
-const logs = await collectLogs(gameAddr, iface, ["RunStarted", "RunSettled", "FreeEnter", "Burned"], latest);
-const byId = new Map(rows.map((r) => [r.id, r]));
+const logsPaid = paidAddr
+  ? await collectLogs(paidAddr, boardIface, ["RunStarted", "RunSettled", "Burned"], latest)
+  : [];
+const logsFree = await collectLogs(freeAddr, freeIface, ["RunStarted", "RunSettled", "FreeEnter", "Burned"], latest);
+const logs = [...logsPaid.map((l) => ({ ...l, lane: "paid" })), ...logsFree.map((l) => ({ ...l, lane: "free" }))];
+const byKey = new Map(rows.map((r) => [r.key, r]));
 const burnsByHash = new Map();
 for (const log of logs) {
+  const lane = log.lane || (paidAddr ? "paid" : "free");
+  const key = `${lane}-${Number(log.args.runId)}`;
   if (log.name === "RunStarted") {
-    const row = byId.get(Number(log.args.runId));
+    const row = byKey.get(key);
     if (!row) continue;
     const ref = log.args.referrer;
     if (ref && ref !== ZERO) row.referrer = getAddress(ref);
     if (log.args.paid != null) row.paid = log.args.paid;
   } else if (log.name === "RunSettled") {
-    const row = byId.get(Number(log.args.runId));
+    const row = byKey.get(key);
     if (row) {
       row.collected = log.args.collected;
       row.leftover = log.args.leftover;
@@ -334,26 +378,27 @@ for (const log of logs) {
     const amt = log.args.burned ?? 0n;
     if (amt > 0n) {
       const player = getAddress(log.args.player);
-      const key = log.transactionHash || `run-${log.args.runId}`;
-      burnsByHash.set(key, {
+      const bkey = log.transactionHash || `run-${key}`;
+      burnsByHash.set(bkey, {
         player,
         tag: short(player),
         amount: amt,
         hash: log.transactionHash || "",
         runId: Number(log.args.runId),
+        lane,
         blockNumber: log.blockNumber,
       });
     }
   } else if (log.name === "FreeEnter") {
-    const row = byId.get(Number(log.args.runId));
+    const row = byKey.get(key);
     if (row) row.free = true;
   } else if (log.name === "Burned") {
     const amt = log.args.amount ?? 0n;
     if (amt <= 0n) continue;
     const player = getAddress(log.args.player);
-    const key = log.transactionHash || `${log.blockNumber}-${player}`;
-    const prev = burnsByHash.get(key) || {};
-    burnsByHash.set(key, {
+    const bkey = log.transactionHash || `${log.blockNumber}-${player}`;
+    const prev = burnsByHash.get(bkey) || {};
+    burnsByHash.set(bkey, {
       ...prev,
       player,
       tag: short(player),
@@ -361,6 +406,7 @@ for (const log of logs) {
       hash: log.transactionHash || prev.hash || "",
       blockNumber: log.blockNumber || prev.blockNumber || 0,
       runId: prev.runId,
+      lane: prev.lane || lane,
     });
   }
 }
@@ -379,16 +425,19 @@ for (const row of rows) {
   byPlayer[row.player].push(row);
 }
 for (const list of Object.values(byPlayer)) {
-  list.sort((a, b) => a.id - b.id);
-  const oneLim = list.filter((r) => r.paid <= 10n ** 18n);
+  list.sort((a, b) => a.startedAt - b.startedAt || a.id - b.id);
+  const freeLane = list.filter((r) => r.lane === "free" && r.paid <= 10n ** 18n);
   let left = freeUsed[list[0].player] || 0;
   for (const r of list) {
-    if (r.paid > 10n ** 18n) {
+    if (r.lane === "paid") {
       r.free = false;
       continue;
     }
+    if (r.paid > 10n ** 18n) {
+      r.free = false;
+    }
   }
-  for (const r of oneLim) {
+  for (const r of freeLane) {
     if (r.free === true) {
       if (left > 0) left -= 1;
       continue;
@@ -396,7 +445,7 @@ for (const list of Object.values(byPlayer)) {
     if (left > 0) {
       r.free = true;
       left -= 1;
-    } else {
+    } else if (r.free == null) {
       r.free = false;
     }
   }
@@ -415,12 +464,23 @@ let invitePool = 0n;
 let freePool = 0n;
 let burnedTotal = 0n;
 try {
-  [weekPool, invitePool, freePool, burnedTotal] = await Promise.all([
-    game.weekPool(),
-    game.invitePool(),
-    game.freePool(),
-    game.burnedTotal(),
+  const boardPools = await Promise.all([
+    boardGame.weekPool(),
+    boardGame.invitePool(),
+    boardGame.burnedTotal(),
   ]);
+  weekPool = boardPools[0];
+  invitePool = boardPools[1];
+  burnedTotal = boardPools[2];
+} catch {}
+try {
+  freePool = await freeGame.freePool();
+} catch {}
+try {
+  if (paidAddr) {
+    const freeBurned = await freeGame.burnedTotal();
+    burnedTotal += freeBurned;
+  }
 } catch {}
 
 let extraPool = 0n;
@@ -446,7 +506,7 @@ if (extraAddr && cfg.extra?.abi) {
       if (log.name === "ExtraPaid") {
         const id = Number(log.args.runId);
         const amt = log.args.amount ?? 0n;
-        const row = byId.get(id);
+        const row = byKey.get(`free-${id}`);
         if (row) {
           row.extraPaid = amt;
           row.extraTx = log.transactionHash;
@@ -459,15 +519,15 @@ if (extraAddr && cfg.extra?.abi) {
         extraWithdrawnTotal += log.args.amount ?? 0n;
       }
     }
-    const sinceIds = rows.map((r) => r.id).filter((id) => id >= extraSinceRunId);
-    if (sinceIds.length) {
-      const paidRows = await multicall(p, extraIface, "paidExtra", sinceIds, 40, extraAddr);
+    const freeIds = rows.filter((r) => r.lane === "free" && r.id >= extraSinceRunId).map((r) => r.id);
+    if (freeIds.length) {
+      const paidRows = await multicall(p, extraIface, "paidExtra", freeIds, 40, extraAddr);
       extraPaidTotal = 0n;
       extraPaidCount = 0;
-      sinceIds.forEach((id, j) => {
+      freeIds.forEach((id, j) => {
         const v = paidRows[j] ? paidRows[j][0] || 0n : 0n;
         if (v <= 0n) return;
-        const row = byId.get(id);
+        const row = byKey.get(`free-${id}`);
         if (row) row.extraPaid = v;
         extraPaidTotal += v;
         extraPaidCount += 1;
@@ -591,9 +651,10 @@ const snapshot = {
   burns,
   social,
   runs: rows
-    .sort((a, b) => b.id - a.id)
+    .sort((a, b) => b.startedAt - a.startedAt || b.id - a.id)
     .map((r) => ({
       id: r.id,
+      lane: r.lane || "free",
       player: r.player,
       paid: weiStr(r.paid),
       ticketLim: r.ticketLim,

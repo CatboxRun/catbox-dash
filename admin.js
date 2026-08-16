@@ -103,7 +103,7 @@ function cmp(a, b, key) {
     return na - nb;
   }
   if (key === "settled" || key === "xClaimed" || key === "tgClaimed") return Number(!!va) - Number(!!vb);
-  if (key === "player" || key === "referrer") {
+  if (key === "player" || key === "referrer" || key === "lane") {
     return String(va || "").localeCompare(String(vb || ""), undefined, { sensitivity: "accent" });
   }
   if (numKeys[key]) {
@@ -202,7 +202,7 @@ function renderTable() {
   const rows = visibleRows();
   const body = $("rows");
   if (!rows.length) {
-    body.innerHTML = `<tr><td colspan="20" class="empty">${allRows.length ? "无匹配地址" : "暂无对局"}</td></tr>`;
+    body.innerHTML = `<tr><td colspan="21" class="empty">${allRows.length ? "无匹配地址" : "暂无对局"}</td></tr>`;
     return;
   }
   body.innerHTML = rows
@@ -210,8 +210,10 @@ function renderTable() {
       const settled = yn(r.settled);
       const pay = r.free === true ? `<span class="free">免费</span>` : payLabel(r.free);
       const score = r.score != null ? fmtPts(r.score) : "—";
+      const lane = r.lane === "paid" ? "付费" : r.lane === "free" ? "免费" : "—";
       return `<tr>
         <td>${r.id}</td>
+        <td>${lane}</td>
         <td>${addrCell(r.player)}</td>
         <td>${r.tierName || "—"} · ${Number(r.ticketLim || 0)} LIM</td>
         <td>${pay}</td>
