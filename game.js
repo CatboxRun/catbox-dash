@@ -1647,8 +1647,8 @@ async function enterPlay() {
 function scoutIsFree(tier) {
   if (!tier || tier.id !== 0) return false;
   const st = window._freeStatus;
-  if (!st) return true;
-  return Number(st.left) > 0;
+  if (!st) return false;
+  return Boolean(st.eligible);
 }
 
 function freeForTier(tier) {
