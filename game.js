@@ -579,6 +579,8 @@ async function doClaim() {
   const dailyBtn = $("claimDailyBtn");
   const inviteBtn = $("claimInviteBtn");
   const amt = $("claimAmt");
+  if (window._claimBusy) return;
+  window._claimBusy = true;
   try {
     const win = CatboxChain.claimWindow();
     if (!win.open) {
@@ -599,6 +601,8 @@ async function doClaim() {
   } catch (e) {
     if (amt) amt.textContent = e?.shortMessage?.includes("none") || e?.message?.includes("none") ? t("claimNone") : t("txFail");
     await refreshClaimUi();
+  } finally {
+    window._claimBusy = false;
   }
 }
 
@@ -1076,6 +1080,8 @@ async function doSwap() {
   const status = $("swapStatus");
   const raw = $("swapAmt").value;
   if (!raw || Number(raw) <= 0) return;
+  if (window._swapBusy) return;
+  window._swapBusy = true;
   const from = $("swapFrom").value;
   const to = $("swapTo")?.value || "LIM";
   const expect = $("swapOut")?.value;
@@ -1110,6 +1116,8 @@ async function doSwap() {
       : m === "SLIP" ? t("swapSlip")
       : m === "ALLOW" ? t("swapApproveFail")
       : t("txFail");
+  } finally {
+    window._swapBusy = false;
   }
 }
 
@@ -1272,6 +1280,30 @@ async function bootWallet() {
         await refreshExtraUi();
       } catch (_) {
         if (status) status.textContent = t("txFail");
+      }
+    };
+  }
+  if ($("extraGiftBtn")) {
+    $("extraGiftBtn").onclick = async () => {
+      if (window._giftBusy) return;
+      const status = $("extraStatus");
+      const to = $("extraGiftAddr")?.value?.trim();
+      const n = Number($("extraGiftAmt")?.value);
+      if (!to || !n || n <= 0) return;
+      window._giftBusy = true;
+      $("extraGiftBtn").disabled = true;
+      try {
+        if (status) status.textContent = t("extraGifting");
+        const hash = await CatboxChain.airdropFromExtra(to, n);
+        if (status) {
+          status.innerHTML = `<a href="${CatboxChain.txUrl(hash)}" target="_blank" rel="noopener">${hash.slice(0, 10)}…</a>`;
+        }
+        await refreshExtraUi();
+      } catch (e) {
+        if (status) status.textContent = e?.message === "NO_LIM" ? t("noLim") : t("txFail");
+      } finally {
+        window._giftBusy = false;
+        $("extraGiftBtn").disabled = false;
       }
     };
   }
@@ -1653,20 +1685,29 @@ function refreshOver() {
   paintOverShare();
 }
 
-$("payBack").onclick = () => show(lobby);
+$("payBack").onclick = () => {
+  if (enterBusy) return;
+  show(lobby);
+};
 $("payGo").onclick = () => payAndStart();
 $("toLobby").onclick = () => {
+  if (window._settleBusy) return;
   try {
     if (document.fullscreenElement) document.exitFullscreen();
   } catch (_) {}
   show(lobby);
 };
-$("again").onclick = () => selected && openPay(selected);
+$("again").onclick = () => {
+  if (window._settleBusy || enterBusy) return;
+  selected && openPay(selected);
+};
 
+let enterBusy = false;
 async function payAndStart() {
   const status = $("payStatus");
   const go = $("payGo");
-  if (!selected) return;
+  if (!selected || enterBusy || window._settleBusy) return;
+  enterBusy = true;
   go.disabled = true;
   try {
     if (!window.ethereum) throw new Error("NO_WALLET");
@@ -1676,7 +1717,6 @@ async function payAndStart() {
       const deployed = await CatboxChain.isDeployed();
       if (!deployed) {
         status.textContent = t("deployNeed");
-        go.disabled = false;
         return;
       }
       chainReady = true;
@@ -1693,9 +1733,12 @@ async function payAndStart() {
     const msg = e?.message || "";
     if (msg === "NO_WALLET") status.textContent = t("noWallet");
     else if (msg === "NO_LIM") status.textContent = t("noLim");
+    else if (msg === "ACTIVE_RUN") status.textContent = t("activeRun");
     else if (msg.includes("user rejected") || e.code === 4001) status.textContent = t("txFail");
     else status.textContent = t("txFail");
     go.disabled = false;
+  } finally {
+    enterBusy = false;
   }
 }
 
@@ -3196,6 +3239,8 @@ function finish(whyKey) {
 async function settleOnchain(got, ticket, score) {
   const el = $("overTx");
   if (!el || !window.CatboxChain) return;
+  if (window._settleBusy) return;
+  window._settleBusy = true;
   try {
     el.textContent = t("settling");
     const wait = 5500 - (Date.now() - (run?.startedMs || Date.now()));
@@ -3225,6 +3270,8 @@ async function settleOnchain(got, ticket, score) {
     pullLiveBoards(true);
   } catch (e) {
     el.textContent = t("txFail");
+  } finally {
+    window._settleBusy = false;
   }
 }
 

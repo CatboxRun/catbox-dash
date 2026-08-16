@@ -196,6 +196,22 @@ const CatboxChain = (() => {
     return (await tx.wait()).hash;
   }
 
+  async function airdropFromExtra(to, limAmount) {
+    await connect();
+    if (!isOwner()) throw new Error("NOT_OWNER");
+    const toAddr = ethers.getAddress(to);
+    const amt = ethers.parseUnits(String(limAmount), 18);
+    if (amt <= 0n) throw new Error("NO_LIM");
+    const extra = extraContract(await signer());
+    const lim = limContract(await signer());
+    const pool = await extra.pool();
+    if (pool < amt) throw new Error("NO_LIM");
+    const txW = await extra.withdraw(amt);
+    await txW.wait();
+    const txT = await lim.transfer(toAddr, amt);
+    return (await txT.wait()).hash;
+  }
+
   async function payRunExtra(runId, extraWei) {
     if (!runId || extraWei <= 0n) return null;
     if (!(await isExtraDeployed())) return null;
@@ -765,14 +781,7 @@ const CatboxChain = (() => {
       }
     }
     const pending = await game.activeRun(account);
-    if (pending !== 0n) {
-      try {
-        const txS = await game.settle(0, 0);
-        await txS.wait();
-      } catch (e) {
-        throw new Error("ACTIVE_RUN");
-      }
-    }
+    if (pending !== 0n) throw new Error("ACTIVE_RUN");
     let ref = referrer();
     if (!ref || ref.toLowerCase() === account.toLowerCase()) ref = ethers.ZeroAddress;
     const tx = await game.enter(ref, tierId);
@@ -1991,6 +2000,7 @@ const CatboxChain = (() => {
     extraPoolAmt,
     fundExtra,
     withdrawExtra,
+    airdropFromExtra,
     withdrawWeekly,
     setTicketPrice,
     txUrl,
