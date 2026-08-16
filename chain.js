@@ -1330,7 +1330,7 @@ const CatboxChain = (() => {
 
   async function multicallFn(p, iface, fn, items) {
     const out = [];
-    const batch = 20;
+    const batch = 40;
     for (let i = 0; i < items.length; i += batch) {
       const chunk = items.slice(i, i + batch);
       const calls = chunk.map((item) => ({
@@ -1436,8 +1436,7 @@ const CatboxChain = (() => {
       };
     }
 
-    const fromId = Math.max(1, last - 999);
-    const fresh = await playersFrom(fromId, last);
+    const fresh = await playersFrom(1, last);
     const week = await ptsFrom("weekPts", fresh);
     const invite = await inviteFrom(fresh);
     return pack(week, invite);
