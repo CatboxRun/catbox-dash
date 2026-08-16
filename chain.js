@@ -1842,6 +1842,10 @@ const CatboxChain = (() => {
       invitePool: reviveWei(raw.invitePool) ?? 0n,
       freePool: reviveWei(raw.freePool) ?? 0n,
       burnedTotal: reviveWei(raw.burnedTotal) ?? 0n,
+      extraPool: reviveWei(raw.extraPool) ?? 0n,
+      extraPaidTotal: reviveWei(raw.extraPaidTotal) ?? 0n,
+      extraFundedTotal: reviveWei(raw.extraFundedTotal) ?? 0n,
+      extraWithdrawnTotal: reviveWei(raw.extraWithdrawnTotal) ?? 0n,
       week: raw.week || [],
       invite: raw.invite || [],
       burns: (raw.burns || []).map((b) => ({
@@ -1857,6 +1861,7 @@ const CatboxChain = (() => {
         payout: reviveWei(r.payout),
         weekPts: reviveWei(r.weekPts) ?? 0n,
         invitePts: reviveWei(r.invitePts) ?? 0n,
+        extraPaid: reviveWei(r.extraPaid) ?? 0n,
       })),
     };
   }

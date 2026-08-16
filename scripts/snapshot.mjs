@@ -115,7 +115,7 @@ function tierOfPaid(paid, prices) {
   return { id: best, name: TIER_NAMES[best] || `T${best}`, lim: n };
 }
 
-async function multicall(p, iface, fn, items, batch = 40) {
+async function multicall(p, iface, fn, items, batch = 40, target = cfg.address) {
   const multi = new Contract(
     MULTICALL3,
     [
@@ -127,7 +127,7 @@ async function multicall(p, iface, fn, items, batch = 40) {
   for (let i = 0; i < items.length; i += batch) {
     const chunk = items.slice(i, i + batch);
     const calls = chunk.map((item) => ({
-      target: cfg.address,
+      target,
       allowFailure: true,
       callData: iface.encodeFunctionData(fn, [item]),
     }));
@@ -167,26 +167,23 @@ async function getLogsChunk(urls, filter) {
   return null;
 }
 
-async function collectLogs(p, iface, names, latest) {
+async function collectLogs(addr, iface, names, latest, maxChunks = 80) {
   const urls = RPCS.slice();
   const span = 1000;
   const out = [];
   for (const name of names) {
     const topic = iface.getEvent(name).topicHash;
-    let quiet = 0;
-    for (let i = 0; i < 80; i++) {
+    for (let i = 0; i < maxChunks; i++) {
       const toBlock = latest - i * span;
       if (toBlock < 0) break;
       const fromBlock = Math.max(0, toBlock - span + 1);
       const got = await getLogsChunk(urls, {
-        address: cfg.address,
+        address: addr,
         topics: [topic],
         fromBlock,
         toBlock,
       });
       if (!got) continue;
-      if (got.length) quiet = 0;
-      else quiet += 1;
       for (const log of got) {
         try {
           const ev = iface.parseLog(log);
@@ -269,6 +266,8 @@ for (let i = 0; i < ids.length; i++) {
     plays: 0,
     weekPts: 0n,
     invitePts: 0n,
+    extraPaid: 0n,
+    extraTx: null,
     referrer: ZERO,
     tx: null,
   });
@@ -305,7 +304,7 @@ if (missingRefs.length) {
 }
 
 console.error("fetching logs");
-const logs = await collectLogs(p, iface, ["RunStarted", "RunSettled", "FreeEnter", "Burned"], latest);
+const logs = await collectLogs(cfg.address, iface, ["RunStarted", "RunSettled", "FreeEnter", "Burned"], latest);
 const byId = new Map(rows.map((r) => [r.id, r]));
 const burnsByHash = new Map();
 for (const log of logs) {
@@ -417,6 +416,61 @@ try {
   ]);
 } catch {}
 
+let extraPool = 0n;
+let extraPaused = false;
+let extraSinceRunId = 0;
+let extraFundedTotal = 0n;
+let extraWithdrawnTotal = 0n;
+let extraPaidTotal = 0n;
+let extraPaidCount = 0;
+const extraAddr = cfg.extra?.address;
+if (extraAddr && cfg.extra?.abi) {
+  try {
+    const extra = new Contract(extraAddr, cfg.extra.abi, p);
+    const extraIface = extra.interface;
+    try {
+      extraPool = await extra.pool();
+      extraPaused = Boolean(await extra.paused());
+      extraSinceRunId = Number(await extra.sinceRunId());
+    } catch {}
+    console.error("fetching extra logs", extraAddr);
+    const extraLogs = await collectLogs(extraAddr, extraIface, ["ExtraPaid", "Funded", "Withdrawn"], latest, 40);
+    for (const log of extraLogs) {
+      if (log.name === "ExtraPaid") {
+        const id = Number(log.args.runId);
+        const amt = log.args.amount ?? 0n;
+        const row = byId.get(id);
+        if (row) {
+          row.extraPaid = amt;
+          row.extraTx = log.transactionHash;
+        }
+        extraPaidTotal += amt;
+        extraPaidCount += 1;
+      } else if (log.name === "Funded") {
+        extraFundedTotal += log.args.amount ?? 0n;
+      } else if (log.name === "Withdrawn") {
+        extraWithdrawnTotal += log.args.amount ?? 0n;
+      }
+    }
+    const sinceIds = rows.map((r) => r.id).filter((id) => id >= extraSinceRunId);
+    if (sinceIds.length) {
+      const paidRows = await multicall(p, extraIface, "paidExtra", sinceIds, 40, extraAddr);
+      extraPaidTotal = 0n;
+      extraPaidCount = 0;
+      sinceIds.forEach((id, j) => {
+        const v = paidRows[j] ? paidRows[j][0] || 0n : 0n;
+        if (v <= 0n) return;
+        const row = byId.get(id);
+        if (row) row.extraPaid = v;
+        extraPaidTotal += v;
+        extraPaidCount += 1;
+      });
+    }
+  } catch (e) {
+    console.error("extra fail", e?.message || e);
+  }
+}
+
 const burns = [...burnsByHash.values()]
   .sort((a, b) => (b.blockNumber || 0) - (a.blockNumber || 0) || (b.runId || 0) - (a.runId || 0))
   .slice(0, 1000)
@@ -437,6 +491,13 @@ const snapshot = {
   invitePool: weiStr(invitePool),
   freePool: weiStr(freePool),
   burnedTotal: weiStr(burnedTotal),
+  extraPool: weiStr(extraPool),
+  extraPaused,
+  extraSinceRunId,
+  extraPaidTotal: weiStr(extraPaidTotal),
+  extraPaidCount,
+  extraFundedTotal: weiStr(extraFundedTotal),
+  extraWithdrawnTotal: weiStr(extraWithdrawnTotal),
   totalRuns: rows.length,
   uniqueWallets: addrs.length,
   freeCount: rows.filter((r) => r.free === true).length,
@@ -467,6 +528,8 @@ const snapshot = {
       plays: r.plays,
       weekPts: weiStr(r.weekPts),
       invitePts: weiStr(r.invitePts),
+      extraPaid: weiStr(r.extraPaid),
+      extraTx: r.extraTx,
       referrer: r.referrer,
       tx: r.tx,
     })),

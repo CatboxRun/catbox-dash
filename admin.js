@@ -93,6 +93,7 @@ function cmp(a, b, key) {
     plays: 1,
     score: 1,
     weekPts: 1,
+    extraPaid: 1,
     startedAt: 1,
   };
   if (key === "free") {
@@ -143,6 +144,11 @@ function renderChips(summary) {
     ["邀请池", s.invitePool != null ? `${lim(s.invitePool)} LIM` : "—"],
     ["免费池", s.freePool != null ? `${lim(s.freePool)} LIM` : "—"],
     ["累计销毁", s.burnedTotal != null ? `${lim(s.burnedTotal)} LIM` : "—"],
+    ["加时池", s.extraPool != null ? `${lim(s.extraPool)} LIM` : "—"],
+    ["已发加时", s.extraPaidTotal != null ? `${lim(s.extraPaidTotal)} LIM · ${s.extraPaidCount ?? 0} 笔` : "—"],
+    ["加时存入", s.extraFundedTotal != null ? `${lim(s.extraFundedTotal)} LIM` : "—"],
+    ["加时提取", s.extraWithdrawnTotal != null ? `${lim(s.extraWithdrawnTotal)} LIM` : "—"],
+    ["加时状态", s.extraPaused ? "暂停" : s.extraSinceRunId != null ? `自 #${s.extraSinceRunId}` : "—"],
   ]
     .map(([k, v]) => `<div class="chip"><span>${k}</span><b>${v}</b></div>`)
     .join("");
@@ -171,7 +177,7 @@ function renderTable() {
   const rows = visibleRows();
   const body = $("rows");
   if (!rows.length) {
-    body.innerHTML = `<tr><td colspan="17" class="empty">${allRows.length ? "无匹配地址" : "暂无对局"}</td></tr>`;
+    body.innerHTML = `<tr><td colspan="18" class="empty">${allRows.length ? "无匹配地址" : "暂无对局"}</td></tr>`;
     return;
   }
   body.innerHTML = rows
@@ -188,6 +194,7 @@ function renderTable() {
         <td>${pay}</td>
         <td>${lim(r.collected)}</td>
         <td>${lim(r.payout)}</td>
+        <td>${r.extraTx ? `${lim(r.extraPaid)} · ${txCell(r.extraTx)}` : r.extraPaid && r.extraPaid !== 0n ? lim(r.extraPaid) : "—"}</td>
         <td>${fmtBps(r.rewardBps)}</td>
         <td>${lim(r.leftover)}</td>
         <td>${lim(r.burned)}</td>
