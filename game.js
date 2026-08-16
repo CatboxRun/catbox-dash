@@ -151,11 +151,6 @@ async function runBoardLookup(fromMine) {
     const weekRank = boardRankOf(window._liveBoards?.week, addr);
     const inviteRank = boardRankOf(window._liveBoards?.invite, addr);
     const tag = CatboxChain.short(addr);
-    if (week <= 0 && invite <= 0) {
-      out.className = "board-lookup-out dim";
-      out.textContent = t("boardLookupNone", { addr: tag });
-      return;
-    }
     out.className = "board-lookup-out";
     out.textContent = t("boardLookupHit", {
       addr: tag,
@@ -228,8 +223,8 @@ let pullingBurns = false;
 
 function renderBoards() {
   if (window._liveBoards) {
-    renderList("weekList", mergeWeekBoard(window._liveBoards.week));
-    renderList("inviteList", window._liveBoards.invite);
+    renderList("weekList", mergeWeekBoard(markBoardYou(window._liveBoards.week)));
+    renderList("inviteList", markBoardYou(window._liveBoards.invite));
   } else if (pullingBoards) {
     renderList("weekList", [], "loadingBoard");
     renderList("inviteList", [], "loadingBoard");
@@ -246,6 +241,22 @@ function renderBoards() {
   refreshInviteUi();
 }
 
+function markBoardYou(rows) {
+  const acc = window.CatboxChain?.account;
+  if (!rows) return [];
+  if (!acc) return rows.map((r) => ({ ...r, you: false }));
+  const me = acc.toLowerCase();
+  return rows.map((r) => ({ ...r, you: Boolean(r.addr && r.addr.toLowerCase() === me) }));
+}
+
+function boardsFromSnapshot(snap) {
+  if (!snap) return null;
+  return {
+    week: markBoardYou(snap.week || []),
+    invite: markBoardYou(snap.invite || []),
+  };
+}
+
 async function pullLiveBoards(forceBoards) {
   if (!window.CatboxChain) return;
   if (!forceBoards && window._boardsReady && window._burnsReady) return;
@@ -258,13 +269,19 @@ async function pullLiveBoards(forceBoards) {
 
   if (!pullingBoards && (!window._boardsReady || forceBoards)) {
     pullingBoards = true;
-    CatboxChain.fetchLeaderboards({ incremental: Boolean(window._boardsReady) })
-      .then((boards) => {
-        if (!boards) throw new Error("NO_BOARDS");
+    CatboxChain.loadSnapshot(true)
+      .then((snap) => {
+        const boards = boardsFromSnapshot(snap);
+        if (!boards || (!boards.week.length && !boards.invite.length)) throw new Error("NO_BOARDS");
         window._liveBoards = boards;
         window._boardsReady = true;
         renderList("weekList", mergeWeekBoard(boards.week));
         renderList("inviteList", boards.invite);
+        if (snap.burns && snap.burns.length) {
+          window._liveBurns = snap.burns;
+          window._burnsReady = true;
+          renderBurns(snap.burns);
+        }
       })
       .catch(() => {
         if (!window._liveBoards) {
@@ -279,8 +296,9 @@ async function pullLiveBoards(forceBoards) {
 
   if (!pullingBurns && !window._burnsReady) {
     pullingBurns = true;
-    CatboxChain.fetchBurns()
-      .then((burns) => {
+    CatboxChain.loadSnapshot(false)
+      .then((snap) => {
+        const burns = snap?.burns;
         if (burns && burns.length) {
           window._liveBurns = burns;
           window._burnsReady = true;
@@ -1092,7 +1110,7 @@ async function liveRefresh() {
   const jobs = [syncOnchainPool(), refreshClaimUi(), refreshFreeUi()];
   if (!window._boardsReady || !window._burnsReady) {
     pullLiveBoards();
-  } else if (liveTick % 3 === 0) {
+  } else if (liveTick % 50 === 0) {
     pullLiveBoards(true);
   }
   await Promise.all(jobs.map((p) => Promise.resolve(p).catch(() => {})));

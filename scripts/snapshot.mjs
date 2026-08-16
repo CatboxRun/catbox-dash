@@ -201,16 +201,16 @@ async function collectLogs(addr, iface, names, latest, maxChunks = 80) {
   return out;
 }
 
-function toRows(map) {
-  return Object.entries(map)
-    .map(([addr, pts]) => ({
+function toRows(map, allAddrs) {
+  const keys = allAddrs && allAddrs.length ? allAddrs : Object.keys(map);
+  return keys
+    .map((addr) => ({
       tag: short(addr),
       addr,
-      pts: asNum(pts),
+      pts: asNum(map[addr] || 0n),
     }))
-    .filter((r) => r.pts > 0)
-    .sort((a, b) => b.pts - a.pts)
-    .slice(0, 1000);
+    .sort((a, b) => b.pts - a.pts || a.addr.localeCompare(b.addr))
+    .slice(0, 2000);
 }
 
 const { p } = await pickProvider();
@@ -507,7 +507,7 @@ const snapshot = {
   freeCount: rows.filter((r) => r.free === true).length,
   paidCount: rows.filter((r) => r.free === false).length,
   unknownPay: rows.filter((r) => r.free == null).length,
-  week: toRows(week),
+  week: toRows(week, addrs),
   invite: toRows(invite),
   burns,
   runs: rows
