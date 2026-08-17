@@ -2231,16 +2231,10 @@ const CatboxChain = (() => {
   }
 
   function tallyBurnStatsFromRows(rows) {
-    const seen = new Set();
     let v5BurnCount = 0;
     let v6BurnCount = 0;
     for (const row of rows || []) {
-      if (effectiveBurnAmt(row) <= 0n) continue;
-      const lane = row.lane === "v6" ? "v6" : "v5";
-      const key = row.tx || `run-${lane}-${row.id}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
-      if (lane === "v6") v6BurnCount += 1;
+      if (row.lane === "v6") v6BurnCount += 1;
       else v5BurnCount += 1;
     }
     return { burnCount: v5BurnCount + v6BurnCount, v5BurnCount, v6BurnCount };
@@ -2283,12 +2277,12 @@ const CatboxChain = (() => {
       });
     }
     const burns = [...byHash.values()];
-    const merged = burnStatsFromList(burns);
+    const runCounts = tallyBurnStatsFromRows(rowList);
     return {
       burns,
-      burnCount: Math.max(merged.burnCount, Number(snapCounts?.burnCount || 0)),
-      v5BurnCount: Math.max(merged.v5BurnCount, Number(snapCounts?.v5BurnCount || 0)),
-      v6BurnCount: Math.max(merged.v6BurnCount, Number(snapCounts?.v6BurnCount || 0)),
+      burnCount: runCounts.burnCount,
+      v5BurnCount: runCounts.v5BurnCount,
+      v6BurnCount: runCounts.v6BurnCount,
     };
   }
 
@@ -2766,12 +2760,13 @@ const CatboxChain = (() => {
       social: raw.social || [],
       xClaimCount: Number(raw.xClaimCount || 0),
       tgClaimCount: Number(raw.tgClaimCount || 0),
-      burnCount: Number(raw.burnCount || 0) || (raw.burns || []).length,
+      burnCount: Number(raw.totalRuns || raw.burnCount || 0) || (raw.runs || []).length,
       v5BurnCount:
-        Number(raw.v5BurnCount || 0) ||
-        (raw.burns || []).filter((b) => (b.lane || "v5") === "v5").length,
+        Number(raw.v5Runs || raw.v5BurnCount || 0) ||
+        (raw.runs || []).filter((r) => r.lane !== "v6").length,
       v6BurnCount:
-        Number(raw.v6BurnCount || 0) || (raw.burns || []).filter((b) => b.lane === "v6").length,
+        Number(raw.v6Runs || raw.v6BurnCount || 0) ||
+        (raw.runs || []).filter((r) => r.lane === "v6").length,
       runs: (raw.runs || []).map((r) => ({
         ...r,
         paid: reviveWei(r.paid) ?? 0n,
@@ -2806,7 +2801,9 @@ const CatboxChain = (() => {
   function reviveAdminBoard(raw) {
     if (!raw) return null;
     const runs = (raw.runs || []).map((r) => reviveRunFromSnap(r)).filter(Boolean);
-    const fromRows = tallyBurnStatsFromRows(runs);
+    const totalRuns = Number(raw.totalRuns || runs.length);
+    const v5Runs = Number(raw.v5Runs || runs.filter((r) => r.lane === "v5").length);
+    const v6Runs = Number(raw.v6Runs || runs.filter((r) => r.lane === "v6").length);
     return {
       ...raw,
       at: raw.at || null,
@@ -2822,12 +2819,12 @@ const CatboxChain = (() => {
       social: raw.social || [],
       xClaimCount: Number(raw.xClaimCount || 0),
       tgClaimCount: Number(raw.tgClaimCount || 0),
-      burnCount: Math.max(Number(raw.burnCount || 0), fromRows.burnCount),
-      v5BurnCount: Math.max(Number(raw.v5BurnCount || 0), fromRows.v5BurnCount),
-      v6BurnCount: Math.max(Number(raw.v6BurnCount || 0), fromRows.v6BurnCount),
-      totalRuns: Number(raw.totalRuns || runs.length),
-      v5Runs: Number(raw.v5Runs || runs.filter((r) => r.lane === "v5").length),
-      v6Runs: Number(raw.v6Runs || runs.filter((r) => r.lane === "v6").length),
+      burnCount: totalRuns,
+      v5BurnCount: v5Runs,
+      v6BurnCount: v6Runs,
+      totalRuns,
+      v5Runs,
+      v6Runs,
       uniqueWallets: Number(raw.uniqueWallets || 0),
       freeCount: Number(raw.freeCount || 0),
       paidCount: Number(raw.paidCount || 0),

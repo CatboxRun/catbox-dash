@@ -996,11 +996,13 @@ function tallyBurnStats(rows, burnsByHash) {
   };
 }
 
-const tallied = tallyBurnStats(rows, burnsByHash);
-const burnValues = tallied.burnValues;
-const burnCount = tallied.burnCount;
-const v5BurnCount = tallied.v5BurnCount;
-const v6BurnCount = tallied.v6BurnCount;
+const v5Runs = rows.filter((r) => r.lane === "v5").length;
+const v6Runs = rows.filter((r) => r.lane === "v6").length;
+// Burn tx count = game count (one burn per run).
+const burnCount = rows.length;
+const v5BurnCount = v5Runs;
+const v6BurnCount = v6Runs;
+const burnValues = tallyBurnStats(rows, burnsByHash).burnValues;
 const burns = burnValues
   .sort((a, b) => (b.blockNumber || 0) - (a.blockNumber || 0) || (b.runId || 0) - (a.runId || 0))
   .slice(0, 5000)
@@ -1027,9 +1029,6 @@ const social = Object.values(socialByAddr)
     xBlock: r.xBlock || 0,
     tgBlock: r.tgBlock || 0,
   }));
-
-const v5Runs = rows.filter((r) => r.lane === "v5").length;
-const v6Runs = rows.filter((r) => r.lane === "v6").length;
 
 const snapshot = {
   at: new Date().toISOString(),
