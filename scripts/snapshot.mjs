@@ -752,14 +752,26 @@ let freePool = 0n;
 let burnedTotal = 0n;
 let strandedBurn = 0n;
 try {
-  const boardPools = await Promise.all([
-    boardGame.weekPool(),
-    boardGame.invitePool(),
-    boardGame.burnedTotal(),
-  ]);
-  weekPool = boardPools[0];
-  invitePool = boardPools[1];
-  burnedTotal = boardPools[2];
+  if (paidAddr) {
+    const [day, eq, inv, burnedPaid] = await Promise.all([
+      boardGame.dayPool(),
+      boardGame.dayEqPool().catch(() => 0n),
+      boardGame.invitePool(),
+      boardGame.burnedTotal(),
+    ]);
+    weekPool = day + (eq || 0n);
+    invitePool = inv;
+    burnedTotal = burnedPaid;
+  } else {
+    const boardPools = await Promise.all([
+      boardGame.weekPool(),
+      boardGame.invitePool(),
+      boardGame.burnedTotal(),
+    ]);
+    weekPool = boardPools[0];
+    invitePool = boardPools[1];
+    burnedTotal = boardPools[2];
+  }
 } catch {}
 try {
   freePool = await freeGame.freePool();
@@ -771,8 +783,6 @@ try {
   }
 } catch {}
 
-// After V6 cutover, V5 board leftovers (+ accounting dust beyond freePool/ticketFloat) are
-// no longer the live claim pools — fold into displayed burned total. Keep freePool intact.
 try {
   if (paidAddr) {
     const lim = new Contract(cfg.lim, ["function balanceOf(address) view returns (uint256)"], p);
@@ -782,22 +792,14 @@ try {
       freeGame.invitePool().catch(() => 0n),
       freeGame.ticketFloat().catch(() => 0n),
     ]);
+    weekPool += v5Week;
+    invitePool += v5Invite;
     const accounted = freePool + v5Week + v5Invite + ticketFloat;
     const dust = v5Bal > accounted ? v5Bal - accounted : 0n;
-    // Leftover V5 day/invite boards + unaccounted dust (not free scout reserve, not live tickets).
-    strandedBurn = v5Week + v5Invite + dust;
-    if (strandedBurn > 0n) {
-      burnedTotal += strandedBurn;
-      console.error(
-        "strandedBurn",
-        formatUnits(strandedBurn, 18),
-        "v5Week",
-        formatUnits(v5Week, 18),
-        "v5Invite",
-        formatUnits(v5Invite, 18),
-        "dust",
-        formatUnits(dust, 18),
-      );
+    strandedBurn = dust;
+    if (dust > 0n) {
+      burnedTotal += dust;
+      console.error("strandedBurn dust", formatUnits(dust, 18));
     }
   }
 } catch (e) {

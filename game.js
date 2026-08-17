@@ -363,25 +363,12 @@ async function syncOnchainPool() {
     const dayLive = $("daySplitLive");
     const inviteLive = $("inviteTopLive");
     if (dayLive) {
-      if (pool.v6 && pool.dayEq != null) {
-        dayLive.classList.remove("hidden");
-        dayLive.textContent = t("daySplitLive", {
-          eq: CatboxChain.formatLim(pool.dayEq ?? pool.day ?? 0n),
-          n: String(pool.dayPlayers ?? 0n),
-        });
-      } else {
-        dayLive.classList.add("hidden");
-        dayLive.textContent = "";
-      }
+      dayLive.classList.add("hidden");
+      dayLive.textContent = "";
     }
     if (inviteLive) {
-      if (pool.v6 && pool.topLen != null) {
-        inviteLive.classList.remove("hidden");
-        inviteLive.textContent = t("inviteTopLive", { n: String(pool.topLen) });
-      } else {
-        inviteLive.classList.add("hidden");
-        inviteLive.textContent = "";
-      }
+      inviteLive.classList.add("hidden");
+      inviteLive.textContent = "";
     }
     const st = window._freeStatus;
     const freeShown = st?.pool != null ? st.pool : pool.free;
@@ -1296,8 +1283,13 @@ async function bootWallet() {
       if (pool.total === 0n) return;
       await CatboxChain.withdrawWeekly(pool.total);
       await syncOnchainPool();
-    } catch (_) {
-      alert(t("txFail"));
+    } catch (e) {
+      const msg = String(e?.message || e);
+      if (msg.includes("CLAIM_NOT_OPEN") || msg.includes("CLAIM_WINDOW_OPEN")) {
+        alert(t("claimWhen"));
+      } else {
+        alert(t("txFail"));
+      }
     }
   };
   $("setTicketBtn").onclick = async () => {
@@ -2630,12 +2622,12 @@ function tick() {
     if (o.kind === "light") {
       if (!o.armed && o.x < 480) {
         o.armed = true;
-        o.phase = 0.18;
+        o.phase = -0.4;
       }
       if (o.armed) o.phase += o.slow || 0.02;
       if (!o.hinted && o.x < 400 && o.x > 70) {
         o.hinted = true;
-        showRunNote("stayLow", { flash: true });
+        showRunNote("stayLow", { soft: true });
       }
     }
     if (o.kind === "beam") {
@@ -2695,7 +2687,7 @@ function tick() {
       }
     }
     if (o.kind === "light") {
-      const on = Math.sin(o.phase) > 0.72;
+      const on = (Math.sin(o.phase) + 1) / 2 > 0.86;
       const lgy = groundAt(run, run.scroll + o.x + o.w / 2);
       const lh = Math.max(90, lgy - 92);
       if (on && aabb(hb.x, hb.y, hb.w, hb.h, o.x, 40, o.w, lh)) {
@@ -2766,7 +2758,7 @@ function showRunNote(key, opts = {}) {
   if (opts.soft && run.notePri > 0) return;
   run.noteT = opts.soft ? 140 : 200;
   run.notePri = opts.soft ? 0 : 1;
-  if (opts.flash) run.flash = Math.max(run.flash || 0, 14);
+  if (opts.flash) run.flash = Math.max(run.flash || 0, 6);
   const note = $("runNote");
   if (!note) return;
   note.textContent = t(key);
@@ -3123,20 +3115,22 @@ function drawGround(pal, W, H) {
 }
 
 function drawLight(o, night) {
-  const on = Math.sin(o.phase) > 0.62;
-  const lethal = Math.sin(o.phase) > 0.72;
+  const pulse = (Math.sin(o.phase) + 1) / 2;
+  const on = pulse > 0.4;
+  const lethal = pulse > 0.86;
   const cx = o.x + o.w / 2;
   const lgy = groundAt(run, run.scroll + cx);
   ctx.fillStyle = "#1a2438";
   ctx.fillRect(cx - 14, 16, 28, 14);
   ctx.fillStyle = "#0b1220";
   ctx.fillRect(cx - 16, 14, 32, 4);
-  ctx.fillStyle = on ? "#ffe08a" : "#5d738c";
+  ctx.fillStyle = lethal ? "#ffe08a" : on ? "#d8c57a" : "#5d738c";
   ctx.fillRect(cx - 8, 24, 16, 8);
+  const beamAlpha = night ? 0.14 + pulse * 0.14 : 0.1 + pulse * 0.1;
   if (on) {
     const grd = ctx.createLinearGradient(cx, 32, cx, lgy);
-    grd.addColorStop(0, night ? "rgba(255, 220, 90, 0.55)" : "rgba(255, 220, 90, 0.42)");
-    grd.addColorStop(1, "rgba(255, 210, 80, 0.04)");
+    grd.addColorStop(0, `rgba(255, 220, 90, ${beamAlpha.toFixed(3)})`);
+    grd.addColorStop(1, `rgba(255, 210, 80, ${(beamAlpha * 0.22).toFixed(3)})`);
     ctx.fillStyle = grd;
     ctx.beginPath();
     ctx.moveTo(cx - 7, 32);
@@ -3144,14 +3138,14 @@ function drawLight(o, night) {
     ctx.lineTo(o.x + o.w + 6, lgy - 30);
     ctx.lineTo(o.x - 6, lgy - 30);
     ctx.fill();
-    ctx.fillStyle = "rgba(255, 240, 160, 0.35)";
+    ctx.fillStyle = `rgba(255, 240, 160, ${(0.14 + pulse * 0.1).toFixed(3)})`;
     ctx.fillRect(cx - 3, 32, 6, 10);
   } else {
-    ctx.fillStyle = "rgba(93, 115, 140, 0.2)";
+    ctx.fillStyle = "rgba(93, 115, 140, 0.16)";
     ctx.fillRect(cx - 2, 32, 4, Math.max(40, lgy - 80));
   }
   const tunnel = 52;
-  ctx.fillStyle = lethal ? "rgba(8, 14, 24, 0.55)" : "rgba(8, 14, 24, 0.28)";
+  ctx.fillStyle = lethal ? "rgba(8, 14, 24, 0.42)" : "rgba(8, 14, 24, 0.24)";
   ctx.fillRect(o.x - 8, lgy - tunnel, o.w + 16, tunnel + 4);
   ctx.fillStyle = "#f0c14a";
   ctx.fillRect(o.x - 8, lgy - 6, o.w + 16, 3);
@@ -3321,7 +3315,7 @@ function draw() {
   drawTutorialCallout();
 
   if (run.flash > 0) {
-    ctx.fillStyle = `rgba(230, 184, 76, ${0.035 * run.flash})`;
+    ctx.fillStyle = `rgba(230, 184, 76, ${0.018 * run.flash})`;
     ctx.fillRect(0, 0, W, H);
   }
 

@@ -424,23 +424,24 @@ const CatboxChain = (() => {
             freeGame.ticketFloat().catch(() => 0n),
           ]);
         const daily = d + (eq || 0n);
+        const weekShown = daily + (v5Week || 0n);
+        const inviteShown = i + (v5Invite || 0n);
         const accounted = free + (v5Week || 0n) + (v5Invite || 0n) + (ticketFloat || 0n);
         const dust = v5Bal > accounted ? v5Bal - accounted : 0n;
-        const stranded = (v5Week || 0n) + (v5Invite || 0n) + dust;
-        const burned = (burnedPaid || 0n) + (burnedFree || 0n) + stranded;
+        const burned = (burnedPaid || 0n) + (burnedFree || 0n) + dust;
         return {
-          week: daily,
-          day: daily,
+          week: weekShown,
+          day: weekShown,
           dayScore: d,
           dayEq: eq,
           dayPlayers: players,
           topLen: topN,
           v6: true,
-          invite: i,
+          invite: inviteShown,
           burned,
-          strandedBurn: stranded,
+          strandedBurn: dust,
           free,
-          total: daily + i,
+          total: weekShown + inviteShown,
         };
       } catch (_) {}
     }
@@ -1161,9 +1162,17 @@ const CatboxChain = (() => {
     }
   }
 
+  function assertBoardWithdrawAllowed() {
+    const win = sgtClaimWindow();
+    const now = Math.floor(Date.now() / 1000);
+    if (win.open) throw new Error("CLAIM_WINDOW_OPEN");
+    if (now < win.nextOpen) throw new Error("CLAIM_NOT_OPEN");
+  }
+
   async function withdrawWeekly(amountWei) {
     await connect();
     if (!isOwner()) throw new Error("NOT_OWNER");
+    assertBoardWithdrawAllowed();
     const s = await signer();
     const game = gameContract(s);
     try {
