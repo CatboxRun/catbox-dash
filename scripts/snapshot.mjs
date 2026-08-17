@@ -348,8 +348,22 @@ function prevRunToInternal(r) {
   };
 }
 
+function loadPrevAdminRuns() {
+  const paths = [
+    join(root, "data/admin-board.json"),
+    join(root, "data/admin-snapshot.json"),
+  ];
+  for (const path of paths) {
+    const prev = readJsonFile(path);
+    if (!prev?.runs?.length) continue;
+    return prev.runs.map(prevRunToInternal);
+  }
+  return [];
+}
+
 function loadPrevV5Runs() {
   const paths = [
+    join(root, "data/admin-board.json"),
     join(root, "data/v5-history.json"),
     join(root, "data/admin-snapshot.json"),
   ];
@@ -401,7 +415,7 @@ function loadPrevBoardAddrs() {
     for (const row of prev.week || []) if (row?.addr) out.add(getAddress(row.addr));
     for (const row of prev.invite || []) if (row?.addr) out.add(getAddress(row.addr));
   }
-  for (const path of [join(root, "data/v5-history.json"), join(root, "data/admin-snapshot.json")]) {
+  for (const path of [join(root, "data/admin-board.json"), join(root, "data/v5-history.json"), join(root, "data/admin-snapshot.json")]) {
     const hist = readJsonFile(path);
     if (!hist) continue;
     for (const row of hist.runs || []) if (row?.player) out.add(getAddress(row.player));
@@ -480,6 +494,7 @@ if (paidAddr && nextFree > 1) {
 }
 
 const prevV5Rows = loadPrevV5Runs();
+const prevAdminRuns = loadPrevAdminRuns();
 
 let rows;
 if (paidAddr) {
@@ -488,9 +503,10 @@ if (paidAddr) {
     freePack.rows.map((r) => ({ ...r, lane: "v5" })),
     v5HistRows.map((r) => ({ ...r, lane: "v5" })),
     prevV5Rows,
+    prevAdminRuns,
   );
 } else {
-  rows = mergeRunRows(freePack.rows.map((r) => ({ ...r, lane: "v5" })), prevV5Rows);
+  rows = mergeRunRows(freePack.rows.map((r) => ({ ...r, lane: "v5" })), prevV5Rows, prevAdminRuns);
 }
 
 const seen = new Set(rows.map((r) => r.player));
@@ -558,30 +574,38 @@ const logsFree = await collectLogs(freeAddr, freeIface, freeLogNames, latest, lo
 const prevSnap = prevSnapEarly;
 const burnChunks = Number(process.env.BURN_CHUNKS || 10);
 const settleChunks = Number(process.env.SETTLE_CHUNKS || 15);
+const v5HistDone = !paidAddr || v5RunScanBefore <= 1;
+const settleCatchup = Number(process.env.SETTLE_CATCHUP || (v5HistDone ? 80 : settleChunks));
+const burnCatchup = Number(process.env.BURN_CATCHUP || (v5HistDone ? 80 : burnChunks));
 let burnScanBefore = Number(prevSnap.burnScanBefore || latest);
 let settleScanBefore = Number(prevSnap.settleScanBefore || latest);
+if ((!Number.isFinite(settleScanBefore) || settleScanBefore <= 0) && prevSnap.burnScanBefore) {
+  settleScanBefore = latest;
+}
 if (!Number.isFinite(burnScanBefore) || burnScanBefore <= 0) burnScanBefore = latest;
 if (!Number.isFinite(settleScanBefore) || settleScanBefore <= 0) settleScanBefore = latest;
 if (burnScanBefore > latest) burnScanBefore = latest;
 if (settleScanBefore > latest) settleScanBefore = latest;
 const burnSpan = 1000;
-const burnFrom = Math.max(0, burnScanBefore - burnChunks * burnSpan);
-const settleFrom = Math.max(0, settleScanBefore - settleChunks * burnSpan);
-if (paidAddr && settleScanBefore > 0 && settleFrom < settleScanBefore) {
-  console.error("settle backfill", settleFrom, "..", settleScanBefore);
-  const topic = freeIface.getEvent("RunSettled").topicHash;
-  for (let toBlock = settleScanBefore; toBlock > settleFrom; toBlock -= burnSpan) {
-    const fromBlock = Math.max(settleFrom, toBlock - burnSpan + 1);
+
+async function backfillTopicLogs(address, iface, eventName, scanBefore, maxSteps, into) {
+  const topic = iface.getEvent(eventName).topicHash;
+  let cursor = scanBefore;
+  let steps = 0;
+  console.error(`${eventName} backfill`, "from", cursor, "steps", maxSteps);
+  while (cursor > 0 && steps < maxSteps) {
+    const toBlock = cursor;
+    const fromBlock = Math.max(0, toBlock - burnSpan + 1);
     const got = await getLogsChunk(RPCS, {
-      address: freeAddr,
+      address,
       topics: [topic],
       fromBlock,
       toBlock,
     });
     for (const log of got || []) {
       try {
-        const parsed = freeIface.parseLog(log);
-        logsFree.push({
+        const parsed = iface.parseLog(log);
+        into.push({
           name: parsed.name,
           args: parsed.args,
           blockNumber: log.blockNumber,
@@ -589,33 +613,31 @@ if (paidAddr && settleScanBefore > 0 && settleFrom < settleScanBefore) {
         });
       } catch {}
     }
+    cursor = fromBlock > 0 ? fromBlock - 1 : 0;
+    steps += 1;
   }
-  settleScanBefore = settleFrom;
+  return cursor;
+}
+
+if (paidAddr && settleScanBefore > 0) {
+  settleScanBefore = await backfillTopicLogs(
+    freeAddr,
+    freeIface,
+    "RunSettled",
+    settleScanBefore,
+    settleCatchup,
+    logsFree,
+  );
 }
 if (paidAddr && burnScanBefore > 0) {
-  console.error("burn backfill", burnFrom, "..", burnScanBefore);
-  const topic = freeIface.getEvent("Burned").topicHash;
-  for (let toBlock = burnScanBefore; toBlock > burnFrom; toBlock -= burnSpan) {
-    const fromBlock = Math.max(burnFrom, toBlock - burnSpan + 1);
-    const got = await getLogsChunk(RPCS, {
-      address: freeAddr,
-      topics: [topic],
-      fromBlock,
-      toBlock,
-    });
-    for (const log of got || []) {
-      try {
-        const parsed = freeIface.parseLog(log);
-        logsFree.push({
-          name: parsed.name,
-          args: parsed.args,
-          blockNumber: log.blockNumber,
-          transactionHash: log.transactionHash,
-        });
-      } catch {}
-    }
-  }
-  burnScanBefore = burnFrom;
+  burnScanBefore = await backfillTopicLogs(
+    freeAddr,
+    freeIface,
+    "Burned",
+    burnScanBefore,
+    burnCatchup,
+    logsFree,
+  );
 }
 const logs = [...logsPaid.map((l) => ({ ...l, lane: "v6" })), ...logsFree.map((l) => ({ ...l, lane: "v5" }))];
 const byKey = new Map(rows.map((r) => [r.key, r]));
