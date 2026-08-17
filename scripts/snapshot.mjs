@@ -965,6 +965,22 @@ function effectiveBurnAmt(row) {
   return 0n;
 }
 
+function isExtraRun(row) {
+  const paid = row.extraPaid ?? 0n;
+  return paid > 0n || Boolean(row.extraTx);
+}
+
+function burnCountsFromRuns(rows) {
+  let v5BurnCount = 0;
+  let v6BurnCount = 0;
+  for (const row of rows) {
+    if (isExtraRun(row)) continue;
+    if (row.lane === "v6") v6BurnCount += 1;
+    else v5BurnCount += 1;
+  }
+  return { burnCount: v5BurnCount + v6BurnCount, v5BurnCount, v6BurnCount };
+}
+
 function tallyBurnStats(rows, burnsByHash) {
   const byKey = new Map();
   for (const b of burnsByHash.values()) {
@@ -972,6 +988,7 @@ function tallyBurnStats(rows, burnsByHash) {
     byKey.set(key, b);
   }
   for (const row of rows) {
+    if (isExtraRun(row)) continue;
     const amt = effectiveBurnAmt(row);
     if (amt <= 0n) continue;
     const lane = row.lane === "v6" ? "v6" : "v5";
@@ -998,10 +1015,8 @@ function tallyBurnStats(rows, burnsByHash) {
 
 const v5Runs = rows.filter((r) => r.lane === "v5").length;
 const v6Runs = rows.filter((r) => r.lane === "v6").length;
-// Burn tx count = game count (one burn per run).
-const burnCount = rows.length;
-const v5BurnCount = v5Runs;
-const v6BurnCount = v6Runs;
+// Burn tx count = game count minus extra-time runs (full ticket, no burn).
+const { burnCount, v5BurnCount, v6BurnCount } = burnCountsFromRuns(rows);
 const burnValues = tallyBurnStats(rows, burnsByHash).burnValues;
 const burns = burnValues
   .sort((a, b) => (b.blockNumber || 0) - (a.blockNumber || 0) || (b.runId || 0) - (a.runId || 0))

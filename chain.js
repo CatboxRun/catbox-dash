@@ -2230,10 +2230,16 @@ const CatboxChain = (() => {
     return 0n;
   }
 
+  function isExtraRun(row) {
+    const paid = asAmt(row.extraPaid);
+    return paid > 0n || Boolean(row.extraTx);
+  }
+
   function tallyBurnStatsFromRows(rows) {
     let v5BurnCount = 0;
     let v6BurnCount = 0;
     for (const row of rows || []) {
+      if (isExtraRun(row)) continue;
       if (row.lane === "v6") v6BurnCount += 1;
       else v5BurnCount += 1;
     }
@@ -2262,6 +2268,7 @@ const CatboxChain = (() => {
       });
     }
     for (const r of rowList || []) {
+      if (isExtraRun(r)) continue;
       const amt = effectiveBurnAmt(r);
       if (amt <= 0n) continue;
       const lane = r.lane === "v6" ? "v6" : "v5";
@@ -2760,13 +2767,13 @@ const CatboxChain = (() => {
       social: raw.social || [],
       xClaimCount: Number(raw.xClaimCount || 0),
       tgClaimCount: Number(raw.tgClaimCount || 0),
-      burnCount: Number(raw.totalRuns || raw.burnCount || 0) || (raw.runs || []).length,
+      burnCount:
+        Number(raw.burnCount ?? 0) ||
+        Math.max(0, Number(raw.totalRuns || 0) - Number(raw.extraPaidCount || 0)),
       v5BurnCount:
-        Number(raw.v5Runs || raw.v5BurnCount || 0) ||
-        (raw.runs || []).filter((r) => r.lane !== "v6").length,
-      v6BurnCount:
-        Number(raw.v6Runs || raw.v6BurnCount || 0) ||
-        (raw.runs || []).filter((r) => r.lane === "v6").length,
+        Number(raw.v5BurnCount ?? 0) ||
+        Math.max(0, Number(raw.v5Runs || 0) - Number(raw.extraPaidCount || 0)),
+      v6BurnCount: Number(raw.v6BurnCount ?? raw.v6Runs ?? 0),
       runs: (raw.runs || []).map((r) => ({
         ...r,
         paid: reviveWei(r.paid) ?? 0n,
@@ -2804,6 +2811,7 @@ const CatboxChain = (() => {
     const totalRuns = Number(raw.totalRuns || runs.length);
     const v5Runs = Number(raw.v5Runs || runs.filter((r) => r.lane === "v5").length);
     const v6Runs = Number(raw.v6Runs || runs.filter((r) => r.lane === "v6").length);
+    const burnStats = tallyBurnStatsFromRows(runs);
     return {
       ...raw,
       at: raw.at || null,
@@ -2819,9 +2827,9 @@ const CatboxChain = (() => {
       social: raw.social || [],
       xClaimCount: Number(raw.xClaimCount || 0),
       tgClaimCount: Number(raw.tgClaimCount || 0),
-      burnCount: totalRuns,
-      v5BurnCount: v5Runs,
-      v6BurnCount: v6Runs,
+      burnCount: Number(raw.burnCount ?? burnStats.burnCount),
+      v5BurnCount: Number(raw.v5BurnCount ?? burnStats.v5BurnCount),
+      v6BurnCount: Number(raw.v6BurnCount ?? burnStats.v6BurnCount),
       totalRuns,
       v5Runs,
       v6Runs,
