@@ -428,13 +428,7 @@ const CatboxChain = (() => {
         const inviteShown = i + (v5Invite || 0n);
         const accounted = free + (v5Week || 0n) + (v5Invite || 0n) + (ticketFloat || 0n);
         const dust = v5Bal > accounted ? v5Bal - accounted : 0n;
-        const burnedAllTime = (burnedPaid || 0n) + (burnedFree || 0n) + dust;
-        const burnedShown =
-          weekShown > 0n
-            ? (weekShown * 30n) / 50n
-            : inviteShown > 0n
-              ? (inviteShown * 30n) / 20n
-              : 0n;
+        const burned = (burnedPaid || 0n) + (burnedFree || 0n) + dust;
         return {
           week: weekShown,
           day: weekShown,
@@ -444,8 +438,7 @@ const CatboxChain = (() => {
           topLen: topN,
           v6: true,
           invite: inviteShown,
-          burned: burnedShown,
-          burnedAllTime,
+          burned,
           strandedBurn: dust,
           free,
           total: weekShown + inviteShown,
@@ -453,9 +446,7 @@ const CatboxChain = (() => {
       } catch (_) {}
     }
     const c = freeGameContract(p);
-    const [week, invite, burnedAllTime] = await Promise.all([c.weekPool(), c.invitePool(), c.burnedTotal()]);
-    const burnedShown =
-      week > 0n ? (week * 30n) / 50n : invite > 0n ? (invite * 30n) / 20n : 0n;
+    const [week, invite, burned] = await Promise.all([c.weekPool(), c.invitePool(), c.burnedTotal()]);
     return {
       week,
       day: week,
@@ -465,8 +456,7 @@ const CatboxChain = (() => {
       topLen: null,
       v6: false,
       invite,
-      burned: burnedShown,
-      burnedAllTime,
+      burned,
       strandedBurn: 0n,
       free,
       total: week + invite,
@@ -2550,7 +2540,7 @@ const CatboxChain = (() => {
     let freePool = 0n;
     try {
       const pool = await poolBalance();
-      burnedTotal = pool.burnedAllTime ?? pool.burned;
+      burnedTotal = pool.burned;
       weekPool = pool.week;
       invitePool = pool.invite;
       freePool = pool.free;
