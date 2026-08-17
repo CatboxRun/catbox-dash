@@ -1207,6 +1207,13 @@ async function doSwap() {
   } catch (e) {
     status.classList.remove("ok");
     const m = e?.message;
+    if (m === "ALLOW" && from === "LIM" && CatboxChain.permit2SellReady) {
+      try {
+        const st = await CatboxChain.permit2SellReady(window.CATBOX_CHAIN?.lim, amt);
+        status.textContent = st.erc && !st.router ? t("swapPermitOnly") : t("swapApproveFail");
+        return;
+      } catch (_) {}
+    }
     status.textContent =
       m === "NO_LIQ" ? t("swapNoLiq")
       : m === "REJECTED" ? t("swapRejected")

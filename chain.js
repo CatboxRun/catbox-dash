@@ -1223,7 +1223,7 @@ const CatboxChain = (() => {
   const CL_PM = "0xa0FfB9c1CE1Fe56963B0321B32E7A0302114058b";
   const CL_QUOTER = "0xd0737C9762912dD34c3271197E362Aa736Df0926";
   const MIXED_QUOTER = "0x2dCbF7B985c8C5C931818e4E107bAe8aaC8dAB7C";
-  const PERMIT2 = "0x31c2F6fcFf4F8759b3Bd5Bf0e1084A055615C768";
+  const PERMIT2 = "0x31c2F6fcFf4F8759b3Bd5Bf0e1084A055615c768";
   const MSG_SENDER = "0x0000000000000000000000000000000000000001";
   const ADDRESS_THIS = "0x0000000000000000000000000000000000000002";
   const CONTRACT_BALANCE = 1n << 255n;
@@ -1356,11 +1356,20 @@ const CatboxChain = (() => {
     return err;
   }
 
+  function revertSelector(e) {
+    const data = e?.data || e?.info?.error?.data;
+    if (typeof data !== "string" || !data.startsWith("0x") || data.length < 10) return null;
+    return data.slice(0, 10).toLowerCase();
+  }
+
   function decorateSwapRevert(e) {
     if (isUserReject(e)) return swapError("REJECTED", e);
+    const sel = revertSelector(e);
+    if (sel === "0xd81b2f2e" || sel === "0xf96fb071") return swapError("ALLOW", e);
+    if (sel === "0x4704aaf8") return swapError("SLIP", e);
     const msg = String(e?.shortMessage || e?.reason || e?.info?.error?.message || e?.message || "");
     if (/TooLittleReceived|too little received|INSUFFICIENT_OUTPUT|slippage/i.test(msg)) return swapError("SLIP", e);
-    if (/allowance|insufficient.*allow|TRANSFER_FROM_FAILED|STF|Permit2|TRANSFER_FROM/i.test(msg)) {
+    if (/AllowanceExpired|InsufficientAllowance|allowance|insufficient.*allow|TRANSFER_FROM_FAILED|STF|Permit2|TRANSFER_FROM/i.test(msg)) {
       return swapError("ALLOW", e);
     }
     if (/insufficient funds|insufficient balance for gas|gas required exceeds|not enough bnb|余额不足/i.test(msg)) {
@@ -1461,14 +1470,30 @@ const CatboxChain = (() => {
     return t.balanceOf(addr);
   }
 
+  async function permit2SellReady(token, amountIn, addr = account) {
+    if (!addr || !amountIn) return { ok: false, erc: false, router: false };
+    const p = await readProvider();
+    const erc = new ethers.Contract(token, ERC20_ABI, p);
+    const allow = await erc.allowance(addr, PERMIT2);
+    const p2 = new ethers.Contract(PERMIT2, PERMIT2_ABI, p);
+    const cur = await p2.allowance(addr, token, UR);
+    const now = Math.floor(Date.now() / 1000);
+    const ercOk = allow >= amountIn;
+    const routerOk = cur[0] >= amountIn && Number(cur[1]) > now + 60;
+    return { ok: ercOk && routerOk, erc: ercOk, router: routerOk };
+  }
+
+  async function assertPermit2Ready(token, amountIn) {
+    const st = await permit2SellReady(token, amountIn);
+    if (!st.ok) throw swapError("ALLOW");
+  }
+
   async function ensurePermit2(token, amountIn, s, onStatus) {
     const erc = new ethers.Contract(token, ERC20_ABI, s);
-    const bal = await erc.balanceOf(account);
-    const grant = bal > amountIn ? bal : amountIn;
     const allow = await erc.allowance(account, PERMIT2);
     if (allow < amountIn) {
       if (onStatus) onStatus("swapApprove");
-      const txA = await erc.approve(PERMIT2, grant);
+      const txA = await erc.approve(PERMIT2, ethers.MaxUint256);
       await txA.wait();
     }
     const p2 = new ethers.Contract(PERMIT2, PERMIT2_ABI, s);
@@ -1478,10 +1503,10 @@ const CatboxChain = (() => {
     if (cur[0] < amountIn || Number(cur[1]) < now + 600) {
       if (onStatus) onStatus("swapPermit");
       const cap160 = (1n << 160n) - 1n;
-      const amt160 = grant > cap160 ? cap160 : grant;
-      const txB = await p2.approve(token, UR, amt160, exp);
+      const txB = await p2.approve(token, UR, cap160, exp);
       await txB.wait();
     }
+    await assertPermit2Ready(token, amountIn);
   }
 
   async function swapExact(fromSym, toSym, amountIn, onStatus) {
@@ -1538,13 +1563,18 @@ const CatboxChain = (() => {
           permit2Pull(cfg.lim, amountIn),
           encodeInfiTakeToRouterFromBalance(pool, cfg.lim, USDT, amountIn, minUsdt),
           coder.encode(["address", "uint256", "uint256", "address[]", "bool"], [ADDRESS_THIS, CONTRACT_BALANCE, minOut, [USDT, WBNB], false]),
-          coder.encode(["address", "uint256"], [MSG_SENDER, minOut]),
+          coder.encode(["address", "uint256"], [MSG_SENDER, 0]),
         ];
       } else {
         throw new Error("NO_LIQ");
       }
       if (onStatus) onStatus("swapping");
-      await ur.execute.staticCall(commands, inputs, deadline, { value });
+      try {
+        await ur.execute.staticCall(commands, inputs, deadline, { value });
+      } catch (e) {
+        const decorated = decorateSwapRevert(e);
+        if (["SLIP", "ALLOW", "REJECTED", "GAS"].includes(decorated.message)) throw decorated;
+      }
       const tx = await ur.execute(commands, inputs, deadline, { value });
       return (await tx.wait()).hash;
     } catch (e) {
@@ -2993,6 +3023,7 @@ const CatboxChain = (() => {
     quoteSwap,
     swapToLim,
     swapExact,
+    permit2SellReady,
     tokenBalance,
     fetchLeaderboards,
     fetchBurns,
