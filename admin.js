@@ -193,6 +193,12 @@ function renderChips(summary) {
     ["V6 邀请池", s.invitePool != null ? `${lim(s.invitePool)} LIM` : "—"],
     ["V5 免费池", s.freePool != null ? `${lim(s.freePool)} LIM` : "—"],
     ["累计销毁", s.burnedTotal != null ? `${lim(s.burnedTotal)} LIM` : "—"],
+    [
+      "销毁笔数",
+      s.burnCount != null
+        ? `V5 ${s.v5BurnCount ?? 0} / V6 ${s.v6BurnCount ?? 0} · 共 ${s.burnCount}`
+        : "—",
+    ],
     ["加时池", s.extraPool != null ? `${lim(s.extraPool)} LIM` : "—"],
     ["已发加时", s.extraPaidTotal != null ? `${lim(s.extraPaidTotal)} LIM · ${s.extraPaidCount ?? 0} 笔` : "—"],
     ["加时存入", `${lim(extraDeposited(s))} LIM`],
@@ -356,58 +362,57 @@ function applySnapshot(snap) {
   renderTable();
   renderSocial();
   const when = snap.at ? new Date(snap.at).toLocaleString() : "";
-  const v5n = snap.v5Runs ?? allRows.filter((r) => r.lane === "v5").length;
-  const v6n = snap.v6Runs ?? allRows.filter((r) => r.lane === "v6").length;
+  const v5n = snap.v5Runs ?? allRows.filter((r) => r.lane === "v5" || r.lane === "free").length;
+  const v6n = snap.v6Runs ?? allRows.filter((r) => r.lane === "v6" || r.lane === "paid").length;
+  const hist = snap.historyAt ? ` · 历史快照 ${new Date(snap.historyAt).toLocaleString()}` : "";
   setStatus(
-    `双合约快照 V5+V6 · ${when} · V5 ${v5n} / V6 ${v6n} 局 · 共 ${snap.totalRuns} 局 · ${snap.uniqueWallets} 个钱包 · 推文 ${snap.xClaimCount ?? 0} · TG ${snap.tgClaimCount ?? 0} · 约每 10 分钟更新`,
+    `数据已合并 · ${when}${hist} · V5 ${v5n} / V6 ${v6n} 局 · 共 ${snap.totalRuns ?? allRows.length} 局 · ${snap.uniqueWallets ?? "—"} 个钱包`,
   );
-}
-
-async function refreshSocialDeployBtn() {
-  const btn = $("socialDeployBtn");
-  const paidBtn = $("paidDeployBtn");
-  if (!CatboxChain.isOwner?.()) {
-    if (btn) show(btn, false);
-    if (paidBtn) show(paidBtn, false);
-    return;
-  }
-  try {
-    if (btn) {
-      const deployed = await CatboxChain.isSocialDeployed();
-      show(btn, !deployed);
-    }
-  } catch (_) {
-    if (btn) show(btn, false);
-  }
-  try {
-    if (paidBtn && CatboxChain.isPaidDeployed) {
-      const deployed = await CatboxChain.isPaidDeployed();
-      show(paidBtn, !deployed);
-    }
-  } catch (_) {
-    if (paidBtn) show(paidBtn, false);
-  }
 }
 
 async function loadRuns() {
   if (!paintGate()) return;
   if (loading) return;
   loading = true;
-  setStatus("读取快照…");
+  setStatus("加载历史并扫描链上…");
   try {
-    const snap = await CatboxChain.loadSnapshot(true);
-    if (!snap?.runs?.length) throw new Error("NO_SNAP");
-    applySnapshot(snap);
-    await refreshSocialDeployBtn();
+    const pools = await CatboxChain.loadSnapshot(true).catch(() => ({}));
+    const live = await CatboxChain.fetchOwnerRuns((p) => {
+      if (p.phase === "history") {
+        const bit = p.complete === false ? " · 回填中" : "";
+        setStatus(`V5 历史 ${p.runs} 局${bit}${p.at ? ` · ${p.at}` : ""}…`);
+      } else if (p.phase === "runs" && p.total) {
+        const lane = p.lane ? ` ${String(p.lane).toUpperCase()}` : "";
+        setStatus(`扫描${lane} ${p.done}/${p.total}…`);
+      } else if (p.phase === "v5gap") {
+        setStatus(`补扫 V5 旧局 #1–${p.to}…`);
+      } else if (p.phase === "v5full") {
+        setStatus(`全量扫描 V5（约 ${p.total} 局）…`);
+      } else if (p.phase === "players") {
+        setStatus(`同步玩家积分 ${p.done}/${p.total}…`);
+      } else if (p.phase === "logs") {
+        setStatus("补全结算日志…");
+      } else if (p.phase === "extra") {
+        setStatus("同步加时数据…");
+      } else if (p.phase === "social") {
+        setStatus("同步推文 / TG 登记…");
+      }
+    });
+    applySnapshot({
+      ...pools,
+      ...live,
+      runs: live.runs || [],
+      social: live.social || [],
+      at: new Date().toISOString(),
+      historyAt: live.historyAt || pools?.at || null,
+    });
   } catch (e) {
     const msg =
       e?.message === "NOT_OWNER"
         ? "无权限：请切换到 owner 钱包"
         : e?.message === "NO_WALLET"
           ? "请先连接钱包"
-          : e?.message === "NO_SNAP"
-            ? "快照还没生成，请稍后再打开。"
-            : `读取失败：${e?.shortMessage || e?.message || "请重试"}`;
+          : `扫描失败：${e?.shortMessage || e?.message || "请重试"}`;
     setStatus(msg);
     if (e?.message === "NOT_OWNER") {
       show($("denied"), true);
@@ -442,30 +447,6 @@ function boot() {
     renderTable();
     renderSocial();
   });
-  if ($("socialDeployBtn")) {
-    $("socialDeployBtn").onclick = async () => {
-      try {
-        setStatus("部署社交登记合约…");
-        const hash = await CatboxChain.deploySocial();
-        setStatus(`社交合约已部署 ${hash.slice(0, 10)}… 下一轮快照会开始收录`);
-        await refreshSocialDeployBtn();
-      } catch (e) {
-        setStatus(`部署失败：${e?.shortMessage || e?.message || "请重试"}`);
-      }
-    };
-  }
-  if ($("paidDeployBtn")) {
-    $("paidDeployBtn").onclick = async () => {
-      try {
-        setStatus("部署付费 V6…");
-        const hash = await CatboxChain.deployPaid();
-        setStatus(hash ? `V6 已部署 ${hash.slice(0, 10)}… 请再跑迁移/注资脚本` : "V6 已在链上");
-        await refreshSocialDeployBtn();
-      } catch (e) {
-        setStatus(`部署失败：${e?.shortMessage || e?.message || "请重试"}`);
-      }
-    };
-  }
   document.querySelector("table.runs thead").addEventListener("click", (e) => {
     const th = e.target.closest("th[data-key]");
     if (!th) return;

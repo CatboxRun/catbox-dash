@@ -349,11 +349,19 @@ function prevRunToInternal(r) {
   };
 }
 
-function loadPrevV5Runs(prev) {
-  if (!prev?.runs?.length) return [];
-  return prev.runs
-    .filter((r) => r.lane === "v5" || r.lane === "free")
-    .map(prevRunToInternal);
+function loadPrevV5Runs() {
+  const paths = [
+    join(root, "data/v5-history.json"),
+    join(root, "data/admin-snapshot.json"),
+  ];
+  for (const path of paths) {
+    const prev = readJsonFile(path);
+    if (!prev?.runs?.length) continue;
+    return prev.runs
+      .filter((r) => r.lane === "v5" || r.lane === "free")
+      .map(prevRunToInternal);
+  }
+  return [];
 }
 
 function mergeRunRows(...lists) {
@@ -373,6 +381,11 @@ function mergeRunRows(...lists) {
       if (prev.leftover != null && r.leftover == null) merged.leftover = prev.leftover;
       if (prev.burned != null && r.burned == null) merged.burned = prev.burned;
       if (prev.score != null && r.score == null) merged.score = prev.score;
+      if (prev.payout != null && r.payout == null) merged.payout = prev.payout;
+      if (prev.extraPaid > 0n && r.extraPaid <= 0n) merged.extraPaid = prev.extraPaid;
+      if (prev.extraTx && !r.extraTx) merged.extraTx = prev.extraTx;
+      if (prev.xClaimed && !r.xClaimed) merged.xClaimed = prev.xClaimed;
+      if (prev.tgClaimed && !r.tgClaimed) merged.tgClaimed = prev.tgClaimed;
       if (prev.referrer && prev.referrer !== ZERO && (!r.referrer || r.referrer === ZERO)) {
         merged.referrer = prev.referrer;
       }
@@ -388,7 +401,11 @@ function loadPrevBoardAddrs() {
   if (prev) {
     for (const row of prev.week || []) if (row?.addr) out.add(getAddress(row.addr));
     for (const row of prev.invite || []) if (row?.addr) out.add(getAddress(row.addr));
-    for (const row of prev.runs || []) if (row?.player) out.add(getAddress(row.player));
+  }
+  for (const path of [join(root, "data/v5-history.json"), join(root, "data/admin-snapshot.json")]) {
+    const hist = readJsonFile(path);
+    if (!hist) continue;
+    for (const row of hist.runs || []) if (row?.player) out.add(getAddress(row.player));
   }
   const book = readJsonFile(join(root, "data/board-wallets.json"));
   if (book?.addrs) {
@@ -421,7 +438,8 @@ const paidPack = paidAddr
 // After V6 cutover, do NOT full-scan V5 history in one shot — it times out Actions.
 // Live window: recent V5 for free SCOUT + logs; older V5 paid runs backfill incrementally + carry forward.
 const V5_RECENT = Number(process.env.V5_RECENT || 120);
-const V5_RUN_CHUNK = Number(process.env.V5_RUN_CHUNK || 150);
+const V5_RUN_CHUNK = Number(process.env.V5_RUN_CHUNK || 200);
+const V5_BACKFILL_CHUNKS = Number(process.env.V5_BACKFILL_CHUNKS || 15);
 let freePack;
 let nextFree = 0;
 if (paidAddr) {
@@ -438,25 +456,31 @@ if (paidAddr) {
 
 let v5HistRows = [];
 let v5RunScanBefore = Number(prevSnapEarly.v5RunScanBefore || 0);
+const prevHist = readJsonFile(join(root, "data/v5-history.json"));
+if ((!Number.isFinite(v5RunScanBefore) || v5RunScanBefore <= 0) && prevHist?.v5RunScanBefore) {
+  v5RunScanBefore = Number(prevHist.v5RunScanBefore);
+}
 if (paidAddr && nextFree > 1) {
   if (!Number.isFinite(v5RunScanBefore) || v5RunScanBefore <= 0) {
     v5RunScanBefore = Math.max(1, nextFree - V5_RECENT);
   }
   if (v5RunScanBefore > nextFree) v5RunScanBefore = nextFree;
-  const histTo = v5RunScanBefore;
-  const histFrom = Math.max(1, histTo - V5_RUN_CHUNK);
-  if (histFrom < histTo) {
-    console.error("v5 run backfill", histFrom, "..", histTo - 1);
+  for (let c = 0; c < V5_BACKFILL_CHUNKS; c++) {
+    if (v5RunScanBefore <= 1) break;
+    const histTo = v5RunScanBefore;
+    const histFrom = Math.max(1, histTo - V5_RUN_CHUNK);
+    if (histFrom >= histTo) break;
+    console.error("v5 run backfill", histFrom, "..", histTo - 1, `chunk ${c + 1}/${V5_BACKFILL_CHUNKS}`);
     const histPack = await loadRunsFrom("v5", freeAddr, freeIface, freeGame, {
       fromId: histFrom,
       toIdExclusive: histTo,
     });
-    v5HistRows = histPack.rows;
+    v5HistRows.push(...histPack.rows);
     v5RunScanBefore = histFrom;
   }
 }
 
-const prevV5Rows = paidAddr ? loadPrevV5Runs(prevSnapEarly) : [];
+const prevV5Rows = loadPrevV5Runs();
 
 let rows;
 if (paidAddr) {
@@ -879,7 +903,11 @@ if (paidAddr) {
   } catch (_) {}
 }
 
-const burns = [...burnsByHash.values()]
+const burnValues = [...burnsByHash.values()];
+const burnCount = burnValues.length;
+const v5BurnCount = burnValues.filter((b) => (b.lane || "v5") === "v5").length;
+const v6BurnCount = burnValues.filter((b) => b.lane === "v6").length;
+const burns = burnValues
   .sort((a, b) => (b.blockNumber || 0) - (a.blockNumber || 0) || (b.runId || 0) - (a.runId || 0))
   .slice(0, 5000)
   .map((b) => ({
@@ -889,6 +917,7 @@ const burns = [...burnsByHash.values()]
     hash: b.hash || "",
     runId: b.runId ?? null,
     blockNumber: b.blockNumber || 0,
+    lane: b.lane || "v5",
   }));
 
 const social = Object.values(socialByAddr)
@@ -924,6 +953,9 @@ const snapshot = {
   freePool: weiStr(freePool),
   burnedTotal: weiStr(burnedTotal),
   strandedBurn: weiStr(strandedBurn),
+  burnCount,
+  v5BurnCount,
+  v6BurnCount,
   extraPool: weiStr(extraPool),
   extraPaused,
   extraSinceRunId,
@@ -943,6 +975,10 @@ const snapshot = {
   week: toRows(week, addrs),
   invite: toRows(invite),
   burns,
+  // Public snapshot: boards + burns only (no per-run PII). Admin reads live via fetchOwnerRuns.
+};
+const adminSnapshot = {
+  ...snapshot,
   social,
   runs: rows
     .sort((a, b) => b.startedAt - a.startedAt || b.id - a.id)
@@ -979,12 +1015,30 @@ const snapshot = {
 const outDir = join(root, "data");
 mkdirSync(outDir, { recursive: true });
 const outFile = join(outDir, "snapshot.json");
+const adminFile = join(outDir, "admin-snapshot.json");
 writeFileSync(outFile, `${JSON.stringify(snapshot)}\n`);
+writeFileSync(adminFile, `${JSON.stringify(adminSnapshot)}\n`);
+const v5HistoryFile = join(outDir, "v5-history.json");
+const v5History = {
+  at: snapshot.at,
+  block: snapshot.block,
+  v5NextRunId: snapshot.v5NextRunId,
+  v5RunScanBefore: snapshot.v5RunScanBefore,
+  v5Runs: snapshot.v5Runs,
+  burnCount: snapshot.burnCount,
+  v5BurnCount: snapshot.v5BurnCount,
+  v6BurnCount: snapshot.v6BurnCount,
+  runs: adminSnapshot.runs.filter((r) => r.lane === "v5"),
+  social,
+};
+writeFileSync(v5HistoryFile, `${JSON.stringify(v5History)}\n`);
 console.error(
   "wrote",
   outFile,
+  "v5-history",
+  v5History.runs.length,
   "runs",
-  snapshot.totalRuns,
+  adminSnapshot.runs.length,
   "week",
   snapshot.week.length,
   "invite",

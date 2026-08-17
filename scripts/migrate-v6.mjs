@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { JsonRpcProvider, Wallet, Contract, getAddress, ZeroAddress } from "ethers";
@@ -12,7 +12,10 @@ if (!v6?.address) {
   process.exit(1);
 }
 
-const snap = JSON.parse(readFileSync(join(root, "data/snapshot.json"), "utf8"));
+const snapPath = join(root, "data/admin-snapshot.json");
+const pubPath = join(root, "data/snapshot.json");
+const snapFile = existsSync(snapPath) ? snapPath : pubPath;
+const snap = JSON.parse(readFileSync(snapFile, "utf8"));
 const rpc = process.env.BSC_RPC || cfg.rpc;
 const provider = new JsonRpcProvider(rpc, cfg.chainId, { staticNetwork: true, batchMaxCount: 1 });
 const key = process.env.PRIVATE_KEY || process.env.BSC_PRIVATE_KEY;

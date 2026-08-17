@@ -482,13 +482,50 @@ const CatboxChain = (() => {
     return null;
   }
 
+  async function readPending(game, addr) {
+    const pend = await game.pending(addr);
+    return {
+      inv: pend[0] ?? 0n,
+      wk: pend[1] ?? 0n,
+      total: pend[2] ?? 0n,
+    };
+  }
+
   async function pendingOf(addr = account) {
-    if (!addr) return { inv: 0n, wk: 0n, total: 0n };
+    if (!addr) return { inv: 0n, wk: 0n, total: 0n, v5: 0n, v6: 0n };
     const p = await readProvider();
-    const c =
-      hasPaidLane() && (await isPaidDeployed()) ? paidGameContract(p) : freeGameContract(p);
-    const pend = await c.pending(addr);
-    return { inv: pend[0], wk: pend[1], total: pend[2] };
+    let v5 = 0n;
+    let v6 = 0n;
+    let inv = 0n;
+    let wk = 0n;
+    try {
+      const p5 = await readPending(freeGameContract(p), addr);
+      v5 = p5.total;
+    } catch (_) {}
+    const v6Live = hasPaidLane() && (await isPaidDeployed());
+    if (v6Live) {
+      try {
+        const p6 = await readPending(paidGameContract(p), addr);
+        v6 = p6.total;
+        inv = p6.inv;
+        wk = p6.wk;
+      } catch (_) {}
+    } else {
+      try {
+        const p5 = await readPending(freeGameContract(p), addr);
+        inv = p5.inv;
+        wk = p5.wk;
+      } catch (_) {}
+    }
+    const total = v5 + v6;
+    if (v6Live && v5 > 0n && inv === 0n && wk === 0n) {
+      try {
+        const p5 = await readPending(freeGameContract(p), addr);
+        inv = (inv || 0n) + p5.inv;
+        wk = (wk || 0n) + p5.wk;
+      } catch (_) {}
+    }
+    return { inv, wk, total, v5, v6 };
   }
 
   async function invitePoints(addr = account) {
@@ -715,11 +752,23 @@ const CatboxChain = (() => {
   async function claim() {
     await connect();
     const s = await signer();
-    // Until V6 is on-chain, keep claiming on V5. After cutover, claim on V6 only.
-    const game =
-      hasPaidLane() && (await isPaidDeployed()) ? paidGameContract(s) : freeGameContract(s);
-    const tx = await game.claim();
-    return (await tx.wait()).hash;
+    const hashes = [];
+    const tryClaim = async (game) => {
+      const pend = await readPending(game, account);
+      if (pend.total <= 0n) return;
+      const tx = await game.claim();
+      hashes.push((await tx.wait()).hash);
+    };
+    try {
+      await tryClaim(freeGameContract(s));
+    } catch (e) {
+      if (!hasPaidLane() || !(await isPaidDeployed())) throw e;
+    }
+    if (hasPaidLane() && (await isPaidDeployed())) {
+      await tryClaim(paidGameContract(s));
+    }
+    if (!hashes.length) throw new Error("NONE");
+    return hashes.length === 1 ? hashes[0] : hashes.join(",");
   }
 
   function referrer() {
@@ -1001,6 +1050,25 @@ const CatboxChain = (() => {
     return rec.hash;
   }
 
+  const SCORE_PER_LIM = 250000n;
+
+  function capBoardScore(score, ticketLim) {
+    let s = 0n;
+    try {
+      s = BigInt(Math.max(0, Math.floor(Number(score) || 0)));
+    } catch (_) {
+      s = 0n;
+    }
+    let lim = 1n;
+    try {
+      lim = BigInt(Math.max(1, Math.floor(Number(ticketLim) || 1)));
+    } catch (_) {
+      lim = 1n;
+    }
+    const max = lim * SCORE_PER_LIM;
+    return s > max ? max : s;
+  }
+
   function collectedWei(got, ticket, capAtTicket) {
     const paid = ethers.parseUnits(String(ticket), 18);
     const wei = ethers.parseUnits(Number(Math.max(0, got)).toFixed(6), 18);
@@ -1028,7 +1096,8 @@ const CatboxChain = (() => {
     const runId = lane.runId;
     const capAtTicket = freeLane;
     const extraAmt = capAtTicket ? extraWeiFromGot(got, ticket) : 0n;
-    const tx = await game.settle(collectedWei(got, ticket, capAtTicket), BigInt(score || 0));
+    const safeScore = capBoardScore(score, ticket);
+    const tx = await game.settle(collectedWei(got, ticket, capAtTicket), safeScore);
     const rec = await tx.wait();
     let burned = 0n;
     let settledPayout = 0n;
@@ -1543,6 +1612,7 @@ const CatboxChain = (() => {
             out.push({
               name: parsedLog.name,
               args: parsedLog.args,
+              address: log.address,
               blockNumber: log.blockNumber,
               transactionHash: log.transactionHash,
             });
@@ -1570,6 +1640,60 @@ const CatboxChain = (() => {
         try {
           onPartial(out);
         } catch (_) {}
+      }
+    }
+    return out;
+  }
+
+  async function fetchContractLogs(address, abi, eventNames, maxChunks = 12) {
+    const names = Array.isArray(eventNames) ? eventNames : [eventNames];
+    const p = await logsReadProvider();
+    const contract = new ethers.Contract(address, abi, p);
+    const iface = contract.interface;
+    const hashes = names.map((n) => iface.getEvent(n).topicHash);
+    const latest = await withTimeout(p.getBlockNumber(), 4000);
+    const span = 1000;
+    const ranges = [];
+    for (let i = 0; i < maxChunks; i++) {
+      const toBlock = latest - i * span;
+      if (toBlock < 0) break;
+      ranges.push({ fromBlock: Math.max(0, toBlock - span + 1), toBlock });
+    }
+    const topic0 = hashes.length === 1 ? hashes[0] : hashes;
+    const out = [];
+    const PARALLEL = 2;
+    for (let i = 0; i < ranges.length; i += PARALLEL) {
+      const slice = ranges.slice(i, i + PARALLEL);
+      const results = await Promise.all(
+        slice.map(async (r) => {
+          try {
+            return await withTimeout(
+              p.getLogs({
+                address,
+                topics: [topic0],
+                fromBlock: r.fromBlock,
+                toBlock: r.toBlock,
+              }),
+              8000,
+            );
+          } catch (_) {
+            return null;
+          }
+        }),
+      );
+      for (const got of results) {
+        if (!got) continue;
+        for (const log of got) {
+          try {
+            const parsedLog = iface.parseLog(log);
+            out.push({
+              name: parsedLog.name,
+              args: parsedLog.args,
+              blockNumber: log.blockNumber,
+              transactionHash: log.transactionHash,
+            });
+          } catch (_) {}
+        }
       }
     }
     return out;
@@ -1638,7 +1762,7 @@ const CatboxChain = (() => {
     if (missed.length && missed.length <= 80) {
       const retryItems = missed.map((i) => items[i]);
       const retryCalls = retryItems.map((item) => ({
-        target: cfg.address,
+        target: dest,
         allowFailure: true,
         callData: iface.encodeFunctionData(fn, [item]),
       }));
@@ -1975,16 +2099,175 @@ const CatboxChain = (() => {
     return raw > cap ? cap : raw;
   }
 
-  async function fetchOwnerRuns(onProgress) {
-    const c = gameContract(await publicReadProvider());
-    const n = Number(await c.nextRunId());
-    if (!Number.isFinite(n) || n < 2) {
-      if (onProgress) onProgress({ phase: "partial", data: { nextRunId: n, runs: [], totalRuns: 0, uniqueWallets: 0, freeCount: 0, paidCount: 0, unknownPay: 0, burnedTotal: 0n, weekPool: 0n, invitePool: 0n, freePool: 0n } });
-      return { nextRunId: n, runs: [], totalRuns: 0, uniqueWallets: 0, freeCount: 0, paidCount: 0, unknownPay: 0, burnedTotal: 0n, weekPool: 0n, invitePool: 0n, freePool: 0n };
+  function reviveRunFromSnap(r) {
+    const lane = r.lane === "paid" ? "v6" : r.lane === "free" ? "v5" : r.lane || "v5";
+    let player = r.player;
+    try {
+      player = ethers.getAddress(player);
+    } catch (_) {
+      return null;
     }
-    const ids = [];
-    for (let i = n - 1; i >= 1; i--) ids.push(i);
-    if (onProgress) onProgress({ phase: "runs", done: 0, total: ids.length });
+    let referrer = ethers.ZeroAddress;
+    if (r.referrer && r.referrer !== ethers.ZeroAddress) {
+      try {
+        referrer = ethers.getAddress(r.referrer);
+      } catch (_) {}
+    }
+    return {
+      id: r.id,
+      lane,
+      key: `${lane}-${r.id}`,
+      player,
+      paid: reviveWei(r.paid) ?? 0n,
+      ticketLim: r.ticketLim,
+      tierId: r.tierId,
+      tierName: r.tierName,
+      startedAt: Number(r.startedAt || 0),
+      settled: Boolean(r.settled),
+      free: r.free == null ? null : Boolean(r.free),
+      collected: reviveWei(r.collected),
+      leftover: reviveWei(r.leftover),
+      burned: reviveWei(r.burned),
+      score: r.score == null ? null : Number(r.score),
+      payout: reviveWei(r.payout),
+      rewardBps: r.rewardBps ?? 10500,
+      invites: r.invites ?? 0,
+      plays: r.plays ?? 0,
+      weekPts: reviveWei(r.weekPts) ?? 0n,
+      invitePts: reviveWei(r.invitePts) ?? 0n,
+      extraPaid: reviveWei(r.extraPaid) ?? 0n,
+      extraTx: r.extraTx || null,
+      xClaimed: Boolean(r.xClaimed),
+      tgClaimed: Boolean(r.tgClaimed),
+      referrer,
+      tx: r.tx || null,
+    };
+  }
+
+  function mergeRunRows(...lists) {
+    const byKey = new Map();
+    for (const list of lists) {
+      for (const r of list) {
+        if (!r) continue;
+        const key = r.key || `${r.lane}-${r.id}`;
+        const prev = byKey.get(key);
+        if (!prev) {
+          byKey.set(key, { ...r, key });
+          continue;
+        }
+        const merged = { ...prev, ...r, key };
+        if (prev.tx && !r.tx) merged.tx = prev.tx;
+        if (prev.collected != null && r.collected == null) merged.collected = prev.collected;
+        if (prev.leftover != null && r.leftover == null) merged.leftover = prev.leftover;
+        if (prev.burned != null && r.burned == null) merged.burned = prev.burned;
+        if (prev.score != null && r.score == null) merged.score = prev.score;
+        if (prev.payout != null && r.payout == null) merged.payout = prev.payout;
+        if (prev.extraPaid > 0n && r.extraPaid <= 0n) merged.extraPaid = prev.extraPaid;
+        if (prev.extraTx && !r.extraTx) merged.extraTx = prev.extraTx;
+        if (prev.xClaimed && !r.xClaimed) merged.xClaimed = prev.xClaimed;
+        if (prev.tgClaimed && !r.tgClaimed) merged.tgClaimed = prev.tgClaimed;
+        if (
+          prev.referrer &&
+          prev.referrer !== ethers.ZeroAddress &&
+          (!r.referrer || r.referrer === ethers.ZeroAddress)
+        ) {
+          merged.referrer = prev.referrer;
+        }
+        byKey.set(key, merged);
+      }
+    }
+    return [...byKey.values()];
+  }
+
+  let ownerHistoryCache = null;
+
+  function reviveOwnerHistory(raw) {
+    if (!raw) return null;
+    const runs = (raw.runs || [])
+      .map((r) => reviveRunFromSnap(r))
+      .filter(Boolean);
+    return {
+      at: raw.at || null,
+      block: raw.block || 0,
+      v5NextRunId: Number(raw.v5NextRunId || 0),
+      v5RunScanBefore: Number(raw.v5RunScanBefore || 0),
+      v5Runs: Number(raw.v5Runs || 0),
+      runs,
+      social: raw.social || [],
+      xClaimCount: Number(raw.xClaimCount || 0),
+      tgClaimCount: Number(raw.tgClaimCount || 0),
+      burnCount: Number(raw.burnCount || 0),
+      v5BurnCount: Number(raw.v5BurnCount || 0),
+      v6BurnCount: Number(raw.v6BurnCount || 0),
+    };
+  }
+
+  async function loadOwnerHistory(force) {
+    if (!force && ownerHistoryCache) return ownerHistoryCache;
+    const paths = ["./data/v5-history.json", "./data/admin-snapshot.json"];
+    for (const path of paths) {
+      try {
+        const res = await fetch(`${path}?t=${Date.now()}`, { cache: "no-store" });
+        if (!res.ok) continue;
+        ownerHistoryCache = reviveOwnerHistory(await res.json());
+        return ownerHistoryCache;
+      } catch (_) {}
+    }
+    ownerHistoryCache = null;
+    return null;
+  }
+
+  function burnStatsFromList(burns) {
+    const list = burns || [];
+    const v5BurnCount = list.filter((b) => (b.lane || "v5") === "v5").length;
+    const v6BurnCount = list.filter((b) => b.lane === "v6").length;
+    return { burnCount: list.length, v5BurnCount, v6BurnCount };
+  }
+
+  function mergeAdminBurns(rowList, snapBurns, snapCounts) {
+    const byHash = new Map();
+    for (const b of snapBurns || []) {
+      const key = b.hash || `${b.blockNumber || 0}-${b.player || ""}-${b.amount || ""}`;
+      if (!key) continue;
+      byHash.set(key, {
+        hash: b.hash || "",
+        lane: b.lane || "v5",
+        runId: b.runId ?? null,
+        player: b.player || "",
+        amount: reviveWei(b.amount) ?? 0n,
+        blockNumber: Number(b.blockNumber || 0),
+      });
+    }
+    for (const r of rowList || []) {
+      const amt = asAmt(r.burned);
+      if (amt <= 0n) continue;
+      const key = r.tx || `run-${r.lane || "v5"}-${r.id}`;
+      if (byHash.has(key)) continue;
+      byHash.set(key, {
+        hash: r.tx || "",
+        lane: r.lane || "v5",
+        runId: r.id,
+        player: r.player,
+        amount: amt,
+        blockNumber: 0,
+      });
+    }
+    const burns = [...byHash.values()];
+    const merged = burnStatsFromList(burns);
+    return {
+      burns,
+      burnCount: Math.max(merged.burnCount, Number(snapCounts?.burnCount || 0)),
+      v5BurnCount: Math.max(merged.v5BurnCount, Number(snapCounts?.v5BurnCount || 0)),
+      v6BurnCount: Math.max(merged.v6BurnCount, Number(snapCounts?.v6BurnCount || 0)),
+    };
+  }
+
+  async function fetchOwnerRuns(onProgress) {
+    await isPaidDeployed();
+    const p = await publicReadProvider();
+    const v6Live = hasPaidLane() && v6Cached === true;
+    const freeC = freeGameContract(p);
+    const paidC = v6Live ? paidGameContract(p) : freeC;
 
     let prices = [
       ethers.parseUnits("1", 18),
@@ -1993,64 +2276,163 @@ const CatboxChain = (() => {
       ethers.parseUnits("10", 18),
     ];
     try {
-      prices = await Promise.all([0, 1, 2, 3].map((i) => c.ticketPrice(i)));
+      prices = await Promise.all([0, 1, 2, 3].map((i) => paidC.ticketPrice(i)));
     } catch (_) {}
 
-    const batch = 8;
-    const rows = [];
-    const maxIds = Math.min(ids.length, 400);
-    for (let i = 0; i < maxIds; i += batch) {
-      const chunk = ids.slice(i, i + batch);
-      const runs = await Promise.all(chunk.map((id) => c.runs(id)));
-      chunk.forEach((id, j) => {
-        const parsed = parseStoredRun(id, runs[j]);
-        if (!parsed.player || parsed.player === ethers.ZeroAddress) return;
-        const player = ethers.getAddress(parsed.player);
-        const tier = tierOfPaid(parsed.paid, prices);
-        rows.push({
-          id,
-          player,
-          paid: parsed.paid,
-          ticketLim: tier.lim,
-          tierId: tier.id,
-          tierName: tier.name,
-          startedAt: parsed.startedAt,
-          settled: parsed.settled,
-          free: parsed.free,
-          collected: null,
-          leftover: null,
-          burned: null,
-          score: null,
-          payout: null,
-          rewardBps: 10500,
-          invites: 0,
-          plays: 0,
-          weekPts: 0n,
-          invitePts: 0n,
-          referrer: ethers.ZeroAddress,
-          tx: null,
+    async function scanLaneMulticall(lane, contract, fromId, toExclusive) {
+      if (fromId >= toExclusive) return [];
+      const out = [];
+      const ids = [];
+      for (let i = fromId; i < toExclusive; i++) ids.push(i);
+      const iface = contract.interface;
+      const target = await contract.getAddress();
+      const batch = 40;
+      for (let i = 0; i < ids.length; i += batch) {
+        const chunk = ids.slice(i, i + batch);
+        const runRows = await multicallFn(p, iface, "runs", chunk, target);
+        chunk.forEach((id, j) => {
+          const decoded = runRows[j];
+          if (!decoded) return;
+          const parsed = parseStoredRun(id, decoded);
+          if (!parsed.player || parsed.player === ethers.ZeroAddress) return;
+          const player = ethers.getAddress(parsed.player);
+          const tier = tierOfPaid(parsed.paid, prices);
+          out.push({
+            id,
+            lane,
+            key: `${lane}-${id}`,
+            player,
+            paid: parsed.paid,
+            ticketLim: tier.lim,
+            tierId: tier.id,
+            tierName: tier.name,
+            startedAt: parsed.startedAt,
+            settled: parsed.settled,
+            free: parsed.free,
+            collected: null,
+            leftover: null,
+            burned: null,
+            score: null,
+            payout: null,
+            rewardBps: 10500,
+            invites: 0,
+            plays: 0,
+            weekPts: 0n,
+            invitePts: 0n,
+            extraPaid: 0n,
+            extraTx: null,
+            xClaimed: false,
+            tgClaimed: false,
+            referrer: ethers.ZeroAddress,
+            tx: null,
+          });
         });
+        if (onProgress) {
+          onProgress({ phase: "runs", done: Math.min(i + batch, ids.length), total: ids.length, lane });
+        }
+      }
+      return out;
+    }
+
+    const history = await loadOwnerHistory(true);
+    const histV5 = (history?.runs || []).filter((r) => r.lane === "v5");
+    if (onProgress) {
+      onProgress({
+        phase: "history",
+        at: history?.at || null,
+        runs: histV5.length,
+        complete: Number(history?.v5RunScanBefore ?? 1) <= 1,
       });
-      if (onProgress) onProgress({ phase: "runs", done: Math.min(i + batch, maxIds), total: maxIds });
+    }
+    await loadSnapshot(true);
+
+    const liveFlat = [];
+    let n5 = 0;
+    let n6 = 0;
+
+    if (v6Live) {
+      n6 = Number(await withTimeout(paidC.nextRunId(), 8000));
+      if (Number.isFinite(n6) && n6 > 1) {
+        liveFlat.push(...(await scanLaneMulticall("v6", paidC, 1, n6)));
+      }
+      n5 = Number(await withTimeout(freeC.nextRunId(), 8000));
+      if (Number.isFinite(n5) && n5 > 1) {
+        const histNext = Math.max(1, Number(history?.v5NextRunId || snapshotCache?.v5NextRunId || 1));
+        if (n5 > histNext) {
+          liveFlat.push(...(await scanLaneMulticall("v5", freeC, histNext, n5)));
+        }
+        const scanBefore = Number(history?.v5RunScanBefore ?? snapshotCache?.v5RunScanBefore ?? 0);
+        if (scanBefore > 1) {
+          if (onProgress) onProgress({ phase: "v5gap", from: 1, to: scanBefore - 1 });
+          liveFlat.push(...(await scanLaneMulticall("v5", freeC, 1, scanBefore)));
+        } else if (!histV5.length) {
+          if (onProgress) onProgress({ phase: "v5full", total: n5 - 1 });
+          liveFlat.push(...(await scanLaneMulticall("v5", freeC, 1, n5)));
+        }
+      }
+    } else {
+      n5 = Number(await withTimeout(freeC.nextRunId(), 8000));
+      if (Number.isFinite(n5) && n5 >= 2) {
+        liveFlat.push(...(await scanLaneMulticall("v5", freeC, 1, n5)));
+      }
+    }
+
+    let rows = mergeRunRows(history?.runs || [], liveFlat);
+    const n = v6Live ? n6 : n5;
+
+    if (!rows.length) {
+      const empty = {
+        nextRunId: n,
+        runs: [],
+        social: [],
+        totalRuns: 0,
+        uniqueWallets: 0,
+        freeCount: 0,
+        paidCount: 0,
+        unknownPay: 0,
+        burnedTotal: 0n,
+        weekPool: 0n,
+        invitePool: 0n,
+        freePool: 0n,
+        v5Runs: 0,
+        v6Runs: 0,
+        xClaimCount: 0,
+        tgClaimCount: 0,
+        historyAt: history?.at || null,
+      };
+      if (onProgress) onProgress({ phase: "partial", data: empty });
+      return empty;
     }
 
     const players = [...new Set(rows.map((r) => r.player))];
     const week = {};
     const refs = {};
     const invPts = {};
-    for (let i = 0; i < players.length; i += batch) {
-      const chunk = players.slice(i, i + batch);
-      const [pts, refList, inv] = await Promise.all([
-        Promise.all(chunk.map((a) => c.weekPts(a).catch(() => 0n))),
-        Promise.all(chunk.map((a) => c.refOf(a).catch(() => ethers.ZeroAddress))),
-        Promise.all(chunk.map((a) => c.invitePts(a).catch(() => 0n))),
+    const boardC = v6Live ? paidC : freeC;
+    const boardIface = boardC.interface;
+    const boardTarget = await boardC.getAddress();
+    const mcBatch = 40;
+    for (let i = 0; i < players.length; i += mcBatch) {
+      const chunk = players.slice(i, i + mcBatch);
+      const [ptsRows, refRows, invRows] = await Promise.all([
+        multicallFn(p, boardIface, "weekPts", chunk, boardTarget),
+        multicallFn(p, boardIface, "refOf", chunk, boardTarget),
+        multicallFn(p, boardIface, "invitePts", chunk, boardTarget),
       ]);
       chunk.forEach((a, j) => {
-        week[a] = pts[j] || 0n;
-        invPts[a] = inv[j] || 0n;
-        const ref = refList[j];
-        refs[a] = ref && ref !== ethers.ZeroAddress ? ethers.getAddress(ref) : ethers.ZeroAddress;
+        week[a] = ptsRows[j] ? ptsRows[j][0] || 0n : 0n;
+        invPts[a] = invRows[j] ? invRows[j][0] || 0n : 0n;
+        const refRaw = refRows[j] ? refRows[j][0] : ethers.ZeroAddress;
+        refs[a] =
+          refRaw && refRaw !== ethers.ZeroAddress ? ethers.getAddress(refRaw) : ethers.ZeroAddress;
       });
+      if (onProgress && players.length > mcBatch) {
+        onProgress({
+          phase: "players",
+          done: Math.min(i + mcBatch, players.length),
+          total: players.length,
+        });
+      }
     }
 
     function decorate() {
@@ -2078,18 +2460,36 @@ const CatboxChain = (() => {
 
     function pack(extra) {
       const unique = new Set(rows.map((r) => r.player.toLowerCase()));
+      const v5Runs = rows.filter((r) => r.lane === "v5").length;
+      const v6Runs = rows.filter((r) => r.lane === "v6").length;
       return {
         nextRunId: n,
         runs: rows,
+        social: extra.social || [],
         burnedTotal: extra.burnedTotal ?? 0n,
         weekPool: extra.weekPool ?? 0n,
         invitePool: extra.invitePool ?? 0n,
         freePool: extra.freePool ?? 0n,
+        extraPool: extra.extraPool ?? 0n,
+        extraPaused: extra.extraPaused ?? false,
+        extraSinceRunId: extra.extraSinceRunId ?? 0,
+        extraPaidTotal: extra.extraPaidTotal ?? 0n,
+        extraPaidCount: extra.extraPaidCount ?? 0,
+        extraFundedTotal: extra.extraFundedTotal ?? 0n,
+        extraWithdrawnTotal: extra.extraWithdrawnTotal ?? 0n,
         totalRuns: rows.length,
         uniqueWallets: unique.size,
         freeCount: rows.filter((r) => r.free === true).length,
         paidCount: rows.filter((r) => r.free === false).length,
         unknownPay: rows.filter((r) => r.free == null).length,
+        v5Runs,
+        v6Runs,
+        xClaimCount: extra.xClaimCount ?? 0,
+        tgClaimCount: extra.tgClaimCount ?? 0,
+        burnCount: extra.burnCount ?? 0,
+        v5BurnCount: extra.v5BurnCount ?? 0,
+        v6BurnCount: extra.v6BurnCount ?? 0,
+        historyAt: history?.at || null,
       };
     }
 
@@ -2106,7 +2506,7 @@ const CatboxChain = (() => {
       freePool = pool.free;
     } catch (_) {
       try {
-        burnedTotal = await c.burnedTotal();
+        burnedTotal = await paidC.burnedTotal();
       } catch (_) {}
     }
 
@@ -2117,21 +2517,27 @@ const CatboxChain = (() => {
       });
     }
 
-    const byId = new Map(rows.map((r) => [r.id, r]));
+    const byKey = new Map(rows.map((r) => [r.key || `${r.lane || "v5"}-${r.id}`, r]));
     if (onProgress) onProgress({ phase: "logs", done: 0, total: rows.length });
     try {
       await Promise.race([
         (async () => {
-          const ev = await fetchEventLogs(["RunStarted", "RunSettled", "FreeEnter"], 12);
+          const logChunks = v6Live ? 28 : 40;
+          const ev = await fetchEventLogs(["RunStarted", "RunSettled", "FreeEnter"], logChunks);
           for (const log of ev) {
+            const lane =
+              log.address && paidAddr() && String(log.address).toLowerCase() === paidAddr().toLowerCase()
+                ? "v6"
+                : "v5";
+            const key = `${lane}-${Number(log.args.runId)}`;
             if (log.name === "RunStarted") {
-              const row = byId.get(Number(log.args.runId));
+              const row = byKey.get(key);
               if (!row) continue;
               const ref = log.args.referrer;
               if (ref && ref !== ethers.ZeroAddress) row.referrer = ethers.getAddress(ref);
               if (log.args.paid != null) row.paid = log.args.paid;
             } else if (log.name === "RunSettled") {
-              const row = byId.get(Number(log.args.runId));
+              const row = byKey.get(key);
               if (!row) continue;
               row.collected = asAmt(log.args.collected);
               row.leftover = asAmt(log.args.leftover);
@@ -2140,20 +2546,160 @@ const CatboxChain = (() => {
               row.tx = log.transactionHash;
               row.settled = true;
             } else if (log.name === "FreeEnter") {
-              const row = byId.get(Number(log.args.runId));
+              const row = byKey.get(key);
               if (row) row.free = true;
             }
           }
         })(),
-        sleep(20000),
+        sleep(30000),
       ]);
     } catch (_) {
       logsProvider = null;
       logsOkAt = 0;
     }
 
+    let extraPool = reviveWei(snapshotCache?.extraPool) ?? 0n;
+    let extraPaused = Boolean(snapshotCache?.extraPaused);
+    let extraSinceRunId = Number(snapshotCache?.extraSinceRunId || 0);
+    let extraFundedTotal = reviveWei(snapshotCache?.extraFundedTotal) ?? 0n;
+    let extraWithdrawnTotal = reviveWei(snapshotCache?.extraWithdrawnTotal) ?? 0n;
+    let extraPaidTotal = reviveWei(snapshotCache?.extraPaidTotal) ?? 0n;
+    let extraPaidCount = Number(snapshotCache?.extraPaidCount || 0);
+
+    const ex = cfg.extra;
+    if (ex?.address && ex?.abi) {
+      try {
+        const extraC = new ethers.Contract(ex.address, ex.abi, p);
+        const extraIface = extraC.interface;
+        try {
+          extraPool = await extraC.pool();
+          extraPaused = Boolean(await extraC.paused());
+          extraSinceRunId = Number(await extraC.sinceRunId());
+        } catch (_) {}
+        if (onProgress) onProgress({ phase: "extra" });
+        const extraLogs = await fetchContractLogs(
+          ex.address,
+          ex.abi,
+          ["ExtraPaid", "Funded", "Withdrawn"],
+          v6Live ? 20 : 32,
+        );
+        extraPaidTotal = 0n;
+        extraPaidCount = 0;
+        for (const log of extraLogs) {
+          if (log.name === "ExtraPaid") {
+            const id = Number(log.args.runId);
+            const amt = asAmt(log.args.amount);
+            const row = byKey.get(`v5-${id}`);
+            if (row) {
+              row.extraPaid = amt;
+              row.extraTx = log.transactionHash;
+            }
+            extraPaidTotal += amt;
+            extraPaidCount += 1;
+          } else if (log.name === "Funded") {
+            extraFundedTotal += asAmt(log.args.amount);
+          } else if (log.name === "Withdrawn") {
+            extraWithdrawnTotal += asAmt(log.args.amount);
+          }
+        }
+        const freeIds = rows.filter((r) => r.lane === "v5" && r.id >= extraSinceRunId).map((r) => r.id);
+        if (freeIds.length) {
+          const paidRows = await multicallFn(p, extraIface, "paidExtra", freeIds, ex.address);
+          extraPaidTotal = 0n;
+          extraPaidCount = 0;
+          freeIds.forEach((id, j) => {
+            const v = paidRows[j] ? paidRows[j][0] || 0n : 0n;
+            if (v <= 0n) return;
+            const row = byKey.get(`v5-${id}`);
+            if (row) row.extraPaid = v;
+            extraPaidTotal += v;
+            extraPaidCount += 1;
+          });
+        }
+        const extraIn = extraPool + extraPaidTotal + extraWithdrawnTotal;
+        if (extraFundedTotal < extraIn) extraFundedTotal = extraIn;
+      } catch (_) {}
+    }
+
+    const socialByAddr = {};
+    for (const row of history?.social || []) {
+      if (!row?.addr) continue;
+      try {
+        const addr = ethers.getAddress(row.addr);
+        socialByAddr[addr] = {
+          addr,
+          x: Boolean(row.x),
+          tg: Boolean(row.tg),
+          xTx: row.xTx || "",
+          tgTx: row.tgTx || "",
+        };
+      } catch (_) {}
+    }
+    let xClaimCount = 0;
+    let tgClaimCount = 0;
+    const sc = cfg.social;
+    if (sc?.address && sc?.abi) {
+      try {
+        const code = await withTimeout(p.getCode(sc.address), 4000);
+        if (code && code !== "0x") {
+          if (onProgress) onProgress({ phase: "social" });
+          const socialLogs = await fetchContractLogs(sc.address, sc.abi, ["XBonus", "TgBonus"], v6Live ? 16 : 24);
+          for (const log of socialLogs) {
+            const addr = ethers.getAddress(log.args.player);
+            if (!socialByAddr[addr]) {
+              socialByAddr[addr] = { addr, x: false, tg: false, xTx: "", tgTx: "" };
+            }
+            if (log.name === "XBonus") {
+              socialByAddr[addr].x = true;
+              socialByAddr[addr].xTx = log.transactionHash;
+            } else if (log.name === "TgBonus") {
+              socialByAddr[addr].tg = true;
+              socialByAddr[addr].tgTx = log.transactionHash;
+            }
+          }
+        }
+      } catch (_) {}
+    }
+    for (const row of rows) {
+      const s = socialByAddr[row.player];
+      if (s) {
+        row.xClaimed = Boolean(s.x);
+        row.tgClaimed = Boolean(s.tg);
+      }
+    }
+    for (const s of Object.values(socialByAddr)) {
+      if (s.x) xClaimCount += 1;
+      if (s.tg) tgClaimCount += 1;
+    }
+    const social = Object.values(socialByAddr).sort(
+      (a, b) => Number(b.x) + Number(b.tg) - (Number(a.x) + Number(a.tg)) || a.addr.localeCompare(b.addr),
+    );
+
     decorate();
-    return pack({ burnedTotal, weekPool, invitePool, freePool });
+    const burnStats = mergeAdminBurns(rows, snapshotCache?.burns || [], {
+      burnCount: snapshotCache?.burnCount,
+      v5BurnCount: snapshotCache?.v5BurnCount,
+      v6BurnCount: snapshotCache?.v6BurnCount,
+    });
+    return pack({
+      burnedTotal,
+      weekPool,
+      invitePool,
+      freePool,
+      social,
+      xClaimCount,
+      tgClaimCount,
+      burnCount: burnStats.burnCount,
+      v5BurnCount: burnStats.v5BurnCount,
+      v6BurnCount: burnStats.v6BurnCount,
+      extraPool,
+      extraPaused,
+      extraSinceRunId,
+      extraPaidTotal,
+      extraPaidCount,
+      extraFundedTotal,
+      extraWithdrawnTotal,
+    });
   }
 
   let snapshotCache = null;
@@ -2185,10 +2731,17 @@ const CatboxChain = (() => {
       burns: (raw.burns || []).map((b) => ({
         ...b,
         amount: reviveWei(b.amount) ?? 0n,
+        lane: b.lane || "v5",
       })),
       social: raw.social || [],
       xClaimCount: Number(raw.xClaimCount || 0),
       tgClaimCount: Number(raw.tgClaimCount || 0),
+      burnCount: Number(raw.burnCount || 0) || (raw.burns || []).length,
+      v5BurnCount:
+        Number(raw.v5BurnCount || 0) ||
+        (raw.burns || []).filter((b) => (b.lane || "v5") === "v5").length,
+      v6BurnCount:
+        Number(raw.v6BurnCount || 0) || (raw.burns || []).filter((b) => b.lane === "v6").length,
       runs: (raw.runs || []).map((r) => ({
         ...r,
         paid: reviveWei(r.paid) ?? 0n,
@@ -2250,6 +2803,7 @@ const CatboxChain = (() => {
     nextClaimAt,
     claimWindow: sgtClaimWindow,
     claim,
+    capBoardScore,
     referrer,
     limBalance,
     bnbBalance,
@@ -2284,6 +2838,8 @@ const CatboxChain = (() => {
     fetchBurns,
     fetchOwnerRuns,
     loadSnapshot,
+    loadOwnerHistory,
+    mergeRunRows,
     formatLim(v) {
       return Number(ethers.formatUnits(v, 18)).toFixed(4);
     },

@@ -28,6 +28,8 @@ contract CatboxDash {
     uint256 public constant PLAY_BPS = 10;
     uint256 public constant MAX_BPS = 20000;
     uint256 public constant TOP_CAP = 200;
+    /// Max board score per run: ~250k pts per 1 LIM ticket (matches client coin formula headroom).
+    uint256 public constant SCORE_PER_LIM = 250000;
 
     uint256[4] private _ticketPrice;
     uint256 public nextRunId = 1;
@@ -382,6 +384,12 @@ contract CatboxDash {
         }
     }
 
+    function maxScoreForTicket(uint256 ticketPaid) public pure returns (uint256) {
+        uint256 lim = ticketPaid / 1 ether;
+        if (lim == 0) lim = 1;
+        return lim * SCORE_PER_LIM;
+    }
+
     function _settle(uint256 runId, uint256 collected, uint256 score) internal {
         Run storage r = runs[runId];
         require(!r.settled, "settled");
@@ -389,6 +397,8 @@ contract CatboxDash {
         uint256 ticketPaid = r.paid;
         uint256 cap = ticketPaid <= 1 ether ? ticketPaid * 2 : ticketPaid * 15 / 10;
         if (collected > cap) collected = cap;
+        uint256 scoreCap = maxScoreForTicket(ticketPaid);
+        if (score > scoreCap) score = scoreCap;
         uint256 fromTicket = collected > ticketPaid ? ticketPaid : collected;
         r.settled = true;
         activeRun[r.player] = 0;

@@ -466,8 +466,13 @@ async function refreshWalletUi() {
     chainReady = deployed;
     if (!deployed) {
       banner.classList.remove("hidden");
-      banner.innerHTML = `<div>${t("deployNeed")}</div><button class="primary" id="deployBtn" type="button">${t("deployBtn")}</button>`;
-      $("deployBtn").onclick = deployContract;
+      const owner = acc && CatboxChain.isOwner();
+      if (owner) {
+        banner.innerHTML = `<div>${t("deployNeed")}</div><button class="primary" id="deployBtn" type="button">${t("deployBtn")}</button>`;
+        $("deployBtn").onclick = deployContract;
+      } else {
+        banner.innerHTML = `<div>${t("deployNeed")}</div>`;
+      }
     } else {
       banner.classList.add("hidden");
       banner.innerHTML = "";
@@ -1119,13 +1124,13 @@ async function claimShareBonus(kind) {
   } catch (_) {
     onchain = false;
   }
-  markBonusLocal(kind, addr);
+  if (onchain) markBonusLocal(kind, addr);
   paintShareCtas();
   try {
     await refreshFreeUi();
   } catch (_) {}
   if (onchain) showToast(t(kind === "x" ? "xClaimedOn" : "tgClaimedOn"));
-  else showToast(t(kind === "x" ? "xClaimedSaved" : "tgClaimedSaved"));
+  else showToast(t(kind === "x" ? "xClaimFail" : "tgClaimFail"));
 }
 
 function bootShare() {
@@ -1801,6 +1806,7 @@ async function payAndStart() {
   go.disabled = true;
   let free = false;
   let teach = false;
+  let started = false;
   try {
     if (!window.ethereum) throw new Error("NO_WALLET");
     status.textContent = t("connecting");
@@ -1827,6 +1833,7 @@ async function payAndStart() {
     enterPlay();
     startRun(selected, teach, free);
     refreshInviteUi();
+    started = true;
   } catch (e) {
     const msg = e?.message || "";
     const rejected =
@@ -1862,9 +1869,9 @@ async function payAndStart() {
     else if (msg === "PAID_NOT_READY") status.textContent = t("paidNotReady") || "Paid lane not ready yet";
     else if (rejected) status.textContent = t("txRejected");
     else status.textContent = t("txFail");
-    go.disabled = false;
   } finally {
     enterBusy = false;
+    if (!started && go) go.disabled = false;
   }
 }
 

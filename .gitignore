@@ -5,3 +5,4 @@ process_assets.py
 .DS_Store
 tmp-shots/
 assets/icon-*-src.png
+data/admin-snapshot.json
