@@ -411,6 +411,9 @@ function boot() {
   $("walletBtn").onclick = connectWallet;
   $("gateConnect").onclick = connectWallet;
   $("refreshBtn").onclick = () => loadRuns();
+  setInterval(() => {
+    if (paintGate() && !loading) loadRuns();
+  }, 5 * 60 * 1000);
   $("filter").addEventListener("input", (e) => {
     filterText = e.target.value || "";
     renderTable();

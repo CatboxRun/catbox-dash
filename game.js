@@ -1219,7 +1219,7 @@ async function liveRefresh() {
   const jobs = [syncOnchainPool(), refreshClaimUi(), refreshFreeUi()];
   if (!window._boardsReady || !window._burnsReady) {
     pullLiveBoards();
-  } else if (liveTick % 50 === 0) {
+  } else if (liveTick % 25 === 0) {
     pullLiveBoards(true);
   }
   await Promise.all(jobs.map((p) => Promise.resolve(p).catch(() => {})));
