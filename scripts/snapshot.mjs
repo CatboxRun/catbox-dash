@@ -828,8 +828,9 @@ const snapshot = {
   paidCount: rows.filter((r) => r.free === false).length,
   unknownPay: rows.filter((r) => r.free == null).length,
   burnScanBefore,
+  // Daily board: every known wallet (0 shards still listed). Invite board: only wallets with invitePts.
   week: toRows(week, addrs),
-  invite: toRows(invite, addrs),
+  invite: toRows(invite),
   burns,
   social,
   runs: rows
