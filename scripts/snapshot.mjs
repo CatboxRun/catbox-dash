@@ -575,8 +575,8 @@ const prevSnap = prevSnapEarly;
 const burnChunks = Number(process.env.BURN_CHUNKS || 10);
 const settleChunks = Number(process.env.SETTLE_CHUNKS || 15);
 const v5HistDone = !paidAddr || v5RunScanBefore <= 1;
-const settleCatchup = Number(process.env.SETTLE_CATCHUP || (v5HistDone ? 250 : settleChunks));
-const burnCatchup = Number(process.env.BURN_CATCHUP || (v5HistDone ? 250 : burnChunks));
+const settleCatchup = Number(process.env.SETTLE_CATCHUP || (v5HistDone ? 450 : settleChunks));
+const burnCatchup = Number(process.env.BURN_CATCHUP || (v5HistDone ? 450 : burnChunks));
 let burnScanBefore = Number(prevSnap.burnScanBefore || latest);
 let settleScanBefore = Number(prevSnap.settleScanBefore || latest);
 if ((!Number.isFinite(settleScanBefore) || settleScanBefore <= 0) && prevSnap.burnScanBefore) {
