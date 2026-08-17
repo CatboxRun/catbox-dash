@@ -1212,6 +1212,8 @@ async function doSwap() {
       : m === "REJECTED" ? t("swapRejected")
       : m === "SLIP" ? t("swapSlip")
       : m === "ALLOW" ? t("swapApproveFail")
+      : m === "GAS" ? t("swapNeedGas")
+      : m === "TX" ? t("swapTxFail")
       : t("txFail");
   } finally {
     window._swapBusy = false;

@@ -1347,7 +1347,7 @@ const CatboxChain = (() => {
   function isUserReject(e) {
     const code = e?.code;
     const msg = String(e?.shortMessage || e?.reason || e?.info?.error?.message || e?.message || "");
-    return code === 4001 || code === "ACTION_REJECTED" || /user rejected|user denied|rejected the request|denied transaction|cancelled/i.test(msg);
+    return code === 4001 || code === "ACTION_REJECTED" || /user rejected|user denied|rejected the request|denied transaction|cancelled|用户取消|拒绝签名|取消交易/i.test(msg);
   }
 
   function swapError(code, cause) {
@@ -1362,6 +1362,9 @@ const CatboxChain = (() => {
     if (/TooLittleReceived|too little received|INSUFFICIENT_OUTPUT|slippage/i.test(msg)) return swapError("SLIP", e);
     if (/allowance|insufficient.*allow|TRANSFER_FROM_FAILED|STF|Permit2|TRANSFER_FROM/i.test(msg)) {
       return swapError("ALLOW", e);
+    }
+    if (/insufficient funds|insufficient balance for gas|gas required exceeds|not enough bnb|余额不足/i.test(msg)) {
+      return swapError("GAS", e);
     }
     return swapError("TX", e);
   }
@@ -1487,6 +1490,11 @@ const CatboxChain = (() => {
     if (!quoted.path || quoted.out === 0n) throw new Error("NO_LIQ");
     const pool = quoted.pool || limPool();
     if (!pool?.currency0) throw new Error("NO_LIQ");
+    if (fromSym !== "BNB") {
+      const gasBal = await bnbBalance(account);
+      const gasFloor = ethers.parseUnits("0.00012", 18);
+      if (gasBal < gasFloor) throw swapError("GAS");
+    }
     const selling = fromSym === "LIM";
     const minOut = selling ? (quoted.out * 95n) / 100n : (quoted.out * 99n) / 100n;
     const deadline = BigInt(Math.floor(Date.now() / 1000) + 180);
@@ -1522,7 +1530,8 @@ const CatboxChain = (() => {
       } else if (fromSym === "LIM" && toSym === "BNB") {
         const usdtOut = await quoteInfi(cfg.lim, amountIn, p);
         if (usdtOut === 0n) throw new Error("NO_LIQ");
-        const minUsdt = (usdtOut * 95n) / 100n;
+        // Slippage only on final BNB; stacking 5% on both hops often reverts sells.
+        const minUsdt = 1n;
         await ensurePermit2(cfg.lim, amountIn, s, onStatus);
         commands = cmds(CMD.PERMIT2_TRANSFER_FROM, CMD.INFI_SWAP, CMD.V2_SWAP_EXACT_IN, CMD.UNWRAP_WETH);
         inputs = [
@@ -1535,18 +1544,11 @@ const CatboxChain = (() => {
         throw new Error("NO_LIQ");
       }
       if (onStatus) onStatus("swapping");
-      try {
-        await ur.execute.staticCall(commands, inputs, deadline, { value });
-      } catch (e) {
-        const decorated = decorateSwapRevert(e);
-        if (decorated.message === "SLIP" || decorated.message === "ALLOW" || decorated.message === "REJECTED") {
-          throw decorated;
-        }
-      }
+      await ur.execute.staticCall(commands, inputs, deadline, { value });
       const tx = await ur.execute(commands, inputs, deadline, { value });
       return (await tx.wait()).hash;
     } catch (e) {
-      if (e?.message === "NO_LIQ" || e?.message === "REJECTED" || e?.message === "SLIP" || e?.message === "ALLOW" || e?.message === "TX") {
+      if (e?.message === "NO_LIQ" || e?.message === "REJECTED" || e?.message === "SLIP" || e?.message === "ALLOW" || e?.message === "GAS" || e?.message === "TX") {
         throw e;
       }
       throw decorateSwapRevert(e);
