@@ -252,10 +252,24 @@ function formatSnapTime(iso) {
   return `${p(sgt.getUTCMonth() + 1)}-${p(sgt.getUTCDate())} ${p(sgt.getUTCHours())}:${p(sgt.getUTCMinutes())} SGT`;
 }
 
+function snapAgeMs() {
+  if (!window._snapAt) return Infinity;
+  const t = new Date(window._snapAt).getTime();
+  return Number.isFinite(t) ? Date.now() - t : Infinity;
+}
+
+function snapStale(maxMin = 12) {
+  return snapAgeMs() > maxMin * 60 * 1000;
+}
+
 function paintSnapNote() {
   const el = $("boardSnapNote");
   if (!el) return;
   const when = window._snapAt ? formatSnapTime(window._snapAt) : "";
+  if (when && snapStale(20)) {
+    el.textContent = t("boardSnapNoteStale", { t: when });
+    return;
+  }
   el.textContent = when ? t("boardSnapNoteAt", { t: when }) : t("boardSnapNote");
 }
 
@@ -1213,12 +1227,19 @@ function startLiveClock() {
 
 let liveTick = 0;
 let pricesAt = 0;
+let lastSnapPoll = 0;
 
 async function liveRefresh() {
   liveTick += 1;
   const jobs = [syncOnchainPool(), refreshClaimUi(), refreshFreeUi()];
-  if (!window._boardsReady || !window._burnsReady) {
-    pullLiveBoards();
+  const now = Date.now();
+  const needBoards = !window._boardsReady || !window._burnsReady;
+  const stale = snapStale(12);
+  if (needBoards) {
+    pullLiveBoards(false);
+  } else if (stale && now - lastSnapPoll > 60000) {
+    lastSnapPoll = now;
+    pullLiveBoards(true);
   } else if (liveTick % 25 === 0) {
     pullLiveBoards(true);
   }

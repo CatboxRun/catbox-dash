@@ -2816,7 +2816,8 @@ const CatboxChain = (() => {
   }
 
   async function loadSnapshot(force) {
-    if (!force && snapshotCache) return snapshotCache;
+    if (force) snapshotCache = null;
+    else if (snapshotCache) return snapshotCache;
     snapshotTried = true;
     try {
       const res = await fetch(`./data/snapshot.json?t=${Date.now()}`, { cache: "no-store" });
@@ -2866,7 +2867,8 @@ const CatboxChain = (() => {
   }
 
   async function loadAdminBoard(force) {
-    if (!force && adminBoardCache) return adminBoardCache;
+    if (force) adminBoardCache = null;
+    else if (adminBoardCache) return adminBoardCache;
     const paths = ["./data/admin-board.json", "./data/admin-snapshot.json"];
     for (const path of paths) {
       try {
