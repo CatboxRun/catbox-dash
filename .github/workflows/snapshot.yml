@@ -33,8 +33,12 @@ jobs:
         run: node scripts/snapshot.mjs
         env:
           BSC_RPC: https://bsc-rpc.publicnode.com
-          SETTLE_CATCHUP: "450"
-          BURN_CATCHUP: "450"
+          SETTLE_CATCHUP: "24"
+          BURN_CATCHUP: "24"
+          V5_BACKFILL_CHUNKS: "0"
+          LOG_CHUNKS_PAID: "12"
+          LOG_CHUNKS_FREE: "12"
+          LOG_CHUNKS_EXTRA: "8"
       - name: Commit snapshot
         run: |
           rm -rf node_modules package-lock.json

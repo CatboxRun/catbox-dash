@@ -453,7 +453,7 @@ const paidPack = paidAddr
 // Live window: recent V5 for free SCOUT + logs; older V5 paid runs backfill incrementally + carry forward.
 const V5_RECENT = Number(process.env.V5_RECENT || 120);
 const V5_RUN_CHUNK = Number(process.env.V5_RUN_CHUNK || 200);
-const V5_BACKFILL_CHUNKS = Number(process.env.V5_BACKFILL_CHUNKS || 15);
+let v5BackfillChunks = Number(process.env.V5_BACKFILL_CHUNKS || 15);
 let freePack;
 let nextFree = 0;
 if (paidAddr) {
@@ -479,12 +479,13 @@ if (paidAddr && nextFree > 1) {
     v5RunScanBefore = Math.max(1, nextFree - V5_RECENT);
   }
   if (v5RunScanBefore > nextFree) v5RunScanBefore = nextFree;
-  for (let c = 0; c < V5_BACKFILL_CHUNKS; c++) {
+  if (v5RunScanBefore <= 1) v5BackfillChunks = 0;
+  for (let c = 0; c < v5BackfillChunks; c++) {
     if (v5RunScanBefore <= 1) break;
     const histTo = v5RunScanBefore;
     const histFrom = Math.max(1, histTo - V5_RUN_CHUNK);
     if (histFrom >= histTo) break;
-    console.error("v5 run backfill", histFrom, "..", histTo - 1, `chunk ${c + 1}/${V5_BACKFILL_CHUNKS}`);
+    console.error("v5 run backfill", histFrom, "..", histTo - 1, `chunk ${c + 1}/${v5BackfillChunks}`);
     const histPack = await loadRunsFrom("v5", freeAddr, freeIface, freeGame, {
       fromId: histFrom,
       toIdExclusive: histTo,
@@ -576,8 +577,8 @@ const prevSnap = prevSnapEarly;
 const burnChunks = Number(process.env.BURN_CHUNKS || 10);
 const settleChunks = Number(process.env.SETTLE_CHUNKS || 15);
 const v5HistDone = !paidAddr || v5RunScanBefore <= 1;
-const settleCatchup = Number(process.env.SETTLE_CATCHUP || (v5HistDone ? 450 : settleChunks));
-const burnCatchup = Number(process.env.BURN_CATCHUP || (v5HistDone ? 450 : burnChunks));
+const settleCatchup = Number(process.env.SETTLE_CATCHUP || (v5HistDone ? 24 : settleChunks));
+const burnCatchup = Number(process.env.BURN_CATCHUP || (v5HistDone ? 24 : burnChunks));
 let burnScanBefore = Number(prevSnap.burnScanBefore || latest);
 let settleScanBefore = Number(prevSnap.settleScanBefore || latest);
 if ((!Number.isFinite(settleScanBefore) || settleScanBefore <= 0) && prevSnap.burnScanBefore) {
@@ -856,19 +857,27 @@ if (extraAddr && cfg.extra?.abi) {
         extraWithdrawnTotal += log.args.amount ?? 0n;
       }
     }
-    const freeIds = rows.filter((r) => r.lane === "v5" && r.id >= extraSinceRunId).map((r) => r.id);
+    const freeIds = rows
+      .filter((r) => r.lane === "v5" && r.id >= extraSinceRunId)
+      .map((r) => r.id)
+      .sort((a, b) => b - a)
+      .slice(0, Number(process.env.EXTRA_PAID_SCAN || 400));
     if (freeIds.length) {
       const paidRows = await multicall(p, extraIface, "paidExtra", freeIds, 40, extraAddr);
-      extraPaidTotal = 0n;
-      extraPaidCount = 0;
       freeIds.forEach((id, j) => {
         const v = paidRows[j] ? paidRows[j][0] || 0n : 0n;
         if (v <= 0n) return;
         const row = byKey.get(`v5-${id}`);
         if (row) row.extraPaid = v;
-        extraPaidTotal += v;
-        extraPaidCount += 1;
       });
+    }
+    extraPaidTotal = 0n;
+    extraPaidCount = 0;
+    for (const row of rows) {
+      const v = row.extraPaid ?? 0n;
+      if (v <= 0n) continue;
+      extraPaidTotal += v;
+      extraPaidCount += 1;
     }
   } catch (e) {
     console.error("extra fail", e?.message || e);

@@ -266,7 +266,7 @@ function paintSnapNote() {
   const el = $("boardSnapNote");
   if (!el) return;
   const when = window._snapAt ? formatSnapTime(window._snapAt) : "";
-  if (when && snapStale(20)) {
+  if (when && snapStale(45)) {
     el.textContent = t("boardSnapNoteStale", { t: when });
     return;
   }
@@ -1234,13 +1234,13 @@ async function liveRefresh() {
   const jobs = [syncOnchainPool(), refreshClaimUi(), refreshFreeUi()];
   const now = Date.now();
   const needBoards = !window._boardsReady || !window._burnsReady;
-  const stale = snapStale(12);
+  const stale = snapStale(8);
   if (needBoards) {
     pullLiveBoards(false);
-  } else if (stale && now - lastSnapPoll > 60000) {
+  } else if (stale && now - lastSnapPoll > 20000) {
     lastSnapPoll = now;
     pullLiveBoards(true);
-  } else if (liveTick % 25 === 0) {
+  } else if (liveTick % 10 === 0) {
     pullLiveBoards(true);
   }
   await Promise.all(jobs.map((p) => Promise.resolve(p).catch(() => {})));
