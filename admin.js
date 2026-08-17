@@ -149,19 +149,49 @@ function extraDeposited(s) {
   return rec > sum ? rec : sum;
 }
 
+function shortAddr(addr) {
+  if (!addr) return "—";
+  return `${addr.slice(0, 6)}…${addr.slice(-4)}`;
+}
+
+function renderAddrChips() {
+  const el = $("addrChips");
+  if (!el || !window.CatboxChain?.cfg) return;
+  const cfg = CatboxChain.cfg;
+  const free = CatboxChain.freeAddr?.() || cfg.freeAddress || cfg.address;
+  const paid = CatboxChain.paidAddr?.() || cfg.v6?.address || cfg.address;
+  const rows = [
+    ["LIM", cfg.lim],
+    ["V5 免费/免费池", free],
+    ["V6 付费/日邀池", paid],
+    ["Extra 加时", cfg.extra?.address],
+    ["Social", cfg.social?.address],
+    ["Owner", cfg.owner],
+  ].filter(([, addr]) => addr);
+  el.innerHTML = rows
+    .map(([k, addr]) => {
+      const href = CatboxChain.addrUrl(addr);
+      return `<div class="chip"><span>${k}</span><b><a href="${href}" target="_blank" rel="noopener noreferrer">${shortAddr(addr)}</a></b></div>`;
+    })
+    .join("");
+}
+
 function renderChips(summary) {
   const s = summary || {};
   const paidBit =
     s.unknownPay > 0
       ? `${s.paidCount} 付费 / ${s.freeCount} 免费 / ${s.unknownPay} 未知`
       : `${s.paidCount ?? 0} 付费 / ${s.freeCount ?? 0} 免费`;
+  const v5n = allRows.filter((r) => r.lane === "v5" || r.lane === "free").length;
+  const v6n = allRows.filter((r) => r.lane === "v6" || r.lane === "paid").length;
   $("chips").innerHTML = [
     ["局数", s.totalRuns ?? allRows.length],
+    ["V5 / V6 局", `${v5n} / ${v6n}`],
     ["独立钱包", s.uniqueWallets ?? "—"],
     ["付费 / 免费", paidBit],
-    ["日奖池", s.weekPool != null ? `${lim(s.weekPool)} LIM` : "—"],
-    ["邀请池", s.invitePool != null ? `${lim(s.invitePool)} LIM` : "—"],
-    ["免费池", s.freePool != null ? `${lim(s.freePool)} LIM` : "—"],
+    ["V6 日奖池", s.weekPool != null ? `${lim(s.weekPool)} LIM` : "—"],
+    ["V6 邀请池", s.invitePool != null ? `${lim(s.invitePool)} LIM` : "—"],
+    ["V5 免费池", s.freePool != null ? `${lim(s.freePool)} LIM` : "—"],
     ["累计销毁", s.burnedTotal != null ? `${lim(s.burnedTotal)} LIM` : "—"],
     ["加时池", s.extraPool != null ? `${lim(s.extraPool)} LIM` : "—"],
     ["已发加时", s.extraPaidTotal != null ? `${lim(s.extraPaidTotal)} LIM · ${s.extraPaidCount ?? 0} 笔` : "—"],
@@ -320,6 +350,7 @@ function paintGate() {
 function applySnapshot(snap) {
   allRows = snap.runs || [];
   socialRows = snap.social || [];
+  renderAddrChips();
   renderChips(snap);
   paintSortHeaders();
   renderTable();
@@ -453,6 +484,7 @@ function boot() {
     else {
       allRows = [];
       socialRows = [];
+      renderAddrChips();
       renderChips({});
       renderTable();
       renderSocial();
@@ -460,6 +492,7 @@ function boot() {
   });
 
   paintGate();
+  renderAddrChips();
   if (CatboxChain.loadSnapshot) CatboxChain.loadSnapshot();
   if (window.ethereum) {
     Promise.race([
