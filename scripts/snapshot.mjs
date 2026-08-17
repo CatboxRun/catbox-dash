@@ -393,13 +393,19 @@ const [weekRows, invRows, refRows] = await Promise.all([
   multicall(p, boardIface, "refOf", addrs, 40, boardAddr),
 ]);
 let usedRows = await multicall(p, freeIface, "freeUsed", addrs, 40, freeAddr);
+let v5InvRows = [];
+if (paidAddr && freeAddr.toLowerCase() !== boardAddr.toLowerCase()) {
+  v5InvRows = await multicall(p, freeIface, "invitePts", addrs, 40, freeAddr);
+}
 const week = {};
 const invite = {};
 const refs = {};
 const freeUsed = {};
 addrs.forEach((a, j) => {
   const w = weekRows[j] ? weekRows[j][0] || 0n : 0n;
-  const inv = invRows[j] ? invRows[j][0] || 0n : 0n;
+  const inv6 = invRows[j] ? invRows[j][0] || 0n : 0n;
+  const inv5 = v5InvRows[j] ? v5InvRows[j][0] || 0n : 0n;
+  const inv = inv6 > inv5 ? inv6 : inv5;
   if (w > 0n) week[a] = w;
   if (inv > 0n) invite[a] = inv;
   const refRaw = refRows[j] ? refRows[j][0] : ZERO;
@@ -409,8 +415,14 @@ addrs.forEach((a, j) => {
 const missingRefs = [...new Set(Object.values(refs).filter((a) => a !== ZERO && invite[a] == null))];
 if (missingRefs.length) {
   const extra = await multicall(p, boardIface, "invitePts", missingRefs, 40, boardAddr);
+  let extra5 = [];
+  if (paidAddr && freeAddr.toLowerCase() !== boardAddr.toLowerCase()) {
+    extra5 = await multicall(p, freeIface, "invitePts", missingRefs, 40, freeAddr);
+  }
   missingRefs.forEach((a, j) => {
-    const pts = extra[j] ? extra[j][0] || 0n : 0n;
+    const p6 = extra[j] ? extra[j][0] || 0n : 0n;
+    const p5 = extra5[j] ? extra5[j][0] || 0n : 0n;
+    const pts = p6 > p5 ? p6 : p5;
     if (pts > 0n) invite[a] = pts;
   });
 }
