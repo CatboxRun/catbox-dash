@@ -2217,6 +2217,35 @@ const CatboxChain = (() => {
     return null;
   }
 
+  function effectiveBurnAmt(row) {
+    const burned = asAmt(row.burned);
+    if (burned > 0n) return burned;
+    let leftover = asAmt(row.leftover);
+    if (leftover <= 0n && row.settled && row.collected != null && row.paid != null) {
+      const ticket = asAmt(row.paid);
+      const got = asAmt(row.collected);
+      if (got < ticket) leftover = ticket - got;
+    }
+    if (leftover > 0n) return (leftover * 30n) / 100n;
+    return 0n;
+  }
+
+  function tallyBurnStatsFromRows(rows) {
+    const seen = new Set();
+    let v5BurnCount = 0;
+    let v6BurnCount = 0;
+    for (const row of rows || []) {
+      if (effectiveBurnAmt(row) <= 0n) continue;
+      const lane = row.lane === "v6" ? "v6" : "v5";
+      const key = row.tx || `run-${lane}-${row.id}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      if (lane === "v6") v6BurnCount += 1;
+      else v5BurnCount += 1;
+    }
+    return { burnCount: v5BurnCount + v6BurnCount, v5BurnCount, v6BurnCount };
+  }
+
   function burnStatsFromList(burns) {
     const list = burns || [];
     const v5BurnCount = list.filter((b) => (b.lane || "v5") === "v5").length;
@@ -2239,13 +2268,14 @@ const CatboxChain = (() => {
       });
     }
     for (const r of rowList || []) {
-      const amt = asAmt(r.burned);
+      const amt = effectiveBurnAmt(r);
       if (amt <= 0n) continue;
-      const key = r.tx || `run-${r.lane || "v5"}-${r.id}`;
+      const lane = r.lane === "v6" ? "v6" : "v5";
+      const key = r.tx || `run-${lane}-${r.id}`;
       if (byHash.has(key)) continue;
       byHash.set(key, {
         hash: r.tx || "",
-        lane: r.lane || "v5",
+        lane,
         runId: r.id,
         player: r.player,
         amount: amt,
@@ -2776,6 +2806,7 @@ const CatboxChain = (() => {
   function reviveAdminBoard(raw) {
     if (!raw) return null;
     const runs = (raw.runs || []).map((r) => reviveRunFromSnap(r)).filter(Boolean);
+    const fromRows = tallyBurnStatsFromRows(runs);
     return {
       ...raw,
       at: raw.at || null,
@@ -2791,9 +2822,9 @@ const CatboxChain = (() => {
       social: raw.social || [],
       xClaimCount: Number(raw.xClaimCount || 0),
       tgClaimCount: Number(raw.tgClaimCount || 0),
-      burnCount: Number(raw.burnCount || 0),
-      v5BurnCount: Number(raw.v5BurnCount || 0),
-      v6BurnCount: Number(raw.v6BurnCount || 0),
+      burnCount: Math.max(Number(raw.burnCount || 0), fromRows.burnCount),
+      v5BurnCount: Math.max(Number(raw.v5BurnCount || 0), fromRows.v5BurnCount),
+      v6BurnCount: Math.max(Number(raw.v6BurnCount || 0), fromRows.v6BurnCount),
       totalRuns: Number(raw.totalRuns || runs.length),
       v5Runs: Number(raw.v5Runs || runs.filter((r) => r.lane === "v5").length),
       v6Runs: Number(raw.v6Runs || runs.filter((r) => r.lane === "v6").length),

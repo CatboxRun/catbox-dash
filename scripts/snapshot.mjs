@@ -545,24 +545,53 @@ if (missingRefs.length) {
 
 console.error("fetching logs");
 const logChunksPaid = Number(process.env.LOG_CHUNKS_PAID || 40);
-const logChunksFree = Number(process.env.LOG_CHUNKS_FREE || (paidAddr ? 12 : 80));
+const logChunksFree = Number(process.env.LOG_CHUNKS_FREE || (paidAddr ? 24 : 80));
 const logsPaid = paidAddr
   ? await collectLogs(paidAddr, boardIface, ["RunStarted", "RunSettled", "Burned"], latest, logChunksPaid)
   : [];
-// V6 live: recent free settles + FreeEnter only (full V5 Burned history is filled incrementally below).
+// V6 live: recent free settles + FreeEnter; older V5 RunSettled backfilled incrementally below.
 const freeLogNames = paidAddr
   ? ["RunSettled", "FreeEnter"]
   : ["RunStarted", "RunSettled", "FreeEnter", "Burned"];
 const logsFree = await collectLogs(freeAddr, freeIface, freeLogNames, latest, logChunksFree);
 
-// Incrementally backfill V5 Burned logs so the burn board grows over time without timing out.
 const prevSnap = prevSnapEarly;
 const burnChunks = Number(process.env.BURN_CHUNKS || 10);
+const settleChunks = Number(process.env.SETTLE_CHUNKS || 15);
 let burnScanBefore = Number(prevSnap.burnScanBefore || latest);
+let settleScanBefore = Number(prevSnap.settleScanBefore || latest);
 if (!Number.isFinite(burnScanBefore) || burnScanBefore <= 0) burnScanBefore = latest;
+if (!Number.isFinite(settleScanBefore) || settleScanBefore <= 0) settleScanBefore = latest;
 if (burnScanBefore > latest) burnScanBefore = latest;
+if (settleScanBefore > latest) settleScanBefore = latest;
 const burnSpan = 1000;
 const burnFrom = Math.max(0, burnScanBefore - burnChunks * burnSpan);
+const settleFrom = Math.max(0, settleScanBefore - settleChunks * burnSpan);
+if (paidAddr && settleScanBefore > 0 && settleFrom < settleScanBefore) {
+  console.error("settle backfill", settleFrom, "..", settleScanBefore);
+  const topic = freeIface.getEvent("RunSettled").topicHash;
+  for (let toBlock = settleScanBefore; toBlock > settleFrom; toBlock -= burnSpan) {
+    const fromBlock = Math.max(settleFrom, toBlock - burnSpan + 1);
+    const got = await getLogsChunk(RPCS, {
+      address: freeAddr,
+      topics: [topic],
+      fromBlock,
+      toBlock,
+    });
+    for (const log of got || []) {
+      try {
+        const parsed = freeIface.parseLog(log);
+        logsFree.push({
+          name: parsed.name,
+          args: parsed.args,
+          blockNumber: log.blockNumber,
+          transactionHash: log.transactionHash,
+        });
+      } catch {}
+    }
+  }
+  settleScanBefore = settleFrom;
+}
 if (paidAddr && burnScanBefore > 0) {
   console.error("burn backfill", burnFrom, "..", burnScanBefore);
   const topic = freeIface.getEvent("Burned").topicHash;
@@ -902,10 +931,54 @@ if (paidAddr) {
   } catch (_) {}
 }
 
-const burnValues = [...burnsByHash.values()];
-const burnCount = burnValues.length;
-const v5BurnCount = burnValues.filter((b) => (b.lane || "v5") === "v5").length;
-const v6BurnCount = burnValues.filter((b) => b.lane === "v6").length;
+function effectiveBurnAmt(row) {
+  if (row.burned != null && row.burned > 0n) return row.burned;
+  let leftover = row.leftover;
+  if ((leftover == null || leftover <= 0n) && row.settled && row.collected != null && row.paid != null) {
+    const ticket = row.paid;
+    const got = row.collected;
+    if (got < ticket) leftover = ticket - got;
+  }
+  if (leftover != null && leftover > 0n) return (leftover * 30n) / 100n;
+  return 0n;
+}
+
+function tallyBurnStats(rows, burnsByHash) {
+  const byKey = new Map();
+  for (const b of burnsByHash.values()) {
+    const key = b.hash || `log-${b.lane || "v5"}-${b.runId ?? ""}-${b.blockNumber || 0}`;
+    byKey.set(key, b);
+  }
+  for (const row of rows) {
+    const amt = effectiveBurnAmt(row);
+    if (amt <= 0n) continue;
+    const lane = row.lane === "v6" ? "v6" : "v5";
+    const key = row.tx || `run-${lane}-${row.id}`;
+    if (byKey.has(key)) continue;
+    byKey.set(key, {
+      player: row.player,
+      tag: short(row.player),
+      amount: amt,
+      hash: row.tx || "",
+      runId: row.id,
+      lane,
+      blockNumber: 0,
+    });
+  }
+  const burnValues = [...byKey.values()];
+  return {
+    burnValues,
+    burnCount: burnValues.length,
+    v5BurnCount: burnValues.filter((b) => (b.lane || "v5") === "v5").length,
+    v6BurnCount: burnValues.filter((b) => b.lane === "v6").length,
+  };
+}
+
+const tallied = tallyBurnStats(rows, burnsByHash);
+const burnValues = tallied.burnValues;
+const burnCount = tallied.burnCount;
+const v5BurnCount = tallied.v5BurnCount;
+const v6BurnCount = tallied.v6BurnCount;
 const burns = burnValues
   .sort((a, b) => (b.blockNumber || 0) - (a.blockNumber || 0) || (b.runId || 0) - (a.runId || 0))
   .slice(0, 5000)
@@ -970,6 +1043,7 @@ const snapshot = {
   paidCount: rows.filter((r) => r.free === false).length,
   unknownPay: rows.filter((r) => r.free == null).length,
   burnScanBefore,
+  settleScanBefore,
   // Daily + invite boards: every known wallet (0 pts still listed).
   week: toRows(week, addrs),
   invite: toRows(invite, addrs),
