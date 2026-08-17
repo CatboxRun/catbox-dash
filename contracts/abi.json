@@ -10,6 +10,31 @@
       {
         "indexed": true,
         "internalType": "address",
+        "name": "from",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "toDay",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "toInvite",
+        "type": "uint256"
+      }
+    ],
+    "name": "BoardsFunded",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "address",
         "name": "player",
         "type": "address"
       },
@@ -103,6 +128,31 @@
       }
     ],
     "name": "Funded",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "player",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "dayPtsSet",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "invitePtsSet",
+        "type": "uint256"
+      }
+    ],
+    "name": "Migrated",
     "type": "event"
   },
   {
@@ -342,6 +392,32 @@
         "internalType": "address",
         "name": "",
         "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "PLAY_BPS",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "SCORE_PER_LIM",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
       }
     ],
     "stateMutability": "view",
@@ -672,19 +748,19 @@
         "type": "uint8"
       }
     ],
-    "stateMutability": "view",
+    "stateMutability": "pure",
     "type": "function"
   },
   {
     "inputs": [
       {
         "internalType": "address",
-        "name": "player",
+        "name": "",
         "type": "address"
       },
       {
         "internalType": "uint256",
-        "name": "tierId",
+        "name": "",
         "type": "uint256"
       }
     ],
@@ -696,7 +772,7 @@
         "type": "bool"
       }
     ],
-    "stateMutability": "view",
+    "stateMutability": "pure",
     "type": "function"
   },
   {
@@ -735,7 +811,7 @@
     "inputs": [
       {
         "internalType": "address",
-        "name": "player",
+        "name": "",
         "type": "address"
       }
     ],
@@ -760,6 +836,25 @@
         "internalType": "bool",
         "name": "eligible",
         "type": "bool"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "u",
+        "type": "address"
+      }
+    ],
+    "name": "freeUsed",
+    "outputs": [
+      {
+        "internalType": "uint8",
+        "name": "",
+        "type": "uint8"
       }
     ],
     "stateMutability": "view",
@@ -838,6 +933,42 @@
       }
     ],
     "name": "fund",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "toDay",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "toInvite",
+        "type": "uint256"
+      }
+    ],
+    "name": "fundBoards",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "toDay",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "toInvite",
+        "type": "uint256"
+      }
+    ],
+    "name": "fundBoardsFromBalance",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
@@ -996,6 +1127,63 @@
     "type": "function"
   },
   {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "ticketPaid",
+        "type": "uint256"
+      }
+    ],
+    "name": "maxScoreForTicket",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "pure",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address[]",
+        "name": "users",
+        "type": "address[]"
+      },
+      {
+        "internalType": "uint256[]",
+        "name": "dayScores",
+        "type": "uint256[]"
+      },
+      {
+        "internalType": "uint256[]",
+        "name": "inviteScores",
+        "type": "uint256[]"
+      },
+      {
+        "internalType": "uint256[]",
+        "name": "plays",
+        "type": "uint256[]"
+      },
+      {
+        "internalType": "address[]",
+        "name": "refs",
+        "type": "address[]"
+      },
+      {
+        "internalType": "uint256[]",
+        "name": "invCounts",
+        "type": "uint256[]"
+      }
+    ],
+    "name": "migratePlayers",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
     "inputs": [],
     "name": "nextClaimAt",
     "outputs": [
@@ -1057,6 +1245,25 @@
       {
         "internalType": "uint256",
         "name": "total",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "name": "playCount",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
         "type": "uint256"
       }
     ],
@@ -1182,7 +1389,7 @@
     "inputs": [
       {
         "internalType": "address",
-        "name": "player",
+        "name": "",
         "type": "address"
       }
     ],
@@ -1194,7 +1401,7 @@
         "type": "bool"
       }
     ],
-    "stateMutability": "view",
+    "stateMutability": "pure",
     "type": "function"
   },
   {
@@ -1370,6 +1577,38 @@
         "type": "bool"
       }
     ],
+    "stateMutability": "pure",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "weekAcc",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "u",
+        "type": "address"
+      }
+    ],
+    "name": "weekDebt",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
     "stateMutability": "view",
     "type": "function"
   },
@@ -1389,12 +1628,57 @@
   {
     "inputs": [
       {
+        "internalType": "address",
+        "name": "u",
+        "type": "address"
+      }
+    ],
+    "name": "weekPts",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "weekPtsTotal",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
         "internalType": "uint256",
         "name": "amount",
         "type": "uint256"
       }
     ],
     "name": "withdrawDaily",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "amount",
+        "type": "uint256"
+      }
+    ],
+    "name": "withdrawWeekly",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"

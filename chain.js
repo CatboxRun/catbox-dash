@@ -856,6 +856,45 @@ const CatboxChain = (() => {
     return (await tx.wait()).hash;
   }
 
+  async function v6ReserveLim() {
+    if (!(await isPaidDeployed())) return 0n;
+    const p = await readProvider();
+    const addr = paidAddr();
+    const game = paidGameContract(p);
+    const [bal, tf, free, day, eq, inv, owed] = await Promise.all([
+      limContract(p).balanceOf(addr),
+      game.ticketFloat().catch(() => 0n),
+      game.freePool().catch(() => 0n),
+      game.dayPool().catch(() => 0n),
+      game.dayEqPool().catch(() => 0n),
+      game.invitePool().catch(() => 0n),
+      game.owed().catch(() => 0n),
+    ]);
+    const booked = (tf || 0n) + (free || 0n) + (day || 0n) + (eq || 0n) + (inv || 0n) + (owed || 0n);
+    return bal > booked ? bal - booked : 0n;
+  }
+
+  async function fundBoardsFromReserve(toDayLim, toInviteLim) {
+    await connect();
+    if (!isOwner()) throw new Error("NOT_OWNER");
+    if (!(await isPaidDeployed())) throw new Error("PAID_NOT_READY");
+    const s = await signer();
+    const game = new ethers.Contract(paidAddr(), [...(cfg.v6?.abi || []), "function fundBoardsFromBalance(uint256,uint256)"], s);
+    const toDay = ethers.parseUnits(String(toDayLim || 0), 18);
+    const toInvite = ethers.parseUnits(String(toInviteLim || 0), 18);
+    const amt = toDay + toInvite;
+    if (amt <= 0n) throw new Error("NO_LIM");
+    const reserve = await v6ReserveLim();
+    if (reserve < amt) throw new Error("RESERVE_LOW");
+    try {
+      await game.fundBoardsFromBalance.staticCall(toDay, toInvite);
+    } catch (e) {
+      throw new Error("NO_RESERVE_FN");
+    }
+    const tx = await game.fundBoardsFromBalance(toDay, toInvite);
+    return (await tx.wait()).hash;
+  }
+
   function assumedFree() {
     return { used: 0, left: 2, pool: 0n, eligible: true, scoutFree: true };
   }
@@ -2978,6 +3017,8 @@ const CatboxChain = (() => {
     isPaidDeployed,
     deployPaid,
     fundBoards,
+    fundBoardsFromReserve,
+    v6ReserveLim,
     freeAddr,
     paidAddr,
     activeLane,

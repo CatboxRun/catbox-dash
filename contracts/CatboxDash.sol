@@ -192,6 +192,20 @@ contract CatboxDash {
         require(toDay > 0 || toInvite > 0, "amount");
         uint256 total = toDay + toInvite;
         _pull(msg.sender, total);
+        _creditBoards(toDay, toInvite);
+    }
+
+    /// Credit board pools from LIM already held by this contract (owner reserve deposits).
+    function fundBoardsFromBalance(uint256 toDay, uint256 toInvite) external onlyOwner {
+        require(toDay > 0 || toInvite > 0, "amount");
+        uint256 total = toDay + toInvite;
+        uint256 bal = IERC20(LIM).balanceOf(address(this));
+        uint256 booked = ticketFloat + freePool + dayPool + dayEqPool + invitePool + owed;
+        require(bal >= booked + total, "reserve");
+        _creditBoards(toDay, toInvite);
+    }
+
+    function _creditBoards(uint256 toDay, uint256 toInvite) internal {
         if (toDay > 0) {
             if (dayPtsTotal > 0) dayAcc += toDay * ACC / dayPtsTotal;
             dayPool += toDay;
