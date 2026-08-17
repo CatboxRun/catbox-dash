@@ -1872,8 +1872,8 @@ const CatboxChain = (() => {
     function pack(weekMap, inviteMap) {
       boardCache = { lastId: last, seen: [...seen], week: weekMap, invite: inviteMap };
       return {
-        week: toRows(weekMap, account).filter((r) => r.pts > 0).slice(0, 1000),
-        invite: toRows(inviteMap, account).filter((r) => r.pts > 0).slice(0, 1000),
+        week: toRows(weekMap, account).filter((r) => r.pts > 0),
+        invite: toRows(inviteMap, account).filter((r) => r.pts > 0),
       };
     }
 

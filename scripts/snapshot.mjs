@@ -210,8 +210,7 @@ function toRows(map, allAddrs) {
       addr,
       pts: asNum(map[addr] || 0n),
     }))
-    .sort((a, b) => b.pts - a.pts || a.addr.localeCompare(b.addr))
-    .slice(0, 2000);
+    .sort((a, b) => b.pts - a.pts || a.addr.localeCompare(b.addr));
 }
 
 const { p } = await pickProvider();
@@ -971,9 +970,9 @@ const snapshot = {
   paidCount: rows.filter((r) => r.free === false).length,
   unknownPay: rows.filter((r) => r.free == null).length,
   burnScanBefore,
-  // Daily board: every known wallet (0 shards still listed). Invite board: only wallets with invitePts.
+  // Daily + invite boards: every known wallet (0 pts still listed).
   week: toRows(week, addrs),
-  invite: toRows(invite),
+  invite: toRows(invite, addrs),
   burns,
   // Public snapshot: boards + burns only (no per-run PII). Admin reads live via fetchOwnerRuns.
 };
