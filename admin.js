@@ -182,8 +182,8 @@ function renderChips(summary) {
     s.unknownPay > 0
       ? `${s.paidCount} 付费 / ${s.freeCount} 免费 / ${s.unknownPay} 未知`
       : `${s.paidCount ?? 0} 付费 / ${s.freeCount ?? 0} 免费`;
-  const v5n = allRows.filter((r) => r.lane === "v5" || r.lane === "free").length;
-  const v6n = allRows.filter((r) => r.lane === "v6" || r.lane === "paid").length;
+  const v5n = s.v5Runs ?? allRows.filter((r) => r.lane === "v5" || r.lane === "free").length;
+  const v6n = s.v6Runs ?? allRows.filter((r) => r.lane === "v6" || r.lane === "paid").length;
   $("chips").innerHTML = [
     ["局数", s.totalRuns ?? allRows.length],
     ["V5 / V6 局", `${v5n} / ${v6n}`],
@@ -356,7 +356,11 @@ function applySnapshot(snap) {
   renderTable();
   renderSocial();
   const when = snap.at ? new Date(snap.at).toLocaleString() : "";
-  setStatus(`快照 ${when} · 共 ${snap.totalRuns} 局 · ${snap.uniqueWallets} 个钱包 · 推文 ${snap.xClaimCount ?? 0} · TG ${snap.tgClaimCount ?? 0} · 约每 10 分钟更新，点刷新重新读取`);
+  const v5n = snap.v5Runs ?? allRows.filter((r) => r.lane === "v5").length;
+  const v6n = snap.v6Runs ?? allRows.filter((r) => r.lane === "v6").length;
+  setStatus(
+    `双合约快照 V5+V6 · ${when} · V5 ${v5n} / V6 ${v6n} 局 · 共 ${snap.totalRuns} 局 · ${snap.uniqueWallets} 个钱包 · 推文 ${snap.xClaimCount ?? 0} · TG ${snap.tgClaimCount ?? 0} · 约每 10 分钟更新`,
+  );
 }
 
 async function refreshSocialDeployBtn() {

@@ -316,6 +316,72 @@ function readJsonFile(path) {
   }
 }
 
+function prevRunToInternal(r) {
+  const lane = r.lane === "paid" ? "v6" : r.lane === "free" ? "v5" : r.lane || "v5";
+  return {
+    id: r.id,
+    lane,
+    key: `${lane}-${r.id}`,
+    player: getAddress(r.player),
+    paid: BigInt(r.paid || "0"),
+    ticketLim: r.ticketLim,
+    tierId: r.tierId,
+    tierName: r.tierName,
+    startedAt: Number(r.startedAt || 0),
+    settled: Boolean(r.settled),
+    free: r.free == null ? null : Boolean(r.free),
+    collected: r.collected != null ? BigInt(r.collected) : null,
+    leftover: r.leftover != null ? BigInt(r.leftover) : null,
+    burned: r.burned != null ? BigInt(r.burned) : null,
+    score: r.score == null ? null : Number(r.score),
+    payout: r.payout != null ? BigInt(r.payout) : null,
+    rewardBps: r.rewardBps ?? 10500,
+    invites: r.invites ?? 0,
+    plays: r.plays ?? 0,
+    weekPts: BigInt(r.weekPts || "0"),
+    invitePts: BigInt(r.invitePts || "0"),
+    extraPaid: BigInt(r.extraPaid || "0"),
+    extraTx: r.extraTx || null,
+    xClaimed: Boolean(r.xClaimed),
+    tgClaimed: Boolean(r.tgClaimed),
+    referrer: r.referrer && r.referrer !== ZERO ? getAddress(r.referrer) : ZERO,
+    tx: r.tx || null,
+  };
+}
+
+function loadPrevV5Runs(prev) {
+  if (!prev?.runs?.length) return [];
+  return prev.runs
+    .filter((r) => r.lane === "v5" || r.lane === "free")
+    .map(prevRunToInternal);
+}
+
+function mergeRunRows(...lists) {
+  const byKey = new Map();
+  for (const list of lists) {
+    for (const r of list) {
+      const key = r.key || `${r.lane}-${r.id}`;
+      const prev = byKey.get(key);
+      if (!prev) {
+        byKey.set(key, { ...r, key });
+        continue;
+      }
+      // Prefer freshly scanned chain rows; keep prev enrichments when scan is sparse.
+      const merged = { ...prev, ...r, key };
+      if (prev.tx && !r.tx) merged.tx = prev.tx;
+      if (prev.collected != null && r.collected == null) merged.collected = prev.collected;
+      if (prev.leftover != null && r.leftover == null) merged.leftover = prev.leftover;
+      if (prev.burned != null && r.burned == null) merged.burned = prev.burned;
+      if (prev.score != null && r.score == null) merged.score = prev.score;
+      if (prev.referrer && prev.referrer !== ZERO && (!r.referrer || r.referrer === ZERO)) {
+        merged.referrer = prev.referrer;
+      }
+      byKey.set(key, merged);
+    }
+  }
+  return [...byKey.values()];
+}
+
 function loadPrevBoardAddrs() {
   const out = new Set();
   const prev = readJsonFile(join(root, "data/snapshot.json"));
@@ -346,16 +412,20 @@ function saveBoardWallets(addrs) {
   return list;
 }
 
+const prevSnapEarly = readJsonFile(join(root, "data/snapshot.json")) || {};
+
 const paidPack = paidAddr
   ? await loadRunsFrom("v6", paidAddr, boardIface, boardGame)
   : { next: 0, rows: [] };
 
-// After V6 cutover, do NOT full-scan V5 history (3000+ runs) — it times out Actions.
-// Keep recent V5 window for free SCOUT admin + Extra; boards read from V6 + prior snapshot wallets.
+// After V6 cutover, do NOT full-scan V5 history in one shot — it times out Actions.
+// Live window: recent V5 for free SCOUT + logs; older V5 paid runs backfill incrementally + carry forward.
 const V5_RECENT = Number(process.env.V5_RECENT || 120);
+const V5_RUN_CHUNK = Number(process.env.V5_RUN_CHUNK || 150);
 let freePack;
+let nextFree = 0;
 if (paidAddr) {
-  const nextFree = Number(await withTimeout(freeGame.nextRunId(), 8000));
+  nextFree = Number(await withTimeout(freeGame.nextRunId(), 8000));
   const fromId = Math.max(1, nextFree - V5_RECENT);
   freePack = await loadRunsFrom("v5", freeAddr, freeIface, freeGame, {
     fromId,
@@ -363,18 +433,41 @@ if (paidAddr) {
   });
 } else {
   freePack = await loadRunsFrom("v5", freeAddr, freeIface, freeGame);
+  nextFree = freePack.next;
 }
+
+let v5HistRows = [];
+let v5RunScanBefore = Number(prevSnapEarly.v5RunScanBefore || 0);
+if (paidAddr && nextFree > 1) {
+  if (!Number.isFinite(v5RunScanBefore) || v5RunScanBefore <= 0) {
+    v5RunScanBefore = Math.max(1, nextFree - V5_RECENT);
+  }
+  if (v5RunScanBefore > nextFree) v5RunScanBefore = nextFree;
+  const histTo = v5RunScanBefore;
+  const histFrom = Math.max(1, histTo - V5_RUN_CHUNK);
+  if (histFrom < histTo) {
+    console.error("v5 run backfill", histFrom, "..", histTo - 1);
+    const histPack = await loadRunsFrom("v5", freeAddr, freeIface, freeGame, {
+      fromId: histFrom,
+      toIdExclusive: histTo,
+    });
+    v5HistRows = histPack.rows;
+    v5RunScanBefore = histFrom;
+  }
+}
+
+const prevV5Rows = paidAddr ? loadPrevV5Runs(prevSnapEarly) : [];
 
 let rows;
 if (paidAddr) {
-  rows = [
-    ...paidPack.rows,
-    ...freePack.rows
-      .filter((r) => r.paid <= 10n ** 18n)
-      .map((r) => ({ ...r, lane: "v5" })),
-  ];
+  rows = mergeRunRows(
+    paidPack.rows,
+    freePack.rows.map((r) => ({ ...r, lane: "v5" })),
+    v5HistRows.map((r) => ({ ...r, lane: "v5" })),
+    prevV5Rows,
+  );
 } else {
-  rows = freePack.rows.map((r) => ({ ...r, lane: "v5" }));
+  rows = mergeRunRows(freePack.rows.map((r) => ({ ...r, lane: "v5" })), prevV5Rows);
 }
 
 const seen = new Set(rows.map((r) => r.player));
@@ -440,7 +533,7 @@ const freeLogNames = paidAddr
 const logsFree = await collectLogs(freeAddr, freeIface, freeLogNames, latest, logChunksFree);
 
 // Incrementally backfill V5 Burned logs so the burn board grows over time without timing out.
-const prevSnap = readJsonFile(join(root, "data/snapshot.json")) || {};
+const prevSnap = prevSnapEarly;
 const burnChunks = Number(process.env.BURN_CHUNKS || 10);
 let burnScanBefore = Number(prevSnap.burnScanBefore || latest);
 if (!Number.isFinite(burnScanBefore) || burnScanBefore <= 0) burnScanBefore = latest;
@@ -568,10 +661,6 @@ for (const list of Object.values(byPlayer)) {
       r.free = false;
     }
   }
-}
-if (paidAddr) {
-  // Drop V5 paid 1 LIM history after cutover; keep only confirmed free SCOUT.
-  rows = rows.filter((r) => r.lane !== "v5" || r.free === true);
 }
 for (const row of rows) {
   row.weekPts = week[row.player] || 0n;
@@ -816,10 +905,20 @@ const social = Object.values(socialByAddr)
     tgBlock: r.tgBlock || 0,
   }));
 
+const v5Runs = rows.filter((r) => r.lane === "v5").length;
+const v6Runs = rows.filter((r) => r.lane === "v6").length;
+
 const snapshot = {
   at: new Date().toISOString(),
   block: latest,
+  freeAddress: freeAddr,
+  paidAddress: paidAddr || null,
   nextRunId,
+  v5NextRunId: nextFree || freePack.next,
+  v6NextRunId: paidPack.next || 0,
+  v5Runs,
+  v6Runs,
+  v5RunScanBefore: paidAddr ? v5RunScanBefore : 0,
   weekPool: weiStr(weekPool),
   invitePool: weiStr(invitePool),
   freePool: weiStr(freePool),
