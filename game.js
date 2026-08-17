@@ -269,9 +269,10 @@ function markBoardYou(rows) {
 
 function boardsFromSnapshot(snap) {
   if (!snap) return null;
+  const invite = (snap.invite || []).filter((r) => rowPts(r) > 0);
   return {
     week: markBoardYou(snap.week || []),
-    invite: markBoardYou(snap.invite || []),
+    invite: markBoardYou(invite),
   };
 }
 
@@ -2661,7 +2662,7 @@ function tick() {
       run.combo += 1;
       run.collected = Math.min(limCap(run), +(run.collected + o.amount).toFixed(6));
       addRaw(36 + Math.round((o.amount / run.tier.cost) * 900) + Math.min(run.combo, 12) * 10);
-      if (o.gold) run.flash = 10;
+      if (o.gold) run.flash = 5;
       const showLim = o.amount >= 0.01 ? `+${o.amount.toFixed(2)} LIM` : `+${o.amount.toFixed(4)} LIM`;
       run.popped.push({
         x: o.x,
@@ -3320,7 +3321,7 @@ function draw() {
   drawTutorialCallout();
 
   if (run.flash > 0) {
-    ctx.fillStyle = `rgba(230, 184, 76, ${0.08 * run.flash})`;
+    ctx.fillStyle = `rgba(230, 184, 76, ${0.035 * run.flash})`;
     ctx.fillRect(0, 0, W, H);
   }
 

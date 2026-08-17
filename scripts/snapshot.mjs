@@ -202,7 +202,7 @@ async function collectLogs(addr, iface, names, latest, maxChunks = 80) {
   return out;
 }
 
-function toRows(map, allAddrs) {
+function toRows(map, allAddrs, keepZero = false) {
   const keys = allAddrs && allAddrs.length ? allAddrs : Object.keys(map);
   return keys
     .map((addr) => ({
@@ -210,6 +210,7 @@ function toRows(map, allAddrs) {
       addr,
       pts: asNum(map[addr] || 0n),
     }))
+    .filter((r) => keepZero || r.pts > 0)
     .sort((a, b) => b.pts - a.pts || a.addr.localeCompare(b.addr));
 }
 
@@ -1080,8 +1081,8 @@ const snapshot = {
   unknownPay: rows.filter((r) => r.free == null).length,
   burnScanBefore,
   settleScanBefore,
-  // Daily + invite boards: every known wallet (0 pts still listed).
-  week: toRows(week, addrs),
+  // Daily: all known wallets (0 pts listed). Invite: scored wallets only.
+  week: toRows(week, addrs, true),
   invite: toRows(invite, addrs),
   burns,
   // Public snapshot: boards + burns only (no per-run PII). Admin reads live via fetchOwnerRuns.
@@ -1143,6 +1144,12 @@ const v5History = {
   social,
 };
 writeFileSync(v5HistoryFile, `${JSON.stringify(v5History)}\n`);
+const inviteDupWeek = snapshot.invite.filter(
+  (r) => r.pts > 0 && snapshot.week.some((w) => w.addr === r.addr && w.pts === r.pts),
+).length;
+if (inviteDupWeek > 0) {
+  console.error("WARN invite rows share same pts as daily board", inviteDupWeek);
+}
 console.error(
   "wrote",
   outFile,
