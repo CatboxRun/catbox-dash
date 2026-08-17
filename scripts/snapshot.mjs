@@ -782,6 +782,14 @@ try {
     burnedTotal += freeBurned;
   }
 } catch {}
+try {
+  const legacyAbi = ["function burnedTotal() view returns (uint256)"];
+  for (const addr of cfg.legacyBurn || []) {
+    if (!addr) continue;
+    const c = new Contract(addr, legacyAbi, p);
+    burnedTotal += await c.burnedTotal().catch(() => 0n);
+  }
+} catch {}
 
 try {
   if (paidAddr) {

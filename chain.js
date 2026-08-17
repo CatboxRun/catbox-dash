@@ -399,6 +399,16 @@ const CatboxChain = (() => {
     return c.ticketPrice(tierId);
   }
 
+  async function legacyBurnedTotal(p) {
+    const addrs = cfg.legacyBurn || [];
+    if (!addrs.length) return 0n;
+    const abi = ["function burnedTotal() view returns (uint256)"];
+    const parts = await Promise.all(
+      addrs.map((addr) => new ethers.Contract(addr, abi, p).burnedTotal().catch(() => 0n)),
+    );
+    return parts.reduce((sum, v) => sum + (v || 0n), 0n);
+  }
+
   async function poolBalance() {
     const p = await readProvider();
     let free = 0n;
@@ -428,7 +438,7 @@ const CatboxChain = (() => {
         const inviteShown = i + (v5Invite || 0n);
         const accounted = free + (v5Week || 0n) + (v5Invite || 0n) + (ticketFloat || 0n);
         const dust = v5Bal > accounted ? v5Bal - accounted : 0n;
-        const burned = (burnedPaid || 0n) + (burnedFree || 0n) + dust;
+        const burned = (burnedPaid || 0n) + (burnedFree || 0n) + dust + (await legacyBurnedTotal(p));
         return {
           week: weekShown,
           day: weekShown,
@@ -446,7 +456,13 @@ const CatboxChain = (() => {
       } catch (_) {}
     }
     const c = freeGameContract(p);
-    const [week, invite, burned] = await Promise.all([c.weekPool(), c.invitePool(), c.burnedTotal()]);
+    const [week, invite, burnedCore, legacyBurn] = await Promise.all([
+      c.weekPool(),
+      c.invitePool(),
+      c.burnedTotal(),
+      legacyBurnedTotal(p),
+    ]);
+    const burned = (burnedCore || 0n) + (legacyBurn || 0n);
     return {
       week,
       day: week,
