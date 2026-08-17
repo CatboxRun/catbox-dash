@@ -321,11 +321,6 @@ function paintWalletBtn() {
   $("gateConnect").textContent = acc ? CatboxChain.short(acc) : "连接钱包";
 }
 
-async function fetchAllRuns(onProgress) {
-  if (!CatboxChain.account || !CatboxChain.isOwner()) throw new Error("NOT_OWNER");
-  return CatboxChain.fetchOwnerRuns(onProgress);
-}
-
 function paintGate() {
   const acc = CatboxChain.account;
   const owner = acc && CatboxChain.isOwner();
@@ -361,12 +356,11 @@ function applySnapshot(snap) {
   paintSortHeaders();
   renderTable();
   renderSocial();
-  const when = snap.at ? new Date(snap.at).toLocaleString() : "";
+  const when = snap.at ? new Date(snap.at).toLocaleString() : "—";
   const v5n = snap.v5Runs ?? allRows.filter((r) => r.lane === "v5" || r.lane === "free").length;
   const v6n = snap.v6Runs ?? allRows.filter((r) => r.lane === "v6" || r.lane === "paid").length;
-  const hist = snap.historyAt ? ` · 历史快照 ${new Date(snap.historyAt).toLocaleString()}` : "";
   setStatus(
-    `数据已合并 · ${when}${hist} · V5 ${v5n} / V6 ${v6n} 局 · 共 ${snap.totalRuns ?? allRows.length} 局 · ${snap.uniqueWallets ?? "—"} 个钱包`,
+    `快照 ${when} · 约每 10 分钟更新 · V5 ${v5n} / V6 ${v6n} 局 · 共 ${snap.totalRuns ?? allRows.length} 局 · ${snap.uniqueWallets ?? "—"} 个钱包`,
   );
 }
 
@@ -374,45 +368,20 @@ async function loadRuns() {
   if (!paintGate()) return;
   if (loading) return;
   loading = true;
-  setStatus("加载历史并扫描链上…");
+  setStatus("加载快照…");
   try {
-    const pools = await CatboxChain.loadSnapshot(true).catch(() => ({}));
-    const live = await CatboxChain.fetchOwnerRuns((p) => {
-      if (p.phase === "history") {
-        const bit = p.complete === false ? " · 回填中" : "";
-        setStatus(`V5 历史 ${p.runs} 局${bit}${p.at ? ` · ${p.at}` : ""}…`);
-      } else if (p.phase === "runs" && p.total) {
-        const lane = p.lane ? ` ${String(p.lane).toUpperCase()}` : "";
-        setStatus(`扫描${lane} ${p.done}/${p.total}…`);
-      } else if (p.phase === "v5gap") {
-        setStatus(`补扫 V5 旧局 #1–${p.to}…`);
-      } else if (p.phase === "v5full") {
-        setStatus(`全量扫描 V5（约 ${p.total} 局）…`);
-      } else if (p.phase === "players") {
-        setStatus(`同步玩家积分 ${p.done}/${p.total}…`);
-      } else if (p.phase === "logs") {
-        setStatus("补全结算日志…");
-      } else if (p.phase === "extra") {
-        setStatus("同步加时数据…");
-      } else if (p.phase === "social") {
-        setStatus("同步推文 / TG 登记…");
-      }
-    });
-    applySnapshot({
-      ...pools,
-      ...live,
-      runs: live.runs || [],
-      social: live.social || [],
-      at: new Date().toISOString(),
-      historyAt: live.historyAt || pools?.at || null,
-    });
+    const snap = await CatboxChain.loadAdminBoard(true);
+    if (!snap?.runs?.length) throw new Error("NO_SNAPSHOT");
+    applySnapshot(snap);
   } catch (e) {
     const msg =
       e?.message === "NOT_OWNER"
         ? "无权限：请切换到 owner 钱包"
         : e?.message === "NO_WALLET"
           ? "请先连接钱包"
-          : `扫描失败：${e?.shortMessage || e?.message || "请重试"}`;
+          : e?.message === "NO_SNAPSHOT"
+            ? "暂无快照数据，请等 CI 跑完或稍后再试"
+            : `加载失败：${e?.shortMessage || e?.message || "请重试"}`;
     setStatus(msg);
     if (e?.message === "NOT_OWNER") {
       show($("denied"), true);
@@ -478,7 +447,6 @@ function boot() {
 
   paintGate();
   renderAddrChips();
-  if (CatboxChain.loadSnapshot) CatboxChain.loadSnapshot();
   if (window.ethereum) {
     Promise.race([
       window.ethereum.request({ method: "eth_accounts" }),

@@ -39,7 +39,7 @@ jobs:
           if [ -f package.json ] && ! git ls-files --error-unmatch package.json >/dev/null 2>&1; then
             rm -f package.json
           fi
-          git add data/snapshot.json data/board-wallets.json data/v5-history.json
+          git add data/snapshot.json data/board-wallets.json data/v5-history.json data/admin-board.json
           if git diff --staged --quiet; then
             echo "snapshot unchanged"
             exit 0

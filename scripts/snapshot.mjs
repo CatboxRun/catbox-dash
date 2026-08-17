@@ -1017,6 +1017,8 @@ const outFile = join(outDir, "snapshot.json");
 const adminFile = join(outDir, "admin-snapshot.json");
 writeFileSync(outFile, `${JSON.stringify(snapshot)}\n`);
 writeFileSync(adminFile, `${JSON.stringify(adminSnapshot)}\n`);
+const adminBoardFile = join(outDir, "admin-board.json");
+writeFileSync(adminBoardFile, `${JSON.stringify(adminSnapshot)}\n`);
 const v5HistoryFile = join(outDir, "v5-history.json");
 const v5History = {
   at: snapshot.at,
@@ -1034,10 +1036,10 @@ writeFileSync(v5HistoryFile, `${JSON.stringify(v5History)}\n`);
 console.error(
   "wrote",
   outFile,
+  "admin-board",
+  adminSnapshot.runs.length,
   "v5-history",
   v5History.runs.length,
-  "runs",
-  adminSnapshot.runs.length,
   "week",
   snapshot.week.length,
   "invite",

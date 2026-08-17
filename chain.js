@@ -2771,6 +2771,101 @@ const CatboxChain = (() => {
     }
   }
 
+  let adminBoardCache = null;
+
+  function reviveAdminBoard(raw) {
+    if (!raw) return null;
+    const runs = (raw.runs || []).map((r) => reviveRunFromSnap(r)).filter(Boolean);
+    return {
+      ...raw,
+      at: raw.at || null,
+      weekPool: reviveWei(raw.weekPool) ?? 0n,
+      invitePool: reviveWei(raw.invitePool) ?? 0n,
+      freePool: reviveWei(raw.freePool) ?? 0n,
+      burnedTotal: reviveWei(raw.burnedTotal) ?? 0n,
+      extraPool: reviveWei(raw.extraPool) ?? 0n,
+      extraPaidTotal: reviveWei(raw.extraPaidTotal) ?? 0n,
+      extraFundedTotal: reviveWei(raw.extraFundedTotal) ?? 0n,
+      extraWithdrawnTotal: reviveWei(raw.extraWithdrawnTotal) ?? 0n,
+      runs,
+      social: raw.social || [],
+      xClaimCount: Number(raw.xClaimCount || 0),
+      tgClaimCount: Number(raw.tgClaimCount || 0),
+      burnCount: Number(raw.burnCount || 0),
+      v5BurnCount: Number(raw.v5BurnCount || 0),
+      v6BurnCount: Number(raw.v6BurnCount || 0),
+      totalRuns: Number(raw.totalRuns || runs.length),
+      v5Runs: Number(raw.v5Runs || runs.filter((r) => r.lane === "v5").length),
+      v6Runs: Number(raw.v6Runs || runs.filter((r) => r.lane === "v6").length),
+      uniqueWallets: Number(raw.uniqueWallets || 0),
+      freeCount: Number(raw.freeCount || 0),
+      paidCount: Number(raw.paidCount || 0),
+      unknownPay: Number(raw.unknownPay || 0),
+    };
+  }
+
+  async function loadAdminBoard(force) {
+    if (!force && adminBoardCache) return adminBoardCache;
+    const paths = ["./data/admin-board.json", "./data/admin-snapshot.json"];
+    for (const path of paths) {
+      try {
+        const res = await fetch(`${path}?t=${Date.now()}`, { cache: "no-store" });
+        if (!res.ok) continue;
+        adminBoardCache = reviveAdminBoard(await res.json());
+        return adminBoardCache;
+      } catch (_) {}
+    }
+    try {
+      const [hist, snap] = await Promise.all([loadOwnerHistory(true), loadSnapshot(true)]);
+      if (!hist?.runs?.length && !snap) {
+        adminBoardCache = null;
+        return null;
+      }
+      const v6Runs = (snap?.runs || [])
+        .map((r) => reviveRunFromSnap(r))
+        .filter(Boolean);
+      const merged = mergeRunRows(hist?.runs || [], v6Runs);
+      adminBoardCache = reviveAdminBoard({
+        ...(snap || {}),
+        ...(hist || {}),
+        at: snap?.at || hist?.at || null,
+        runs: merged.map((r) => ({
+          id: r.id,
+          lane: r.lane,
+          player: r.player,
+          paid: String(r.paid ?? 0n),
+          ticketLim: r.ticketLim,
+          tierId: r.tierId,
+          tierName: r.tierName,
+          startedAt: r.startedAt,
+          settled: r.settled,
+          free: r.free,
+          collected: r.collected != null ? String(r.collected) : null,
+          leftover: r.leftover != null ? String(r.leftover) : null,
+          burned: r.burned != null ? String(r.burned) : null,
+          score: r.score,
+          payout: r.payout != null ? String(r.payout) : null,
+          rewardBps: r.rewardBps,
+          invites: r.invites,
+          plays: r.plays,
+          weekPts: String(r.weekPts ?? 0n),
+          invitePts: String(r.invitePts ?? 0n),
+          extraPaid: String(r.extraPaid ?? 0n),
+          extraTx: r.extraTx,
+          xClaimed: r.xClaimed,
+          tgClaimed: r.tgClaimed,
+          referrer: r.referrer,
+          tx: r.tx,
+        })),
+        social: hist?.social || snap?.social || [],
+      });
+      return adminBoardCache;
+    } catch (_) {
+      adminBoardCache = null;
+      return null;
+    }
+  }
+
   return {
     cfg,
     get account() {
@@ -2838,6 +2933,7 @@ const CatboxChain = (() => {
     fetchBurns,
     fetchOwnerRuns,
     loadSnapshot,
+    loadAdminBoard,
     loadOwnerHistory,
     mergeRunRows,
     formatLim(v) {
