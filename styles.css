@@ -466,6 +466,9 @@ body:not([data-lang="en"]) .meme-line {
   background: linear-gradient(180deg, #edd078, #c9a227);
   border: 3px solid #000;
   box-shadow: 6px 6px 0 #000;
+  user-select: text;
+  -webkit-user-select: text;
+  word-break: break-all;
 }
 body[data-lang="zh"] { font-family: "Noto Sans SC", "Press Start 2P", sans-serif; }
 body[data-lang="ja"] { font-family: "Noto Sans JP", "Press Start 2P", sans-serif; }

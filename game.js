@@ -700,40 +700,67 @@ function paintCrew() {
   });
 }
 
-async function copyInviteLink(btn) {
+function writeClipboard(text) {
+  let ok = false;
+  try {
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.setAttribute("readonly", "");
+    ta.style.cssText = "position:fixed;left:0;top:0;width:1px;height:1px;opacity:0";
+    document.body.appendChild(ta);
+    ta.focus();
+    ta.select();
+    ta.setSelectionRange(0, text.length);
+    ok = document.execCommand("copy");
+    ta.remove();
+  } catch (_) {}
+  if (navigator.clipboard?.writeText) {
+    navigator.clipboard.writeText(text).catch(() => {});
+  }
+  const link = $("inviteLink");
+  if (link && link.offsetParent) {
+    link.value = text;
+    try {
+      link.focus();
+      link.select();
+    } catch (_) {}
+  }
+  return ok;
+}
+
+function markInviteCopied(btn) {
+  const label = btn && btn.tagName === "BUTTON" ? btn : $("copyInvite");
+  if (!label) return;
+  label.textContent = t("copied");
+  setTimeout(() => {
+    if (label.hasAttribute("data-crew-btn")) {
+      const need = Math.max(0, 4 - Math.floor(Number(window._crewCount) || 0));
+      label.textContent = need === 1 ? t("crewCopy1") : t("crewCopy");
+    } else if (label.id === "overShareCopy") {
+      label.textContent = t("shareCopy");
+    } else {
+      label.textContent = t("copyInvite");
+    }
+  }, 1200);
+}
+
+function copyInviteLink(btn) {
   const acc = window.CatboxChain?.account;
   if (!acc) {
-    try {
-      await CatboxChain.connect();
-    } catch (_) {
-      showToast(t("connectFirst"));
-      return;
-    }
+    CatboxChain.connect()
+      .then(() => copyInviteLink(btn))
+      .catch(() => showToast(t("connectFirst")));
+    return;
   }
-  await refreshInviteUi();
   const val = inviteLinkValue();
   if (!val) {
     showToast(t("connectFirst"));
     return;
   }
-  try {
-    await navigator.clipboard.writeText(val);
-    const label = btn && btn.tagName === "BUTTON" ? btn : $("copyInvite");
-    if (label) {
-      label.textContent = t("copied");
-      setTimeout(() => {
-        if (label.hasAttribute("data-crew-btn")) {
-          const need = Math.max(0, 4 - Math.floor(Number(window._crewCount) || 0));
-          label.textContent = need === 1 ? t("crewCopy1") : t("crewCopy");
-        } else if (label.id === "overShareCopy") {
-          label.textContent = t("shareCopy");
-        } else {
-          label.textContent = t("copyInvite");
-        }
-      }, 1200);
-    }
-    showToast(t("copied"));
-  } catch (_) {}
+  const ok = writeClipboard(val);
+  markInviteCopied(btn);
+  showToast(ok ? t("copied") : val);
+  refreshInviteUi().catch(() => {});
 }
 
 function friendRunKey(addr) {
@@ -1425,7 +1452,7 @@ async function bootWallet() {
       }
     };
   }
-  $("copyInvite").onclick = () => copyInviteLink($("copyInvite"));
+  if ($("copyInvite")) $("copyInvite").onclick = () => copyInviteLink($("copyInvite"));
   document.querySelectorAll(".js-copy-invite").forEach((btn) => {
     if (btn.id === "copyInvite") return;
     btn.onclick = () => copyInviteLink(btn);
