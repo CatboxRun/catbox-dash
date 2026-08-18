@@ -201,7 +201,12 @@
                   <li data-i18n="rulePoolInvite">👥 20% → invite board pool</li>
                   <li data-i18n="rulePoolBurn">🔥 30% → burn (dead address, on-chain)</li>
                 </ul>
-                <p class="rules-note" data-i18n="ruleClaimNote">📅 Daily and invite rewards open at Singapore midnight for one hour — claim on the POOLS tab.</p>
+                <p class="rules-note" data-i18n="ruleClaimNote">📅 Singapore midnight opens one hour on the POOLS tab. Claim daily board + invite with CLAIM / CLAIM INVITE; claim the floor pool separately with CLAIM FLOOR.</p>
+              </section>
+
+              <section class="rules-block">
+                <h3 data-i18n="ruleFloorTitle">📊 Floor pool</h3>
+                <p class="rules-intro" data-i18n="ruleFloorBody">Separate from the 50% daily score pool. One equal share per address that finishes a settled run today. As more wallets play, the pool keeps growing (currently seeded with 500 LIM). Claim at Singapore midnight — use CLAIM FLOOR on the POOLS tab, not the same button as the daily board.</p>
               </section>
 
               <section class="rules-block">
@@ -213,6 +218,8 @@
                   <dd data-i18n="ruleFaq2A">105% base + invite / extra-run boosts (200% cap total), still within the per-run LIM cap.</dd>
                   <dt data-i18n="ruleFaq6Q">Is 200% the max I can take home?</dt>
                   <dd data-i18n="ruleFaq6A">200% is the settle bonus rate cap (105% + friends + extra runs). A separate per-run LIM cap still applies: 1 LIM tickets ×2, other tickets ×1.5. Extra over the ticket is yours, inside that LIM cap.</dd>
+                  <dt data-i18n="ruleFaq7Q">What is the floor pool?</dt>
+                  <dd data-i18n="ruleFaq7A">An equal-split bonus pool — not the 50% score board. Play and settle today to get a share. Pool grows as more addresses join (500 LIM seeded now). Claim at Singapore midnight with CLAIM FLOOR.</dd>
                   <dt data-i18n="ruleFaq3Q">Why can't I claim?</dt>
                   <dd data-i18n="ruleFaq3A">Usually outside the claim window (Singapore midnight hour), or nothing pending yet.</dd>
                   <dt data-i18n="ruleFaq4Q">Where does LIM come from / how do I sell?</dt>
@@ -229,9 +236,11 @@
               <div class="split week">
                 <img src="./assets/icon-trophy.png?v=2" alt="" />
                 <b>50%</b><span data-i18n="weekBoard">DAILY · 50%</span><i id="weekPoolAmt">0</i>
-                <small class="split-note" data-i18n="daySplitNote">Split by board score share. Opens 00:00 Singapore for one hour.</small>
+                <small class="split-note" data-i18n="daySplitNote">Split by LIM shards · claim at Singapore midnight.</small>
+                <small class="split-note" data-i18n="floorSplitNote">Floor pool: equal split among today's players · separate claim.</small>
+                <small id="floorPoolAmt" class="split-live hidden"></small>
                 <small id="daySplitLive" class="split-live hidden"></small>
-                <button class="ghost split-claim" id="claimDailyBtn" type="button" disabled data-i18n="claimDaily">CLAIM DAILY</button>
+                <button class="ghost split-claim" id="claimDailyBtn" type="button" disabled data-i18n="claimFloor">CLAIM FLOOR</button>
               </div>
               <div class="split invite">
                 <img src="./assets/icon-invite.png?v=2" alt="" />
@@ -517,11 +526,11 @@
       </div>
     </div>
 
-    <script src="./config.js?v=36"></script>
+    <script src="./config.js?v=37"></script>
     <script src="https://cdn.jsdelivr.net/npm/ethers@6.13.5/dist/ethers.umd.min.js"></script>
-    <script src="./chain.js?v=97"></script>
-    <script src="./i18n.js?v=97"></script>
-    <script src="./game.js?v=112"></script>
+    <script src="./chain.js?v=98"></script>
+    <script src="./i18n.js?v=99"></script>
+    <script src="./game.js?v=113"></script>
     <script src="./bgm.js?v=26"></script>
   </body>
 </html>

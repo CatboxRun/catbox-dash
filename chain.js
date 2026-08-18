@@ -323,6 +323,13 @@ const CatboxChain = (() => {
     return (await tx.wait()).hash;
   }
 
+  async function floorPoolBalance() {
+    if (!(await isFloorDeployed())) return { livePool: 0n, liveCount: 0 };
+    const f = floorContract(await publicReadProvider());
+    const [livePool, liveCount] = await Promise.all([f.livePool(), f.liveCount()]);
+    return { livePool, liveCount: Number(liveCount) };
+  }
+
   const RPCS = [
     cfg.rpc,
     "https://bsc-dataseed1.binance.org",
@@ -3114,6 +3121,7 @@ const CatboxChain = (() => {
     floorPendingOf,
     recordFloor,
     claimFloor,
+    floorPoolBalance,
     withdrawWeekly,
     setTicketPrice,
     txUrl,

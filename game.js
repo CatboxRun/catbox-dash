@@ -374,6 +374,17 @@ async function syncOnchainPool() {
     if ($("weekPoolAmt")) $("weekPoolAmt").textContent = `${CatboxChain.formatLim(weekShown)} LIM`;
     if ($("invitePoolAmt")) $("invitePoolAmt").textContent = `${CatboxChain.formatLim(pool.invite)} LIM`;
     if ($("burnedAmt")) $("burnedAmt").textContent = `${CatboxChain.formatLim(pool.burned)} LIM`;
+    try {
+      const floor = await CatboxChain.floorPoolBalance();
+      const el = $("floorPoolAmt");
+      if (el && floor) {
+        el.textContent = t("floorLive", {
+          pool: CatboxChain.formatLim(floor.livePool),
+          n: String(floor.liveCount),
+        });
+        el.classList.remove("hidden");
+      }
+    } catch (_) {}
     const dayLive = $("daySplitLive");
     const inviteLive = $("inviteTopLive");
     if (dayLive) {
@@ -534,10 +545,10 @@ async function refreshClaimUi() {
     const text = `${CatboxChain.formatLim(settled)} LIM`;
     if (amt) amt.textContent = settled > 0n ? `${t("claimPending")} ${text}` : t("claimNone");
     if (when) when.textContent = settled > 0n ? t("claimReady") : t("claimOpen");
-    if (btn) btn.disabled = boardSettled === 0n && floorSettled === 0n;
+    if (btn) btn.disabled = boardSettled === 0n;
     if (dailyBtn) {
-      dailyBtn.disabled = dailySettled === 0n && floorSettled === 0n;
-      dailyBtn.hidden = dailySettled === 0n && floorSettled === 0n;
+      dailyBtn.disabled = floorSettled === 0n;
+      dailyBtn.hidden = floorSettled === 0n;
     }
     if (inviteBtn) {
       inviteBtn.disabled = inviteSettled === 0n;
@@ -606,7 +617,8 @@ async function doClaim() {
     if (amt) amt.textContent = t("claiming");
     const p = await CatboxChain.pendingOf();
     const board = (p.v6 || 0n) + (p.v5 || 0n);
-    const hash = board > 0n ? await CatboxChain.claim() : await CatboxChain.claimFloor();
+    if (board === 0n) throw new Error("NONE");
+    const hash = await CatboxChain.claim();
     if (amt) {
       amt.innerHTML = `<a href="${CatboxChain.txUrl(hash)}" target="_blank" rel="noopener">${hash.slice(0, 10)}…</a>`;
     }
@@ -639,7 +651,8 @@ async function doClaimFloor() {
     if (inviteBtn) inviteBtn.disabled = true;
     if (amt) amt.textContent = t("claiming");
     const p = await CatboxChain.pendingOf();
-    const hash = (p.floor || 0n) > 0n ? await CatboxChain.claimFloor() : await CatboxChain.claim();
+    if ((p.floor || 0n) === 0n) throw new Error("NONE");
+    const hash = await CatboxChain.claimFloor();
     if (amt) {
       amt.innerHTML = `<a href="${CatboxChain.txUrl(hash)}" target="_blank" rel="noopener">${hash.slice(0, 10)}…</a>`;
     }
