@@ -544,6 +544,29 @@ h1 { font-size: 16px; line-height: 1.6; margin: 0 0 14px; }
 .rules-card h2 { margin: 0 0 10px; font-size: 16px; line-height: 1.4; }
 .rules.full { margin: 0; }
 .rules.full li { margin: 10px 0; line-height: 1.55; color: var(--ink); }
+.rules-block { margin: 14px 0 0; }
+.rules-block h3 { margin: 0 0 8px; font-size: 13px; line-height: 1.45; color: var(--gold); font-weight: 700; }
+.rules-flow {
+  margin: 0;
+  padding: 10px 12px;
+  font-size: 12px;
+  line-height: 1.65;
+  color: var(--ink);
+  background: rgba(0, 0, 0, 0.22);
+  border: 2px solid var(--line);
+}
+.rules.steps { margin: 0; }
+.rules.steps li { margin: 12px 0; padding-left: 0; }
+.rules.steps li::before { content: none; }
+.rules.steps li strong { display: block; margin: 0 0 4px; font-size: 12px; color: var(--ink); }
+.rules.steps li p { margin: 0; font-size: 12px; line-height: 1.6; color: var(--dim); }
+.rules-intro, .rules-note { margin: 0 0 8px; font-size: 12px; line-height: 1.55; color: var(--dim); }
+.rules.pool-split { margin: 0; }
+.rules.pool-split li { margin: 6px 0; font-size: 12px; line-height: 1.5; color: var(--ink); }
+.rules-faq { margin: 0; }
+.rules-faq dt { margin: 10px 0 0; font-size: 12px; line-height: 1.45; color: var(--ink); font-weight: 700; }
+.rules-faq dt:first-child { margin-top: 0; }
+.rules-faq dd { margin: 4px 0 0; padding: 0; font-size: 12px; line-height: 1.55; color: var(--dim); }
 .public-fund { display: none !important; }
 
 .play-lead { font-size: 8px; color: var(--dim); margin: 0 0 10px; line-height: 1.7; }

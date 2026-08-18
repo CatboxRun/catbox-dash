@@ -164,15 +164,56 @@
                 </div>
               </div>
               <p class="how-note" data-i18n="howNote">Stay low under lights. Jump red pipes and gaps. The track never stops — miss a jump and you fall.</p>
-              <ol class="rules full">
-                <li data-i18n="rulePlay">Pick a ticket. Coins on the track are that ticket's LIM. Catch them to keep them. The run ends if you hit a red pipe, a searchlight, or a gap.</li>
-                <li data-i18n="ruleFree">Every new wallet gets two free 1 LIM SCOUT runs. What you catch is yours.</li>
-                <li data-i18n="ruleFull">Catch the ticket LIM and this run burns nothing. Then keep running — extra LIM you catch is yours. Cap: 1 LIM tickets ×2, other tickets ×1.5. New score ×2 until you crash. It gets faster.</li>
-                <li data-i18n="ruleInvitePay">Caught LIM × 105%+. Invites and extra runs are separate, one reward % cap at 200%. Each friend who plays from your link adds +5%. Four friends is 125% from invites. On your own, every extra run you start adds +0.1% — no invite needed. Payout this run cannot pass the LIM cap: 1 LIM tickets ×2, others ×1.5.</li>
-                <li data-i18n="ruleLeft">Missed coins go to the pools: daily 50% · invite 20% · burn 30%.</li>
-                <li data-i18n="ruleDaily">Missed coins feed the daily pool. It splits by on-chain board score share. Opens 00:00 Singapore for one hour. Miss it, and claim at the same hour the next day.</li>
-                <li data-i18n="ruleInviteBoard">Invite pool follows LIM points. Same midnight hour as the daily board.</li>
-              </ol>
+
+              <section class="rules-block">
+                <h3 data-i18n="ruleRouteTitle">🚀 Quick path</h3>
+                <p class="rules-flow" data-i18n="ruleRoute">Connect wallet → 2 free SCOUT runs → copy invite link → pick RUNNER or higher → claim at Singapore midnight → repeat.</p>
+              </section>
+
+              <section class="rules-block">
+                <h3 data-i18n="ruleRunTitle">🎮 One run</h3>
+                <ol class="rules steps">
+                  <li>
+                    <strong data-i18n="ruleStep1Title">① Clear the ticket</strong>
+                    <p data-i18n="ruleStep1Body">Coins on the track ≈ this ticket's LIM. Catch them all — this run burns nothing, and what you catch settles to your wallet.</p>
+                  </li>
+                  <li>
+                    <strong data-i18n="ruleStep2Title">② Overtime</strong>
+                    <p data-i18n="ruleStep2Body">Keep running after the ticket is in for extra LIM. SCOUT (1 LIM) caps at ×2 (~2 LIM). Other tickets cap at ×1.5 (e.g. 10 LIM ticket → ~15 LIM max).</p>
+                  </li>
+                  <li>
+                    <strong data-i18n="ruleStep3Title">③ Settle</strong>
+                    <p data-i18n="ruleStep3Body">The run ends on-chain. LIM lands in your wallet — check the tx on BSCScan.</p>
+                  </li>
+                </ol>
+              </section>
+
+              <section class="rules-block">
+                <h3 data-i18n="rulePoolTitle">💰 Missed LIM</h3>
+                <p class="rules-intro" data-i18n="rulePoolIntro">Leftover from each run is split by the contract:</p>
+                <ul class="rules pool-split">
+                  <li data-i18n="rulePoolDaily">🏆 50% → daily board pool</li>
+                  <li data-i18n="rulePoolInvite">👥 20% → invite board pool</li>
+                  <li data-i18n="rulePoolBurn">🔥 30% → burn (dead address, on-chain)</li>
+                </ul>
+                <p class="rules-note" data-i18n="ruleClaimNote">📅 Daily and invite rewards open at Singapore midnight for one hour — claim on the POOLS tab.</p>
+              </section>
+
+              <section class="rules-block">
+                <h3 data-i18n="ruleFaqTitle">❓ FAQ</h3>
+                <dl class="rules-faq">
+                  <dt data-i18n="ruleFaq1Q">Out of free runs?</dt>
+                  <dd data-i18n="ruleFaq1A">Buy SCOUT (1 LIM) or any other ticket with your LIM.</dd>
+                  <dt data-i18n="ruleFaq2Q">Why is settle higher than what I caught?</dt>
+                  <dd data-i18n="ruleFaq2A">105% base + invite / extra-run boosts (200% cap total), still within the per-run LIM cap.</dd>
+                  <dt data-i18n="ruleFaq3Q">Why can't I claim?</dt>
+                  <dd data-i18n="ruleFaq3A">Usually outside the claim window (Singapore midnight hour), or nothing pending yet.</dd>
+                  <dt data-i18n="ruleFaq4Q">Where does LIM come from / how do I sell?</dt>
+                  <dd data-i18n="ruleFaq4A">Catch it in-game — it goes to your wallet. Swap in-app when you need BNB or USDT.</dd>
+                  <dt data-i18n="ruleFaq5Q">Is it fair?</dt>
+                  <dd data-i18n="ruleFaq5A">Tickets, settle, pools, and burn all run on BSC contracts — public rules, verifiable on-chain.</dd>
+                </dl>
+              </section>
             </article>
           </div>
 
@@ -472,7 +513,7 @@
     <script src="./config.js?v=35"></script>
     <script src="https://cdn.jsdelivr.net/npm/ethers@6.13.5/dist/ethers.umd.min.js"></script>
     <script src="./chain.js?v=96"></script>
-    <script src="./i18n.js?v=93"></script>
+    <script src="./i18n.js?v=94"></script>
     <script src="./game.js?v=110"></script>
     <script src="./bgm.js?v=26"></script>
   </body>
