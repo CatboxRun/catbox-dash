@@ -273,6 +273,56 @@ const CatboxChain = (() => {
     return (await tx.wait()).hash;
   }
 
+  function floorCfg() {
+    return cfg.floor || null;
+  }
+
+  function floorContract(s) {
+    const f = floorCfg();
+    if (!f?.address || !f?.abi) throw new Error("NO_FLOOR");
+    return new ethers.Contract(f.address, f.abi, s);
+  }
+
+  async function isFloorDeployed() {
+    const f = floorCfg();
+    if (!f?.address) return false;
+    try {
+      const p = await publicReadProvider();
+      const code = await withTimeout(p.getCode(f.address), 4000);
+      return Boolean(code && code !== "0x");
+    } catch (_) {
+      return false;
+    }
+  }
+
+  async function floorPendingOf(addr = account) {
+    if (!addr) return 0n;
+    try {
+      if (!(await isFloorDeployed())) return 0n;
+      return await floorContract(await publicReadProvider()).pending(addr);
+    } catch (_) {
+      return 0n;
+    }
+  }
+
+  async function recordFloor(runId, paidLane) {
+    if (!runId) return null;
+    if (!(await isFloorDeployed())) return null;
+    const floor = floorContract(await signer());
+    const tx = await floor.record(runId, Boolean(paidLane));
+    return (await tx.wait()).hash;
+  }
+
+  async function claimFloor() {
+    await connect();
+    if (!(await isFloorDeployed())) throw new Error("NONE");
+    const floor = floorContract(await signer());
+    const pend = await floor.pending(account);
+    if (pend <= 0n) throw new Error("NONE");
+    const tx = await floor.claim();
+    return (await tx.wait()).hash;
+  }
+
   const RPCS = [
     cfg.rpc,
     "https://bsc-dataseed1.binance.org",
@@ -509,7 +559,7 @@ const CatboxChain = (() => {
   }
 
   async function pendingOf(addr = account) {
-    if (!addr) return { inv: 0n, wk: 0n, total: 0n, v5: 0n, v6: 0n };
+    if (!addr) return { inv: 0n, wk: 0n, total: 0n, v5: 0n, v6: 0n, floor: 0n };
     const p = await readProvider();
     let v5 = 0n;
     let v6 = 0n;
@@ -534,7 +584,8 @@ const CatboxChain = (() => {
         wk = p5.wk;
       } catch (_) {}
     }
-    const total = v5 + v6;
+    const floorPend = await floorPendingOf(addr);
+    const total = v5 + v6 + floorPend;
     if (v6Live && v5 > 0n && inv === 0n && wk === 0n) {
       try {
         const p5 = await readPending(freeGameContract(p), addr);
@@ -542,7 +593,7 @@ const CatboxChain = (() => {
         wk = (wk || 0n) + p5.wk;
       } catch (_) {}
     }
-    return { inv, wk, total, v5, v6 };
+    return { inv, wk, total, v5, v6, floor: floorPend };
   }
 
   async function invitePoints(addr = account) {
@@ -1188,6 +1239,9 @@ const CatboxChain = (() => {
         if (extraHash) extraPaid = extraAmt;
       } catch (_) {}
     }
+    try {
+      await recordFloor(runId, !freeLane);
+    } catch (_) {}
     return { hash: rec.hash, burned, payout: payout + extraPaid, extraHash, extraPaid, lane: lane.lane };
   }
 
@@ -3056,6 +3110,10 @@ const CatboxChain = (() => {
     fundExtra,
     withdrawExtra,
     airdropFromExtra,
+    isFloorDeployed,
+    floorPendingOf,
+    recordFloor,
+    claimFloor,
     withdrawWeekly,
     setTicketPrice,
     txUrl,
