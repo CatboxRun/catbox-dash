@@ -1305,10 +1305,11 @@ async function doSwap() {
 }
 
 function startLiveClock() {
+  const intervalMs = lowPerfMode() ? 20000 : 12000;
   setInterval(() => {
     if (document.body.classList.contains("playing")) return;
     liveRefresh();
-  }, 12000);
+  }, intervalMs);
 }
 
 let liveTick = 0;
@@ -1317,16 +1318,18 @@ let lastSnapPoll = 0;
 
 async function liveRefresh() {
   liveTick += 1;
-  const jobs = [syncOnchainPool(), refreshClaimUi(), refreshFreeUi()];
+  const jobs = [syncOnchainPool()];
+  if (!lowPerfMode() || liveTick % 2 === 0) jobs.push(refreshClaimUi());
+  if (!lowPerfMode() || liveTick % 3 === 0) jobs.push(refreshFreeUi());
   const now = Date.now();
   const needBoards = !window._boardsReady || !window._burnsReady;
-  const stale = snapStale(8);
+  const stale = snapStale(lowPerfMode() ? 12 : 8);
   if (needBoards) {
     pullLiveBoards(false);
-  } else if (stale && now - lastSnapPoll > 20000) {
+  } else if (stale && now - lastSnapPoll > (lowPerfMode() ? 30000 : 20000)) {
     lastSnapPoll = now;
     pullLiveBoards(true);
-  } else if (liveTick % 10 === 0) {
+  } else if (liveTick % (lowPerfMode() ? 15 : 10) === 0) {
     pullLiveBoards(true);
   }
   await Promise.all(jobs.map((p) => Promise.resolve(p).catch(() => {})));
@@ -2623,6 +2626,14 @@ const STEP = 1000 / 60;
 let accMs = 0;
 let lastTs = 0;
 
+function lowPerfMode() {
+  try {
+    if (window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches) return true;
+    if (window.matchMedia?.("(pointer: coarse)")?.matches) return true;
+  } catch (_) {}
+  return Math.min(window.innerWidth || 0, window.innerHeight || 0) <= 900;
+}
+
 function loop(ts) {
   raf = requestAnimationFrame(loop);
   if (!run || run.dead) return;
@@ -2639,7 +2650,8 @@ function loop(ts) {
 
 function spawnDust(x, y) {
   if (!run) return;
-  for (let i = 0; i < 6; i++) {
+  const burst = lowPerfMode() ? 2 : 6;
+  for (let i = 0; i < burst; i++) {
     run.fx.push({
       kind: "dust",
       x: x + (Math.random() - 0.5) * 18,
@@ -2660,6 +2672,7 @@ function tickFx() {
     p.vy += 0.12;
     p.t -= 1;
   }
+  if (lowPerfMode() && run.fx.length > 18) run.fx = run.fx.slice(-18);
   run.fx = run.fx.filter((p) => p.t > 0);
 }
 
@@ -3340,7 +3353,7 @@ function drawCat() {
 }
 
 function drawFx() {
-  if (!run.fx) return;
+  if (!run.fx || lowPerfMode()) return;
   for (const p of run.fx) {
     ctx.fillStyle = `rgba(196, 154, 74, ${Math.min(1, p.t / 12)})`;
     ctx.fillRect(p.x, p.y, p.s || 3, p.s || 3);
@@ -3383,8 +3396,9 @@ function drawTutorialCallout() {
 }
 
 function drawPopped() {
+  const items = lowPerfMode() ? run.popped.slice(-3) : run.popped;
   ctx.font = lang === "en" ? "10px 'Press Start 2P'" : "13px 'Noto Sans', 'Noto Sans SC', sans-serif";
-  for (const n of run.popped) {
+  for (const n of items) {
     ctx.fillStyle = "#000";
     ctx.fillText(n.text, n.x - 19, n.y - (21 - n.t));
     ctx.fillStyle = n.gold ? "#ffe08a" : "#d6e6ff";
@@ -3477,6 +3491,7 @@ async function settleOnchain(got, ticket, score) {
   if (window._settleBusy) return;
   window._settleBusy = true;
   try {
+    el.classList.remove("settled");
     el.textContent = t("settling");
     const wait = 5500 - (Date.now() - (run?.startedMs || Date.now()));
     if (wait > 0) await new Promise((r) => setTimeout(r, wait));
@@ -3490,10 +3505,12 @@ async function settleOnchain(got, ticket, score) {
       if (rec.payout != null && rec.payout > 0n) {
         lastFinish.payout = Number(ethers.formatUnits(rec.payout, 18));
       }
-      const settleLink = `<a href="${CatboxChain.txUrl(rec.hash)}" target="_blank" rel="noopener">${rec.hash.slice(0, 10)}…</a>`;
+      const settleLink = `<a class="tx-view" href="${CatboxChain.txUrl(rec.hash)}" target="_blank" rel="noopener">${t("viewTx")}</a>`;
+      const paidLim = CatboxChain.formatLim(rec.payout != null ? rec.payout : ethers.parseUnits(String(lastFinish.payout || 0), 18));
+      el.classList.add("settled");
       el.innerHTML = rec.extraHash
-        ? `${settleLink} · <a href="${CatboxChain.txUrl(rec.extraHash)}" target="_blank" rel="noopener">${rec.extraHash.slice(0, 10)}…</a>`
-        : settleLink;
+        ? `<span class="ok">${t("settledTx", { n: paidLim })}</span> · ${settleLink} · <a class="tx-view" href="${CatboxChain.txUrl(rec.extraHash)}" target="_blank" rel="noopener">+extra</a>`
+        : `<span class="ok">${t("settledTx", { n: paidLim })}</span> · ${settleLink}`;
       refreshOver();
     } else {
       el.textContent = "";

@@ -441,6 +441,33 @@ body:not([data-lang="en"]) .meme-line {
 }
 .tx-line { font-size: 8px; color: var(--gold); min-height: 1.6em; margin: 8px 0 0; }
 .tx-line a { color: var(--blue); }
+.tx-line.settled {
+  font-size: 11px;
+  line-height: 1.5;
+  margin: 10px 0 4px;
+  padding: 8px 10px;
+  background: rgba(8, 12, 20, 0.72);
+  border: 2px solid var(--gold);
+  box-shadow: 3px 3px 0 #000;
+}
+.tx-line .ok {
+  display: inline-block;
+  margin-right: 4px;
+  padding: 3px 8px;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  color: #1a1204;
+  background: linear-gradient(180deg, #f5e08a, #c9a227);
+  border: 2px solid #000;
+  box-shadow: 2px 2px 0 #000;
+}
+.tx-line .tx-view {
+  font-size: 11px;
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
 #swapStatus.ok {
   font-size: 16px;
   font-weight: 800;
