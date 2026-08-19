@@ -37,7 +37,8 @@ const v6RunAbi = [
 async function uniqueToday(game, paidLane) {
   const now = Math.floor(Date.now() / 1000);
   const todayStart = Math.floor((now + BJ) / DAY) * DAY - BJ;
-  const n = Number(await game.nextRunId());
+    const nRaw = await game.nextRunId().catch(() => 0n);
+    const n = Number(nRaw) || (paidLane ? 700 : 5600);
   const seen = new Set();
   const from = Math.max(1, n - 800);
   for (let id = n - 1; id >= from; id--) {

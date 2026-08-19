@@ -30,7 +30,7 @@ const art = out.contracts["CatboxFloor.sol"].CatboxFloor;
 const abi = art.abi;
 const bytecode = "0x" + art.evm.bytecode.object;
 const factory = "0x4e59b44847b379578588920cA78FbF26c0B4956C";
-const salt = id("LIMINAL.CATBOX.FLOOR.V1");
+const salt = id("LIMINAL.CATBOX.FLOOR.V2");
 const address = getCreate2Address(factory, salt, keccak256(bytecode));
 const floor = { address, salt, bytecode, abi };
 writeFileSync(join(dir, "floor.json"), JSON.stringify(floor, null, 2));
