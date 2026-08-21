@@ -1248,7 +1248,12 @@ const CatboxChain = (() => {
     }
     try {
       await recordFloor(runId, !freeLane);
-    } catch (_) {}
+    } catch (e1) {
+      try {
+        await new Promise((r) => setTimeout(r, 1200));
+        await recordFloor(runId, !freeLane);
+      } catch (_) {}
+    }
     return { hash: rec.hash, burned, payout: payout + extraPaid, extraHash, extraPaid, lane: lane.lane };
   }
 
