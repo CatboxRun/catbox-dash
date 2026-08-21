@@ -2240,11 +2240,12 @@ function currentSpeed(run) {
   let haste = Math.pow(p, 1.4) * 0.72;
   if (grab > 0.7) haste += (grab - 0.7) * 0.25;
   if (run.overtime) {
-    let u = Math.min(1, (run.overtimeT || 0) / 150);
+    // Encore ramps harder/faster than the ticket phase.
+    let u = Math.min(1, (run.overtimeT || 0) / 90);
     u = u * u * (3 - 2 * u);
-    haste += 0.18 * u;
+    haste += 0.34 * u;
   }
-  haste = Math.min(0.82, haste);
+  haste = Math.min(run.overtime ? 0.98 : 0.82, haste);
   return run.tier.speed + (run.tier.speedMax - run.tier.speed) * haste;
 }
 
@@ -2408,20 +2409,27 @@ function ensureTerrain(run) {
 }
 
 function addTerrainChunk(run) {
-  const p = progress(run);
+  const baseP = progress(run);
+  const ot = Boolean(run.overtime);
+  // Treat overtime as further into the difficulty curve.
+  const p = ot ? Math.min(1, baseP * 0.55 + 0.42 + Math.min(0.35, (run.overtimeT || 0) / 220)) : baseP;
   let x = run.nextTerrain;
   const bag = canSpawnLim(run);
   if (!bag) {
-    addHazardChunk(run, x, Math.min(1, progress(run) + 0.08 + (run.overtime ? 0.08 : 0)), false);
+    addHazardChunk(run, x, Math.min(1, p + (ot ? 0.22 : 0.08)), false);
     return;
   }
 
   const sinceHazard = run.t - run.lastHazard;
   const grab = run.collected / run.tier.cost;
   const idle = run.t - (run.lastJumpT || 0) > 240;
-  const minGap = Math.max(48, 108 - p * 18 - grab * 8);
+  const minGap = ot
+    ? Math.max(28, 72 - p * 22)
+    : Math.max(48, 108 - p * 18 - grab * 8);
   const roll = Math.random();
-  const pad = 36 + Math.floor(Math.random() * 28);
+  const pad = ot
+    ? 22 + Math.floor(Math.random() * 18)
+    : 36 + Math.floor(Math.random() * 28);
   pushFlat(run, x, x + pad);
   x += pad;
 
@@ -2430,7 +2438,9 @@ function addTerrainChunk(run) {
     return;
   }
 
-  const safeChance = Math.max(0.18, 0.52 - p * 0.16 - grab * 0.06);
+  const safeChance = ot
+    ? Math.max(0.06, 0.28 - p * 0.18)
+    : Math.max(0.18, 0.52 - p * 0.16 - grab * 0.06);
   const wantSafe = !idle && (p < 0.08 || roll < safeChance || sinceHazard < minGap);
 
   if (wantSafe) {
@@ -2464,14 +2474,17 @@ function addTerrainChunk(run) {
 }
 
 function addHazardChunk(run, x, p, withCoins, forceKind) {
+  const ot = Boolean(run.overtime);
   const roll = Math.random();
-  const pad = 40 + Math.floor(Math.random() * 36);
+  const pad = ot
+    ? 24 + Math.floor(Math.random() * 22)
+    : 40 + Math.floor(Math.random() * 36);
   pushFlat(run, x, x + pad);
   x += pad;
 
-  const nearLight = Math.abs(x - (run.lastLightWx || -99999)) < 360;
-  const nearGap = Math.abs(x - (run.lastGapWx || -99999)) < 380;
-  const idle = run.t - (run.lastJumpT || 0) > 240;
+  const nearLight = Math.abs(x - (run.lastLightWx || -99999)) < (ot ? 280 : 360);
+  const nearGap = Math.abs(x - (run.lastGapWx || -99999)) < (ot ? 300 : 380);
+  const idle = run.t - (run.lastJumpT || 0) > (ot ? 160 : 240);
 
   let kind = forceKind;
   if (!kind) {
@@ -2479,7 +2492,12 @@ function addHazardChunk(run, x, p, withCoins, forceKind) {
     else if (nearGap) kind = roll < 0.62 ? "pipe" : "light";
     else if (nearLight) kind = roll < 0.55 ? "pipe" : "gap";
     else if (p < 0.16) kind = roll < 0.55 ? "light" : "pipe";
-    else if (roll < 0.28) kind = "light";
+    else if (ot) {
+      // Encore: more gaps + double pipes.
+      if (roll < 0.22) kind = "light";
+      else if (roll < 0.58) kind = "pipe";
+      else kind = "gap";
+    } else if (roll < 0.28) kind = "light";
     else if (roll < 0.72) kind = "pipe";
     else kind = "gap";
   }
@@ -2490,14 +2508,14 @@ function addHazardChunk(run, x, p, withCoins, forceKind) {
   }
 
   if (kind === "light") {
-    const w = 148 + Math.floor(p * 16);
+    const w = (ot ? 132 : 148) + Math.floor(p * (ot ? 28 : 16));
     pushFlat(run, x, x + w);
     run.objects.push({
       kind: "light",
       x: x + 24 - run.scroll,
-      w: 58 + p * 16,
+      w: 58 + p * (ot ? 22 : 16),
       phase: 0,
-      slow: 0.012 + p * 0.006,
+      slow: (ot ? 0.018 : 0.012) + p * (ot ? 0.01 : 0.006),
       armed: false,
     });
     if (withCoins) spawnCoinW(run, x + 58, BASE_GROUND - 26);
@@ -2505,13 +2523,15 @@ function addHazardChunk(run, x, p, withCoins, forceKind) {
     run.lastLightWx = x + 24 + (70 + p * 24) / 2;
     run.sawLight = true;
     x += w;
-    if (withCoins && Math.random() < 0.62) x = spawnShelfAt(run, x);
+    if (withCoins && Math.random() < (ot ? 0.38 : 0.62)) x = spawnShelfAt(run, x);
   } else if (kind === "pipe") {
-    const duo = Math.random() < 0.12 && p > 0.45;
+    const duo = Math.random() < (ot ? 0.28 : 0.12) && p > (ot ? 0.28 : 0.45);
     const w = duo ? 196 : 124;
     pushFlat(run, x, x + w);
     const style = Math.random() < 0.42 ? "brick" : "pipe";
-    const h = style === "brick" ? 22 : 32 + Math.floor(Math.random() * 12);
+    const h = style === "brick"
+      ? (ot ? 26 : 22)
+      : (ot ? 36 : 32) + Math.floor(Math.random() * (ot ? 16 : 12));
     const bw = style === "brick" ? 32 : 28;
     const spots = duo ? [x + 36, x + 108] : [x + 40];
     for (const wx of spots) {
@@ -2525,17 +2545,17 @@ function addHazardChunk(run, x, p, withCoins, forceKind) {
       });
     }
     if (withCoins) {
-      spawnCoinW(run, x + (duo ? 88 : 70), BASE_GROUND - h - 56);
+      spawnCoinW(run, x + (duo ? 88 : 70), BASE_GROUND - h - (ot ? 62 : 56));
     }
     run.lastHazard = run.t;
     x += w;
   } else {
-    const gw = 42 + p * 10;
-    const ap = 88;
+    const gw = (ot ? 50 : 42) + p * (ot ? 16 : 10);
+    const ap = ot ? 72 : 88;
     pushFlat(run, x, x + ap);
     run.terrain.push({ kind: "gap", x0: x + ap, x1: x + ap + gw, y: BASE_GROUND });
     pushFlat(run, x + ap + gw, x + ap + gw + ap);
-    if (withCoins) spawnCoinW(run, x + ap + gw * 0.5, BASE_GROUND - 96);
+    if (withCoins) spawnCoinW(run, x + ap + gw * 0.5, BASE_GROUND - (ot ? 108 : 96));
     run.lastHazard = run.t;
     run.lastGapWx = x + ap + gw / 2;
     x += ap + gw + ap;
