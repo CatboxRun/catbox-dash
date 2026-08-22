@@ -1097,6 +1097,16 @@ const CatboxChain = (() => {
     }
   }
 
+  /** V6 freePool — pays overtime / settle boost above the ticket on paid runs. */
+  async function bonusPoolAmt() {
+    if (!hasPaidLane() || !(await isPaidDeployed())) return 0n;
+    try {
+      return await paidGameContract(await publicReadProvider()).freePool();
+    } catch (_) {
+      return 0n;
+    }
+  }
+
   async function fundFreePool(limAmount) {
     await connect();
     const s = await signer();
@@ -1115,8 +1125,20 @@ const CatboxChain = (() => {
     return (await tx.wait()).hash;
   }
 
+  function isBanned(addr = account) {
+    if (!addr) return false;
+    const list = cfg.banned || [];
+    const want = String(addr).toLowerCase();
+    return list.some((a) => String(a).toLowerCase() === want);
+  }
+
+  function assertNotBanned(addr = account) {
+    if (isBanned(addr)) throw new Error("BANNED");
+  }
+
   async function approveAndEnter(tierId = 0) {
     await connect();
+    assertNotBanned();
     const s = await signer();
     const lim = limContract(s);
     const id = Number(tierId);
@@ -2774,10 +2796,12 @@ const CatboxChain = (() => {
           ex.address,
           ex.abi,
           ["ExtraPaid", "Funded", "Withdrawn"],
-          v6Live ? 20 : 32,
+          v6Live ? 80 : 120,
         );
-        extraPaidTotal = 0n;
-        extraPaidCount = 0;
+        let fundedFromLogs = 0n;
+        let withdrawnFromLogs = 0n;
+        let paidFromLogs = 0n;
+        let paidCountFromLogs = 0;
         for (const log of extraLogs) {
           if (log.name === "ExtraPaid") {
             const id = Number(log.args.runId);
@@ -2787,27 +2811,43 @@ const CatboxChain = (() => {
               row.extraPaid = amt;
               row.extraTx = log.transactionHash;
             }
-            extraPaidTotal += amt;
-            extraPaidCount += 1;
+            paidFromLogs += amt;
+            paidCountFromLogs += 1;
           } else if (log.name === "Funded") {
-            extraFundedTotal += asAmt(log.args.amount);
+            fundedFromLogs += asAmt(log.args.amount);
           } else if (log.name === "Withdrawn") {
-            extraWithdrawnTotal += asAmt(log.args.amount);
+            withdrawnFromLogs += asAmt(log.args.amount);
           }
         }
-        const freeIds = rows.filter((r) => r.lane === "v5" && r.id >= extraSinceRunId).map((r) => r.id);
+        if (fundedFromLogs > extraFundedTotal) extraFundedTotal = fundedFromLogs;
+        if (withdrawnFromLogs > extraWithdrawnTotal) extraWithdrawnTotal = withdrawnFromLogs;
+        const freeIds = [];
+        const freeNext = Number(
+          snapshotCache?.v5NextRunId || history?.v5NextRunId || rows.reduce((m, r) => (r.lane === "v5" && r.id > m ? r.id : m), 0) + 1,
+        );
+        for (let id = Math.max(1, extraSinceRunId); id < freeNext; id++) freeIds.push(id);
         if (freeIds.length) {
           const paidRows = await multicallFn(p, extraIface, "paidExtra", freeIds, ex.address);
-          extraPaidTotal = 0n;
-          extraPaidCount = 0;
+          let paidFromStorage = 0n;
+          let paidCountFromStorage = 0;
           freeIds.forEach((id, j) => {
             const v = paidRows[j] ? paidRows[j][0] || 0n : 0n;
             if (v <= 0n) return;
             const row = byKey.get(`v5-${id}`);
             if (row) row.extraPaid = v;
-            extraPaidTotal += v;
-            extraPaidCount += 1;
+            paidFromStorage += v;
+            paidCountFromStorage += 1;
           });
+          if (paidFromStorage > 0n) {
+            extraPaidTotal = paidFromStorage;
+            extraPaidCount = paidCountFromStorage;
+          } else if (paidFromLogs > extraPaidTotal) {
+            extraPaidTotal = paidFromLogs;
+            extraPaidCount = paidCountFromLogs;
+          }
+        } else if (paidFromLogs > extraPaidTotal) {
+          extraPaidTotal = paidFromLogs;
+          extraPaidCount = paidCountFromLogs;
         }
         const extraIn = extraPool + extraPaidTotal + extraWithdrawnTotal;
         if (extraFundedTotal < extraIn) extraFundedTotal = extraIn;
@@ -2986,6 +3026,10 @@ const CatboxChain = (() => {
       extraPaidTotal: reviveWei(raw.extraPaidTotal) ?? 0n,
       extraFundedTotal: reviveWei(raw.extraFundedTotal) ?? 0n,
       extraWithdrawnTotal: reviveWei(raw.extraWithdrawnTotal) ?? 0n,
+      settleOverTotal: reviveWei(raw.settleOverTotal) ?? 0n,
+      settleOverCount: Number(raw.settleOverCount || 0),
+      settleOverV6: reviveWei(raw.settleOverV6) ?? 0n,
+      settleOverV6Count: Number(raw.settleOverV6Count || 0),
       runs,
       social: raw.social || [],
       xClaimCount: Number(raw.xClaimCount || 0),
@@ -3105,6 +3149,7 @@ const CatboxChain = (() => {
     limBalance,
     bnbBalance,
     activeRun,
+    isBanned,
     approveAndEnter,
     freeStatus,
     hasTgBonus,
@@ -3114,6 +3159,7 @@ const CatboxChain = (() => {
     isSocialDeployed,
     deploySocial,
     fundFreePool,
+    bonusPoolAmt,
     settleRun,
     clearActiveRun,
     isExtraDeployed,

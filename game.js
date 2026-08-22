@@ -1524,7 +1524,11 @@ const pay = $("pay");
 const game = $("game");
 const over = $("over");
 const canvas = $("cv");
-const ctx = canvas.getContext("2d", { alpha: false, desynchronized: true }) || canvas.getContext("2d");
+const ctx = canvas.getContext("2d", {
+  alpha: false,
+  desynchronized: true,
+  powerPreference: "high-performance",
+}) || canvas.getContext("2d");
 ctx.imageSmoothingEnabled = false;
 
 const BASE_GROUND = 400;
@@ -1722,7 +1726,16 @@ function applyFakeLandscape() {
   stage.style.transform = "translate(-50%, -50%) rotate(90deg)";
 }
 
+let rotateQueued = 0;
 function syncRotate() {
+  if (rotateQueued) return;
+  rotateQueued = requestAnimationFrame(() => {
+    rotateQueued = 0;
+    syncRotateNow();
+  });
+}
+
+function syncRotateNow() {
   const wallet = markWalletDapp();
   const { w, h } = viewportBox();
   if (w > h) sawLandscape = true;
@@ -1914,6 +1927,7 @@ async function payAndStart() {
     if (!window.ethereum) throw new Error("NO_WALLET");
     status.textContent = t("connecting");
     await CatboxChain.connect();
+    if (CatboxChain.isBanned()) throw new Error("BANNED");
     if (!chainReady) {
       const deployed = await CatboxChain.isDeployed();
       if (!deployed) {
@@ -1924,6 +1938,13 @@ async function payAndStart() {
     }
     free = freeForTier(selected);
     teach = shouldTeach(selected);
+    if (!free && typeof CatboxChain.bonusPoolAmt === "function") {
+      try {
+        const bonus = await CatboxChain.bonusPoolAmt();
+        const minKeep = ethers.parseUnits(String(Math.max(5, selected.cost)), 18);
+        if (bonus < minKeep) showToast(t("bonusPoolLow"));
+      } catch (_) {}
+    }
     const me = CatboxChain.account;
     const stuck = me ? await CatboxChain.activeRun(me) : 0n;
     if (stuck && stuck !== 0n) {
@@ -1945,6 +1966,7 @@ async function payAndStart() {
       /user rejected|user denied|rejected the request/i.test(msg) ||
       /user rejected|user denied|rejected the request/i.test(String(e?.shortMessage || ""));
     if (msg === "NO_WALLET") status.textContent = t("noWallet");
+    else if (msg === "BANNED") status.textContent = t("banned");
     else if (msg === "NO_LIM") status.textContent = t("noLim");
     else if (msg === "ACTIVE_RUN") {
       status.textContent = t("clearingRun");
@@ -1964,6 +1986,7 @@ async function payAndStart() {
           err?.code === "ACTION_REJECTED" ||
           /user rejected|user denied|rejected the request/i.test(em);
         if (em === "NO_LIM") status.textContent = t("noLim");
+        else if (em === "BANNED") status.textContent = t("banned");
         else if (em === "ACTIVE_RUN") status.textContent = t("activeRun");
         else if (rej2) status.textContent = t("txRejected");
         else status.textContent = t("txFail");
@@ -2225,6 +2248,8 @@ function startRun(tier, teach, freeRun) {
   cancelAnimationFrame(raf);
   accMs = 0;
   lastTs = 0;
+  hitchN = 0;
+  liteAt = 0;
   raf = requestAnimationFrame(loop);
 }
 
@@ -2241,11 +2266,11 @@ function currentSpeed(run) {
   if (grab > 0.7) haste += (grab - 0.7) * 0.25;
   if (run.overtime) {
     // Encore ramps harder/faster than the ticket phase.
-    let u = Math.min(1, (run.overtimeT || 0) / 90);
+    let u = Math.min(1, (run.overtimeT || 0) / 55);
     u = u * u * (3 - 2 * u);
-    haste += 0.34 * u;
+    haste += 0.48 * u;
   }
-  haste = Math.min(run.overtime ? 0.98 : 0.82, haste);
+  haste = Math.min(run.overtime ? 0.99 : 0.82, haste);
   return run.tier.speed + (run.tier.speedMax - run.tier.speed) * haste;
 }
 
@@ -2310,30 +2335,38 @@ function hash11(n) {
   return s - Math.floor(s);
 }
 
+function terrainSeg(run, wx) {
+  const segs = run.terrain;
+  let lo = 0;
+  let hi = segs.length - 1;
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1;
+    const s = segs[mid];
+    if (wx < s.x0) hi = mid - 1;
+    else if (wx >= s.x1) lo = mid + 1;
+    else return s;
+  }
+  return null;
+}
+
 function groundAt(run, wx) {
+  const s = terrainSeg(run, wx);
   let y = BASE_GROUND;
-  for (let i = 0; i < run.terrain.length; i++) {
-    const s = run.terrain[i];
-    if (wx >= s.x0 && wx < s.x1) {
-      if (s.kind === "hill" || s.kind === "bump") {
-        const t = (wx - s.x0) / Math.max(1, s.x1 - s.x0);
-        const h = (1 - Math.cos(t * Math.PI * 2)) * 0.5;
-        y = s.y - s.peak * h;
-      } else {
-        y = s.y;
-      }
-      break;
+  if (s) {
+    if (s.kind === "hill" || s.kind === "bump") {
+      const t = (wx - s.x0) / Math.max(1, s.x1 - s.x0);
+      const h = (1 - Math.cos(t * Math.PI * 2)) * 0.5;
+      y = s.y - s.peak * h;
+    } else {
+      y = s.y;
     }
   }
   return Math.round(y * 0.5) * 2;
 }
 
 function isGapAt(run, wx) {
-  for (let i = 0; i < run.terrain.length; i++) {
-    const s = run.terrain[i];
-    if (s.kind === "gap" && wx >= s.x0 + 12 && wx < s.x1 - 12) return true;
-  }
-  return false;
+  const s = terrainSeg(run, wx);
+  return Boolean(s && s.kind === "gap" && wx >= s.x0 + 12 && wx < s.x1 - 12);
 }
 
 function landingLedge(run, wx, py, vy) {
@@ -2401,7 +2434,7 @@ function pushFlat(run, x0, x1) {
 function ensureTerrain(run) {
   const need = run.scroll + canvas.width + 160;
   while (run.nextTerrain < need) addTerrainChunk(run);
-  if (run.terrain.length > 20) {
+  if (run.terrain.length > 24 && (run.t & 15) === 0) {
     const cut = run.scroll - 240;
     run.terrain = run.terrain.filter((s) => s.x1 > cut);
     if (run.ledges) run.ledges = run.ledges.filter((L) => L.x1 > cut);
@@ -2412,11 +2445,11 @@ function addTerrainChunk(run) {
   const baseP = progress(run);
   const ot = Boolean(run.overtime);
   // Treat overtime as further into the difficulty curve.
-  const p = ot ? Math.min(1, baseP * 0.55 + 0.42 + Math.min(0.35, (run.overtimeT || 0) / 220)) : baseP;
+  const p = ot ? Math.min(1, baseP * 0.45 + 0.55 + Math.min(0.42, (run.overtimeT || 0) / 140)) : baseP;
   let x = run.nextTerrain;
   const bag = canSpawnLim(run);
   if (!bag) {
-    addHazardChunk(run, x, Math.min(1, p + (ot ? 0.22 : 0.08)), false);
+    addHazardChunk(run, x, Math.min(1, p + (ot ? 0.32 : 0.08)), false);
     return;
   }
 
@@ -2424,11 +2457,11 @@ function addTerrainChunk(run) {
   const grab = run.collected / run.tier.cost;
   const idle = run.t - (run.lastJumpT || 0) > 240;
   const minGap = ot
-    ? Math.max(28, 72 - p * 22)
+    ? Math.max(20, 58 - p * 26)
     : Math.max(48, 108 - p * 18 - grab * 8);
   const roll = Math.random();
   const pad = ot
-    ? 22 + Math.floor(Math.random() * 18)
+    ? 16 + Math.floor(Math.random() * 14)
     : 36 + Math.floor(Math.random() * 28);
   pushFlat(run, x, x + pad);
   x += pad;
@@ -2439,7 +2472,7 @@ function addTerrainChunk(run) {
   }
 
   const safeChance = ot
-    ? Math.max(0.06, 0.28 - p * 0.18)
+    ? Math.max(0.02, 0.14 - p * 0.14)
     : Math.max(0.18, 0.52 - p * 0.16 - grab * 0.06);
   const wantSafe = !idle && (p < 0.08 || roll < safeChance || sinceHazard < minGap);
 
@@ -2477,14 +2510,14 @@ function addHazardChunk(run, x, p, withCoins, forceKind) {
   const ot = Boolean(run.overtime);
   const roll = Math.random();
   const pad = ot
-    ? 24 + Math.floor(Math.random() * 22)
+    ? 14 + Math.floor(Math.random() * 14)
     : 40 + Math.floor(Math.random() * 36);
   pushFlat(run, x, x + pad);
   x += pad;
 
-  const nearLight = Math.abs(x - (run.lastLightWx || -99999)) < (ot ? 280 : 360);
-  const nearGap = Math.abs(x - (run.lastGapWx || -99999)) < (ot ? 300 : 380);
-  const idle = run.t - (run.lastJumpT || 0) > (ot ? 160 : 240);
+  const nearLight = Math.abs(x - (run.lastLightWx || -99999)) < (ot ? 220 : 360);
+  const nearGap = Math.abs(x - (run.lastGapWx || -99999)) < (ot ? 230 : 380);
+  const idle = run.t - (run.lastJumpT || 0) > (ot ? 110 : 240);
 
   let kind = forceKind;
   if (!kind) {
@@ -2494,8 +2527,8 @@ function addHazardChunk(run, x, p, withCoins, forceKind) {
     else if (p < 0.16) kind = roll < 0.55 ? "light" : "pipe";
     else if (ot) {
       // Encore: more gaps + double pipes.
-      if (roll < 0.22) kind = "light";
-      else if (roll < 0.58) kind = "pipe";
+      if (roll < 0.14) kind = "light";
+      else if (roll < 0.46) kind = "pipe";
       else kind = "gap";
     } else if (roll < 0.28) kind = "light";
     else if (roll < 0.72) kind = "pipe";
@@ -2508,14 +2541,14 @@ function addHazardChunk(run, x, p, withCoins, forceKind) {
   }
 
   if (kind === "light") {
-    const w = (ot ? 132 : 148) + Math.floor(p * (ot ? 28 : 16));
+    const w = (ot ? 118 : 148) + Math.floor(p * (ot ? 36 : 16));
     pushFlat(run, x, x + w);
     run.objects.push({
       kind: "light",
       x: x + 24 - run.scroll,
-      w: 58 + p * (ot ? 22 : 16),
+      w: 58 + p * (ot ? 28 : 16),
       phase: 0,
-      slow: (ot ? 0.018 : 0.012) + p * (ot ? 0.01 : 0.006),
+      slow: (ot ? 0.026 : 0.012) + p * (ot ? 0.014 : 0.006),
       armed: false,
     });
     if (withCoins) spawnCoinW(run, x + 58, BASE_GROUND - 26);
@@ -2523,15 +2556,15 @@ function addHazardChunk(run, x, p, withCoins, forceKind) {
     run.lastLightWx = x + 24 + (70 + p * 24) / 2;
     run.sawLight = true;
     x += w;
-    if (withCoins && Math.random() < (ot ? 0.38 : 0.62)) x = spawnShelfAt(run, x);
+    if (withCoins && Math.random() < (ot ? 0.22 : 0.62)) x = spawnShelfAt(run, x);
   } else if (kind === "pipe") {
-    const duo = Math.random() < (ot ? 0.28 : 0.12) && p > (ot ? 0.28 : 0.45);
+    const duo = Math.random() < (ot ? 0.42 : 0.12) && p > (ot ? 0.18 : 0.45);
     const w = duo ? 196 : 124;
     pushFlat(run, x, x + w);
     const style = Math.random() < 0.42 ? "brick" : "pipe";
     const h = style === "brick"
-      ? (ot ? 26 : 22)
-      : (ot ? 36 : 32) + Math.floor(Math.random() * (ot ? 16 : 12));
+      ? (ot ? 30 : 22)
+      : (ot ? 42 : 32) + Math.floor(Math.random() * (ot ? 18 : 12));
     const bw = style === "brick" ? 32 : 28;
     const spots = duo ? [x + 36, x + 108] : [x + 40];
     for (const wx of spots) {
@@ -2550,8 +2583,8 @@ function addHazardChunk(run, x, p, withCoins, forceKind) {
     run.lastHazard = run.t;
     x += w;
   } else {
-    const gw = (ot ? 50 : 42) + p * (ot ? 16 : 10);
-    const ap = ot ? 72 : 88;
+    const gw = (ot ? 58 : 42) + p * (ot ? 22 : 10);
+    const ap = ot ? 62 : 88;
     pushFlat(run, x, x + ap);
     run.terrain.push({ kind: "gap", x0: x + ap, x1: x + ap + gw, y: BASE_GROUND });
     pushFlat(run, x + ap + gw, x + ap + gw + ap);
@@ -2606,16 +2639,18 @@ window.addEventListener("pointerdown", (e) => {
   e.preventDefault();
   jumpNow();
 });
-window.addEventListener(
-  "touchstart",
-  (e) => {
-    if (game.classList.contains("hidden")) return;
-    if (e.target.closest("a, button, .langs, .lang-btn, .rotate-gate, .rotate-soft, .tut-skip")) return;
-    e.preventDefault();
-    jumpNow();
-  },
-  { passive: false },
-);
+if (!window.PointerEvent) {
+  window.addEventListener(
+    "touchstart",
+    (e) => {
+      if (game.classList.contains("hidden")) return;
+      if (e.target.closest("a, button, .langs, .lang-btn, .rotate-gate, .rotate-soft, .tut-skip")) return;
+      e.preventDefault();
+      jumpNow();
+    },
+    { passive: false },
+  );
+}
 window.addEventListener("keydown", (e) => {
   if (game.classList.contains("hidden")) return;
   if (e.code === "Space" || e.code === "ArrowUp") {
@@ -2626,7 +2661,7 @@ window.addEventListener("keydown", (e) => {
 window.addEventListener("orientationchange", syncRotate);
 window.addEventListener("resize", syncRotate);
 window.visualViewport?.addEventListener("resize", syncRotate);
-window.visualViewport?.addEventListener("scroll", syncRotate);
+window.visualViewport?.addEventListener("scroll", syncRotate, { passive: true });
 window.addEventListener("ethereum#initialized", markWalletDapp, { once: true });
 setTimeout(markWalletDapp, 0);
 setTimeout(markWalletDapp, 400);
@@ -2645,6 +2680,9 @@ document.addEventListener(
 const STEP = 1000 / 60;
 let accMs = 0;
 let lastTs = 0;
+let hitchN = 0;
+let liteCached = false;
+let liteAt = 0;
 
 function lowPerfMode() {
   try {
@@ -2654,23 +2692,40 @@ function lowPerfMode() {
   return Math.min(window.innerWidth || 0, window.innerHeight || 0) <= 900;
 }
 
+function liteDraw() {
+  const now = performance.now();
+  if (now - liteAt > 350) {
+    liteAt = now;
+    liteCached = hitchN >= 6 || lowPerfMode();
+  }
+  return liteCached;
+}
+
 function loop(ts) {
   raf = requestAnimationFrame(loop);
   if (!run || run.dead) return;
   if (!lastTs) lastTs = ts;
-  accMs += Math.min(100, ts - lastTs);
+  const dt = ts - lastTs;
   lastTs = ts;
-  while (accMs >= STEP) {
+  if (dt > 28) hitchN = Math.min(24, hitchN + 2);
+  else hitchN = Math.max(0, hitchN - 1);
+  const lite = liteDraw();
+  accMs += Math.min(lite ? 48 : 72, dt);
+  const maxTicks = lite ? 2 : 3;
+  let n = 0;
+  while (accMs >= STEP && n < maxTicks) {
     accMs -= STEP;
+    n += 1;
     tick();
     if (!run || run.dead) return;
   }
+  if (accMs > STEP * 3) accMs = 0;
   draw();
 }
 
 function spawnDust(x, y) {
   if (!run) return;
-  const burst = lowPerfMode() ? 2 : 6;
+  const burst = liteDraw() ? 2 : 5;
   for (let i = 0; i < burst; i++) {
     run.fx.push({
       kind: "dust",
@@ -2692,7 +2747,8 @@ function tickFx() {
     p.vy += 0.12;
     p.t -= 1;
   }
-  if (lowPerfMode() && run.fx.length > 18) run.fx = run.fx.slice(-18);
+  const cap = liteDraw() ? 14 : 28;
+  if (run.fx.length > cap) run.fx = run.fx.slice(-cap);
   run.fx = run.fx.filter((p) => p.t > 0);
 }
 
@@ -2842,11 +2898,13 @@ function tick() {
   if (run.overtime) run.overtimeT = (run.overtimeT || 0) + 1;
   if (run.flash > 0) run.flash -= 1;
   if (run.t - (run.lastJumpT || 0) < 96) addRaw(0.22);
-  const cap = limCap(run);
-  const pct = (run.collected / cap) * 100;
-  $("hudRebate").textContent = `${run.collected.toFixed(3)}/${cap} LIM`;
-  $("rebateBar").style.width = `${Math.min(100, pct)}%`;
-  $("hudScore").textContent = String(boardScore());
+  if ((run.t & 3) === 0) {
+    const cap = limCap(run);
+    const pct = (run.collected / cap) * 100;
+    $("hudRebate").textContent = `${run.collected.toFixed(3)}/${cap} LIM`;
+    $("rebateBar").style.width = `${Math.min(100, pct)}%`;
+    $("hudScore").textContent = String(boardScore());
+  }
   if (!run.tutorial) {
     const grab = run.tier.cost > 0 ? run.collected / run.tier.cost : 0;
     const grabKeys = [
@@ -2910,7 +2968,9 @@ function boardScore() {
 }
 
 function dist(ax, ay, bx, by) {
-  return Math.hypot(ax - bx, ay - by);
+  const dx = ax - bx;
+  const dy = ay - by;
+  return Math.sqrt(dx * dx + dy * dy);
 }
 function aabb(x, y, w, h, x2, y2, w2, h2) {
   return x < x2 + w2 && x + w > x2 && y < y2 + h2 && y + h > y2;
@@ -2941,20 +3001,22 @@ function worldPal(night, veil) {
 }
 
 function fillHill(x, baseY, w, h, color, hi) {
+  const step = liteDraw() ? 8 : 4;
   ctx.fillStyle = color;
-  for (let i = 0; i < h; i += 2) {
+  for (let i = 0; i < h; i += step) {
     const t = i / h;
     const half = (w / 2) * Math.sqrt(Math.max(0, 1 - t * t));
     ctx.fillRect(
       Math.round(x + w / 2 - half),
-      Math.round(baseY - i - 2),
+      Math.round(baseY - i - step),
       Math.max(2, Math.round(half * 2)),
-      3,
+      step + 1,
     );
   }
   if (hi) {
     ctx.fillStyle = hi;
-    for (let i = Math.floor(h * 0.28); i < h * 0.82; i += 3) {
+    const hiStep = step + 2;
+    for (let i = Math.floor(h * 0.28); i < h * 0.82; i += hiStep) {
       const t = i / h;
       const half = (w / 2) * Math.sqrt(Math.max(0, 1 - t * t));
       ctx.fillRect(
@@ -3064,13 +3126,12 @@ function drawSky(pal, night, W, H) {
   ctx.fillStyle = g;
   ctx.fillRect(0, 0, W, H);
   if (night) {
-    for (let i = 0; i < 56; i++) {
+    const stars = liteDraw() ? 18 : 56;
+    for (let i = 0; i < stars; i++) {
       const sx = (((i * 97 - run.scroll * 0.04) % W) + W) % W;
       const sy = 12 + (i * 37) % 176;
-      const tw = (Math.sin(run.t * 0.08 + i) + 1) * 0.5;
-      ctx.fillStyle = i % 6 === 0 ? "#ffe08a" : `rgba(214,230,255,${0.45 + tw * 0.5})`;
-      const sz = i % 7 === 0 ? 2 : 1;
-      ctx.fillRect(sx, sy, sz, sz);
+      ctx.fillStyle = i % 6 === 0 ? "#ffe08a" : "rgba(214,230,255,0.7)";
+      ctx.fillRect(sx, sy, i % 7 === 0 ? 2 : 1, i % 7 === 0 ? 2 : 1);
     }
     ctx.fillStyle = "rgba(230, 184, 76, 0.18)";
     ctx.fillRect(724, 32, 48, 48);
@@ -3103,15 +3164,19 @@ function drawSky(pal, night, W, H) {
 }
 
 function drawParallax(pal, night, W) {
+  const lite = liteDraw();
   const farOff = ((run.scroll * 0.1) % 240 + 240) % 240;
-  for (let x = -220; x < W + 240; x += 190) {
+  const farStep = lite ? 240 : 190;
+  for (let x = -220; x < W + 240; x += farStep) {
     fillHill(x - farOff, 300, 230, 96, pal.far, pal.farHi);
   }
-  const ridgeOff = ((run.scroll * 0.18) % 200 + 200) % 200;
-  for (let x = -180; x < W + 200; x += 160) {
-    fillHill(x - ridgeOff + 40, 332, 170, 64, pal.mid, pal.midHi);
+  if (!lite) {
+    const ridgeOff = ((run.scroll * 0.18) % 200 + 200) % 200;
+    for (let x = -180; x < W + 200; x += 160) {
+      fillHill(x - ridgeOff + 40, 332, 170, 64, pal.mid, pal.midHi);
+    }
   }
-  if (night) {
+  if (night && !lite) {
     const span = 64;
     const off = run.scroll * 0.2;
     const base = Math.floor(off / span);
@@ -3130,13 +3195,15 @@ function drawParallax(pal, night, W) {
     }
   }
   const midOff = ((run.scroll * 0.3) % 260 + 260) % 260;
-  for (let x = -240; x < W + 260; x += 200) {
+  const midStep = lite ? 280 : 200;
+  for (let x = -240; x < W + 260; x += midStep) {
     fillHill(x - midOff, 372, 250, 78, pal.mid, pal.midHi);
-    fillHill(x - midOff + 88, 362, 160, 58, pal.near, pal.midHi);
+    if (!lite) fillHill(x - midOff + 88, 362, 160, 58, pal.near, pal.midHi);
   }
   const cSpan = W + 180;
   const cOff = run.scroll * 0.07;
-  for (let i = 0; i < 6; i++) {
+  const clouds = lite ? 3 : 6;
+  for (let i = 0; i < clouds; i++) {
     const cx = (((i * 200 - cOff) % cSpan) + cSpan) % cSpan - 50;
     drawPixelCloud(cx, 36 + (i % 3) * 26, i % 2 ? 2 : 1.45, pal.cloud);
   }
@@ -3159,7 +3226,8 @@ function drawParallax(pal, night, W) {
 }
 
 function drawGround(pal, W, H) {
-  const step = 4;
+  const lite = liteDraw();
+  const step = lite ? 12 : 8;
   const vis = (sx) => groundAt(run, run.scroll + sx) + 6;
   let sx = 0;
   while (sx <= W) {
@@ -3170,10 +3238,6 @@ function drawGround(pal, W, H) {
       ctx.fillRect(g0, BASE_GROUND + 6, sx - g0, H - (BASE_GROUND + 6));
       ctx.fillStyle = pal.pit2;
       ctx.fillRect(g0 + 4, BASE_GROUND + 26, sx - g0 - 8, H - (BASE_GROUND + 26));
-      ctx.fillStyle = "#1a1010";
-      for (let y = BASE_GROUND + 36; y < H; y += 10) {
-        ctx.fillRect(g0 + 8, y, sx - g0 - 16, 2);
-      }
       ctx.fillStyle = pal.lip;
       ctx.fillRect(g0 - 2, BASE_GROUND, 6, 16);
       ctx.fillRect(sx - 4, BASE_GROUND, 6, 16);
@@ -3185,65 +3249,44 @@ function drawGround(pal, W, H) {
     let e = sx;
     while (e <= W && !isGapAt(run, run.scroll + e)) e += step;
     const x1 = Math.min(e, W);
+    const ys = [];
+    for (let x = sx; x <= x1; x += step) ys.push(vis(x));
     ctx.beginPath();
     ctx.moveTo(sx, H);
-    for (let x = sx; x <= x1; x += step) ctx.lineTo(x, vis(x));
+    for (let i = 0; i < ys.length; i++) ctx.lineTo(sx + i * step, ys[i]);
     ctx.lineTo(x1, H);
     ctx.closePath();
     ctx.fillStyle = pal.dirt;
     ctx.fill();
-    ctx.save();
-    ctx.beginPath();
-    ctx.moveTo(sx, H);
-    for (let x = sx; x <= x1; x += step) ctx.lineTo(x, vis(x));
-    ctx.lineTo(x1, H);
-    ctx.closePath();
-    ctx.clip();
-    ctx.fillStyle = pal.dirtMid || pal.dirtDk;
-    for (let x = sx; x <= x1; x += step) {
-      const y = vis(x);
-      ctx.fillRect(x, y + 18, step + 1, H - y);
+    if (!lite) {
+      ctx.fillStyle = pal.dirtMid || pal.dirtDk;
+      for (let i = 0; i < ys.length; i++) {
+        ctx.fillRect(sx + i * step, ys[i] + 18, step + 1, 28);
+      }
     }
-    ctx.fillStyle = pal.dirtDk;
-    const tOff = -((run.scroll) % 16);
-    for (let tx = tOff; tx < W; tx += 16) ctx.fillRect(tx, 0, 1, H);
-    for (let ty = 290; ty < H; ty += 16) ctx.fillRect(0, ty, W, 1);
-    for (let x = sx + 12; x < x1; x += 36) {
-      if (hash11(Math.floor((run.scroll + x) / 36)) < 0.55) continue;
-      ctx.fillStyle = pal.dirtDk;
-      ctx.fillRect(x, vis(x) + 14, 5, 3);
-    }
-    ctx.restore();
     ctx.strokeStyle = pal.grass;
-    ctx.lineWidth = 8;
+    ctx.lineWidth = lite ? 6 : 8;
     ctx.beginPath();
-    for (let x = sx; x <= x1; x += step) {
-      const y = vis(x);
-      if (x === sx) ctx.moveTo(x, y);
-      else ctx.lineTo(x, y);
+    for (let i = 0; i < ys.length; i++) {
+      const x = sx + i * step;
+      if (i === 0) ctx.moveTo(x, ys[i]);
+      else ctx.lineTo(x, ys[i]);
     }
     ctx.stroke();
-    ctx.strokeStyle = pal.grassHi || pal.grass;
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    for (let x = sx; x <= x1; x += step) {
-      const y = vis(x) - 3;
-      if (x === sx) ctx.moveTo(x, y);
-      else ctx.lineTo(x, y);
+    if (!lite) {
+      ctx.strokeStyle = pal.grassHi || pal.grass;
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      for (let i = 0; i < ys.length; i++) {
+        const x = sx + i * step;
+        if (i === 0) ctx.moveTo(x, ys[i] - 3);
+        else ctx.lineTo(x, ys[i] - 3);
+      }
+      ctx.stroke();
     }
-    ctx.stroke();
-    ctx.strokeStyle = pal.lip;
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    for (let x = sx; x <= x1; x += step) {
-      const y = vis(x) - 6;
-      if (x === sx) ctx.moveTo(x, y);
-      else ctx.lineTo(x, y);
-    }
-    ctx.stroke();
-    for (let x = sx + 8; x < x1; x += 28) {
-      const wx = run.scroll + x;
-      if (hash11(Math.floor(wx / 28)) < 0.42) continue;
+    const bladeGap = lite ? 32 : 28;
+    for (let x = sx + 8; x < x1; x += bladeGap) {
+      if (hash11(Math.floor((run.scroll + x) / 28)) < 0.42) continue;
       const gy = vis(x);
       ctx.fillStyle = pal.grassHi || pal.grass;
       ctx.fillRect(x, gy - 10, 3, 10);
@@ -3268,16 +3311,21 @@ function drawLight(o, night) {
   ctx.fillRect(cx - 8, 24, 16, 8);
   const beamAlpha = night ? 0.14 + pulse * 0.14 : 0.1 + pulse * 0.1;
   if (on) {
-    const grd = ctx.createLinearGradient(cx, 32, cx, lgy);
-    grd.addColorStop(0, `rgba(255, 220, 90, ${beamAlpha.toFixed(3)})`);
-    grd.addColorStop(1, `rgba(255, 210, 80, ${(beamAlpha * 0.22).toFixed(3)})`);
-    ctx.fillStyle = grd;
-    ctx.beginPath();
-    ctx.moveTo(cx - 7, 32);
-    ctx.lineTo(cx + 7, 32);
-    ctx.lineTo(o.x + o.w + 6, lgy - 30);
-    ctx.lineTo(o.x - 6, lgy - 30);
-    ctx.fill();
+    if (liteDraw()) {
+      ctx.fillStyle = `rgba(255, 220, 90, ${beamAlpha.toFixed(3)})`;
+      ctx.fillRect(o.x - 6, 32, o.w + 12, Math.max(40, lgy - 62));
+    } else {
+      const grd = ctx.createLinearGradient(cx, 32, cx, lgy);
+      grd.addColorStop(0, `rgba(255, 220, 90, ${beamAlpha.toFixed(3)})`);
+      grd.addColorStop(1, `rgba(255, 210, 80, ${(beamAlpha * 0.22).toFixed(3)})`);
+      ctx.fillStyle = grd;
+      ctx.beginPath();
+      ctx.moveTo(cx - 7, 32);
+      ctx.lineTo(cx + 7, 32);
+      ctx.lineTo(o.x + o.w + 6, lgy - 30);
+      ctx.lineTo(o.x - 6, lgy - 30);
+      ctx.fill();
+    }
     ctx.fillStyle = `rgba(255, 240, 160, ${(0.14 + pulse * 0.1).toFixed(3)})`;
     ctx.fillRect(cx - 3, 32, 6, 10);
   } else {
@@ -3294,11 +3342,13 @@ function drawLight(o, night) {
   ctx.fillRect(mid - 5, lgy - 18, 10, 3);
   ctx.fillRect(mid - 3, lgy - 14, 6, 3);
   ctx.fillRect(mid - 1, lgy - 10, 2, 4);
-  ctx.font = lang === "en" ? "8px 'Press Start 2P'" : "12px 'Noto Sans SC', 'Noto Sans', sans-serif";
-  ctx.fillStyle = "#000";
-  ctx.fillText(t("stayLow"), mid - 31, lgy + 16);
-  ctx.fillStyle = "#ffe08a";
-  ctx.fillText(t("stayLow"), mid - 32, lgy + 15);
+  if (!liteDraw()) {
+    ctx.font = lang === "en" ? "8px 'Press Start 2P'" : "12px 'Noto Sans SC', 'Noto Sans', sans-serif";
+    ctx.fillStyle = "#000";
+    ctx.fillText(t("stayLow"), mid - 31, lgy + 16);
+    ctx.fillStyle = "#ffe08a";
+    ctx.fillText(t("stayLow"), mid - 32, lgy + 15);
+  }
 }
 
 function drawLedges(pal) {
@@ -3373,7 +3423,7 @@ function drawCat() {
 }
 
 function drawFx() {
-  if (!run.fx || lowPerfMode()) return;
+  if (!run.fx?.length) return;
   for (const p of run.fx) {
     ctx.fillStyle = `rgba(196, 154, 74, ${Math.min(1, p.t / 12)})`;
     ctx.fillRect(p.x, p.y, p.s || 3, p.s || 3);
@@ -3416,7 +3466,7 @@ function drawTutorialCallout() {
 }
 
 function drawPopped() {
-  const items = lowPerfMode() ? run.popped.slice(-3) : run.popped;
+  const items = liteDraw() ? run.popped.slice(-3) : run.popped;
   ctx.font = lang === "en" ? "10px 'Press Start 2P'" : "13px 'Noto Sans', 'Noto Sans SC', sans-serif";
   for (const n of items) {
     ctx.fillStyle = "#000";
@@ -3436,13 +3486,14 @@ function draw() {
   const night = run.night;
   const veil = run.invuln > 0;
   const pal = worldPal(night, veil);
-  ctx.imageSmoothingEnabled = false;
+  const lite = liteDraw();
   drawSky(pal, night, W, H);
   drawParallax(pal, night, W);
   drawGround(pal, W, H);
   drawLedges(pal);
 
   for (const o of run.objects) {
+    if (o.x < -90 || o.x > W + 90) continue;
     if (o.kind === "coin" && !o.hit) drawCoin(o);
     if (o.kind === "beam") {
       if (o.style === "brick") drawBrick(o, night);
@@ -3460,13 +3511,15 @@ function draw() {
     ctx.fillRect(0, 0, W, H);
   }
 
-  const vg = ctx.createLinearGradient(0, 0, 0, H);
-  vg.addColorStop(0, "rgba(255, 248, 236, 0.18)");
-  vg.addColorStop(0.12, "transparent");
-  vg.addColorStop(0.88, "transparent");
-  vg.addColorStop(1, "rgba(80, 56, 32, 0.12)");
-  ctx.fillStyle = vg;
-  ctx.fillRect(0, 0, W, H);
+  if (!lite) {
+    const vg = ctx.createLinearGradient(0, 0, 0, H);
+    vg.addColorStop(0, "rgba(255, 248, 236, 0.18)");
+    vg.addColorStop(0.12, "transparent");
+    vg.addColorStop(0.88, "transparent");
+    vg.addColorStop(1, "rgba(80, 56, 32, 0.12)");
+    ctx.fillStyle = vg;
+    ctx.fillRect(0, 0, W, H);
+  }
 
   drawPopped();
 }
@@ -3524,6 +3577,15 @@ async function settleOnchain(got, ticket, score) {
       if (rec.burned > 0n) lastFinish.burned = Number(ethers.formatUnits(rec.burned, 18));
       if (rec.payout != null && rec.payout > 0n) {
         lastFinish.payout = Number(ethers.formatUnits(rec.payout, 18));
+      }
+      const fair = displayPayout(got, ticket, lastFinish.bps || window._rewardBps || 10500);
+      if (Number(lastFinish.payout) + 0.05 < Number(fair)) {
+        showToast(
+          t("settleShortfall", {
+            fair: Number(fair).toFixed(2),
+            paid: Number(lastFinish.payout).toFixed(2),
+          }),
+        );
       }
       const settleLink = `<a class="tx-view" href="${CatboxChain.txUrl(rec.hash)}" target="_blank" rel="noopener">${t("viewTx")}</a>`;
       const paidLim = CatboxChain.formatLim(rec.payout != null ? rec.payout : ethers.parseUnits(String(lastFinish.payout || 0), 18));

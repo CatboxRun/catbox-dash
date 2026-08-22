@@ -1294,6 +1294,7 @@ body.playing #cv {
   height: 100%;
   object-fit: contain;
   max-height: 100%;
+  transform: translateZ(0);
 }
 body.playing .lang-drop,
 body.playing .swap-btn,
