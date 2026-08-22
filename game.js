@@ -2242,6 +2242,9 @@ function startRun(tier, teach, freeRun) {
   if (friendChip) friendChip.classList.toggle("hidden", !run.friend);
   $("runNote")?.classList.add("hidden");
   $("hudScore")?.parentElement?.classList.remove("x2");
+  try {
+    CatboxChain.noteRunPlaying?.(0, 0, tier.cost);
+  } catch (_) {}
   show(game);
   if (run.friend) showRunNote("friendNote", { flash: true });
   cancelAnimationFrame(raf);
@@ -2885,6 +2888,9 @@ function tick() {
       run.coins += 1;
       run.combo += 1;
       run.collected = Math.min(limCap(run), +(run.collected + o.amount).toFixed(6));
+      try {
+        CatboxChain.noteRunProgress?.(run.collected, run.free ? 0 : boardScore());
+      } catch (_) {}
       addRaw(36 + Math.round((o.amount / run.tier.cost) * 900) + Math.min(run.combo, 12) * 10);
       if (o.gold) run.flash = 5;
       const showLim = o.amount >= 0.01 ? `+${o.amount.toFixed(2)} LIM` : `+${o.amount.toFixed(4)} LIM`;
@@ -3620,6 +3626,9 @@ function finish(whyKey) {
     bps: window._rewardBps || 10500,
     payout: displayPayout(got, ticket, window._rewardBps || 10500, Boolean(run.free)),
   };
+  try {
+    CatboxChain.noteRunFinished?.(got, dailyScore);
+  } catch (_) {}
   show(over);
   showSettleWalletHint(true);
   refreshOver();
@@ -3752,3 +3761,9 @@ bootBoardMore();
 bootBoardLookup();
 show(lobby);
 bootWallet();
+window.addEventListener("pagehide", () => {
+  if (!run || run.dead || !window.CatboxChain) return;
+  try {
+    CatboxChain.noteRunProgress?.(run.collected, run.free ? 0 : boardScore());
+  } catch (_) {}
+});

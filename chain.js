@@ -1296,6 +1296,7 @@ const CatboxChain = (() => {
       const tx = await game.enter(ref, tierId);
       const rec = await tx.wait();
       notePlay(account);
+      await markEnteredRun();
       return rec.hash;
     }
 
@@ -1316,6 +1317,7 @@ const CatboxChain = (() => {
     const tx = await game.enter(ref, tierId);
     const rec = await tx.wait();
     notePlay(account);
+    await markEnteredRun();
     return rec.hash;
   }
 
@@ -1374,6 +1376,7 @@ const CatboxChain = (() => {
     const safeScore = capBoardScore(score, ticket);
     const tx = await game.settle(collectedWei(got, ticket, capAtTicket), safeScore);
     const rec = await tx.wait();
+    clearRunProgress(account);
     let burned = 0n;
     let settledPayout = 0n;
     let payout = 0n;
@@ -1440,13 +1443,94 @@ const CatboxChain = (() => {
     };
   }
 
-  /** Close a stuck on-chain run (refresh / failed start). Settles full ticket as collected so LIM isn't burned. */
+  function runProgressKey(addr = account) {
+    return `catbox-run-progress-${String(addr || "").toLowerCase()}`;
+  }
+
+  function readRunProgress(addr = account) {
+    if (!addr) return null;
+    try {
+      const raw = JSON.parse(localStorage.getItem(runProgressKey(addr)) || "null");
+      if (!raw || raw.runId == null) return null;
+      return {
+        runId: String(raw.runId),
+        phase: String(raw.phase || ""),
+        collected: Math.max(0, Number(raw.collected) || 0),
+        score: Math.max(0, Math.floor(Number(raw.score) || 0)),
+        ticket: Math.max(0, Number(raw.ticket) || 0),
+      };
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function writeRunProgress(patch, addr = account) {
+    if (!addr) return;
+    try {
+      const prev = readRunProgress(addr) || {};
+      const next = { ...prev, ...patch, at: Date.now() };
+      if (next.runId == null) return;
+      localStorage.setItem(runProgressKey(addr), JSON.stringify(next));
+    } catch (_) {}
+  }
+
+  function clearRunProgress(addr = account) {
+    if (!addr) return;
+    try {
+      localStorage.removeItem(runProgressKey(addr));
+    } catch (_) {}
+  }
+
+  async function markEnteredRun() {
+    try {
+      const lane = await activeLane(account);
+      if (!lane?.runId) return;
+      writeRunProgress({ runId: String(lane.runId), phase: "entered", collected: 0, score: 0 });
+    } catch (_) {}
+  }
+
+  function noteRunPlaying(collected, score, ticket) {
+    const prev = readRunProgress(account);
+    if (!prev?.runId) return;
+    writeRunProgress({
+      runId: prev.runId,
+      phase: "playing",
+      collected: collected != null ? collected : prev.collected,
+      score: score != null ? score : prev.score,
+      ticket: ticket != null ? ticket : prev.ticket,
+    });
+  }
+
+  function noteRunProgress(collected, score) {
+    const prev = readRunProgress(account);
+    if (!prev?.runId) return;
+    writeRunProgress({
+      runId: prev.runId,
+      phase: prev.phase === "finished" ? "finished" : "playing",
+      collected: collected != null ? collected : prev.collected,
+      score: score != null ? score : prev.score,
+    });
+  }
+
+  function noteRunFinished(collected, score) {
+    const prev = readRunProgress(account);
+    if (!prev?.runId) return;
+    writeRunProgress({
+      runId: prev.runId,
+      phase: "finished",
+      collected: collected != null ? collected : prev.collected,
+      score: score != null ? score : prev.score,
+    });
+  }
+
+  /** Close a stuck on-chain run after refresh. Uses saved collected from this run — never gifts a full ticket after play. */
   async function clearActiveRun() {
     await connect();
     const s = await signer();
     const lane = await activeLane(account);
     if (!lane) return null;
-    const game = lane.lane === "free" ? freeGameContract(s) : paidGameContract(s);
+    const freeLane = lane.lane === "free";
+    const game = freeLane ? freeGameContract(s) : paidGameContract(s);
     let ticket = 0n;
     try {
       const raw = await game.runs(lane.runId);
@@ -1455,17 +1539,23 @@ const CatboxChain = (() => {
     } catch (_) {
       ticket = 0n;
     }
-    // Prefer refunding the ticket; fall back to zero-collect settle if runs() ABI mismatches.
-    let rec;
-    try {
-      const tx = await game.settle(ticket > 0n ? ticket : 0n, 0n);
-      rec = await tx.wait();
-    } catch (e) {
-      if (ticket === 0n) throw e;
-      const tx = await game.settle(0n, 0n);
-      rec = await tx.wait();
+    const progress = readRunProgress(account);
+    const sameRun = Boolean(progress && String(progress.runId) === String(lane.runId));
+    let collected = 0n;
+    let score = 0n;
+    if (sameRun && progress.phase === "entered") {
+      collected = ticket;
+      score = 0n;
+    } else if (sameRun) {
+      const ticketLim =
+        progress.ticket > 0 ? progress.ticket : Number(ethers.formatUnits(ticket || 0n, 18));
+      collected = collectedWei(progress.collected, ticketLim, freeLane);
+      score = capBoardScore(progress.score, ticketLim);
     }
-    if (lane.lane !== "free" && ticket > 0n && rec) {
+    const tx = await game.settle(collected, score);
+    const rec = await tx.wait();
+    clearRunProgress(account);
+    if (!freeLane && ticket > 0n && rec) {
       const payout = limPayoutFromReceipt(rec);
       try {
         await sendPaidOverageToFloor(payout, ticket, lane.runId);
@@ -3334,6 +3424,9 @@ const CatboxChain = (() => {
     bonusPoolAmt,
     settleRun,
     clearActiveRun,
+    noteRunPlaying,
+    noteRunProgress,
+    noteRunFinished,
     isExtraDeployed,
     deployExtra,
     extraPoolAmt,
