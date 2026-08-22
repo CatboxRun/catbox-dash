@@ -200,7 +200,16 @@ function renderChips(summary) {
         : "—",
     ],
     ["加时池", s.extraPool != null ? `${lim(s.extraPool)} LIM` : "—"],
-    ["已发加时", s.extraPaidTotal != null ? `${lim(s.extraPaidTotal)} LIM · ${s.extraPaidCount ?? 0} 笔` : "—"],
+    [
+      "加时合约已发",
+      s.extraPaidTotal != null ? `${lim(s.extraPaidTotal)} LIM · ${s.extraPaidCount ?? 0} 笔` : "—",
+    ],
+    [
+      "结算超票",
+      s.settleOverTotal != null
+        ? `${lim(s.settleOverTotal)} LIM · ${s.settleOverCount ?? 0} 局`
+        : "—",
+    ],
     ["加时存入", `${lim(extraDeposited(s))} LIM`],
     ["加时提取", s.extraWithdrawnTotal != null ? `${lim(s.extraWithdrawnTotal)} LIM` : "—"],
     ["加时状态", s.extraPaused ? "暂停" : s.extraSinceRunId != null ? `自 #${s.extraSinceRunId}` : "—"],

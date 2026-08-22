@@ -818,10 +818,11 @@ try {
 let extraPool = 0n;
 let extraPaused = false;
 let extraSinceRunId = 0;
-let extraFundedTotal = 0n;
-let extraWithdrawnTotal = 0n;
-let extraPaidTotal = 0n;
-let extraPaidCount = 0;
+// Carry forward prior Extra totals so short RPC log windows never regress chips.
+let extraFundedTotal = BigInt(prevSnapEarly.extraFundedTotal || "0");
+let extraWithdrawnTotal = BigInt(prevSnapEarly.extraWithdrawnTotal || "0");
+let extraPaidTotal = BigInt(prevSnapEarly.extraPaidTotal || "0");
+let extraPaidCount = Number(prevSnapEarly.extraPaidCount || 0);
 const extraAddr = cfg.extra?.address;
 if (extraAddr && cfg.extra?.abi) {
   try {
@@ -833,13 +834,18 @@ if (extraAddr && cfg.extra?.abi) {
       extraSinceRunId = Number(await extra.sinceRunId());
     } catch {}
     console.error("fetching extra logs", extraAddr);
+    // Extra is low-volume; scan far enough to cover Funded/Withdrawn history (~days).
     const extraLogs = await collectLogs(
       extraAddr,
       extraIface,
       ["ExtraPaid", "Funded", "Withdrawn"],
       latest,
-      Number(process.env.LOG_CHUNKS_EXTRA || (paidAddr ? 16 : 40)),
+      Number(process.env.LOG_CHUNKS_EXTRA || (paidAddr ? 120 : 200)),
     );
+    let fundedFromLogs = 0n;
+    let withdrawnFromLogs = 0n;
+    let paidFromLogs = 0n;
+    let paidCountFromLogs = 0;
     for (const log of extraLogs) {
       if (log.name === "ExtraPaid") {
         const id = Number(log.args.runId);
@@ -849,35 +855,42 @@ if (extraAddr && cfg.extra?.abi) {
           row.extraPaid = amt;
           row.extraTx = log.transactionHash;
         }
-        extraPaidTotal += amt;
-        extraPaidCount += 1;
+        paidFromLogs += amt;
+        paidCountFromLogs += 1;
       } else if (log.name === "Funded") {
-        extraFundedTotal += log.args.amount ?? 0n;
+        fundedFromLogs += log.args.amount ?? 0n;
       } else if (log.name === "Withdrawn") {
-        extraWithdrawnTotal += log.args.amount ?? 0n;
+        withdrawnFromLogs += log.args.amount ?? 0n;
       }
     }
-    const freeIds = rows
-      .filter((r) => r.lane === "v5" && r.id >= extraSinceRunId)
-      .map((r) => r.id)
-      .sort((a, b) => b - a)
-      .slice(0, Number(process.env.EXTRA_PAID_SCAN || 400));
-    if (freeIds.length) {
-      const paidRows = await multicall(p, extraIface, "paidExtra", freeIds, 40, extraAddr);
-      freeIds.forEach((id, j) => {
+    if (fundedFromLogs > extraFundedTotal) extraFundedTotal = fundedFromLogs;
+    if (withdrawnFromLogs > extraWithdrawnTotal) extraWithdrawnTotal = withdrawnFromLogs;
+    // Full paidExtra storage scan (Extra is V5 free-lane only). Do not cap to recent N —
+    // a short window freezes「已发加时」while older claims stay only if merge keeps them.
+    const freeNext = Number(nextFree || freePack.next || 0);
+    const scanTo = Math.max(freeNext - 1, 0);
+    const allExtraIds = [];
+    for (let id = Math.max(1, extraSinceRunId); id <= scanTo; id++) allExtraIds.push(id);
+    console.error("paidExtra scan", allExtraIds.length, "ids", extraSinceRunId, "..", scanTo);
+    let paidFromStorage = 0n;
+    let paidCountFromStorage = 0;
+    if (allExtraIds.length) {
+      const paidRows = await multicall(p, extraIface, "paidExtra", allExtraIds, 80, extraAddr);
+      allExtraIds.forEach((id, j) => {
         const v = paidRows[j] ? paidRows[j][0] || 0n : 0n;
         if (v <= 0n) return;
         const row = byKey.get(`v5-${id}`);
         if (row) row.extraPaid = v;
+        paidFromStorage += v;
+        paidCountFromStorage += 1;
       });
     }
-    extraPaidTotal = 0n;
-    extraPaidCount = 0;
-    for (const row of rows) {
-      const v = row.extraPaid ?? 0n;
-      if (v <= 0n) continue;
-      extraPaidTotal += v;
-      extraPaidCount += 1;
+    if (paidFromStorage > 0n) {
+      extraPaidTotal = paidFromStorage;
+      extraPaidCount = paidCountFromStorage;
+    } else if (paidFromLogs > extraPaidTotal) {
+      extraPaidTotal = paidFromLogs;
+      extraPaidCount = paidCountFromLogs;
     }
   } catch (e) {
     console.error("extra fail", e?.message || e);
@@ -990,6 +1003,27 @@ function isExtraRun(row) {
   return paid > 0n || Boolean(row.extraTx);
 }
 
+function settleOverFromRows(list) {
+  let settleOverTotal = 0n;
+  let settleOverCount = 0;
+  let settleOverV6 = 0n;
+  let settleOverV6Count = 0;
+  for (const row of list) {
+    if (!row?.settled) continue;
+    const payout = row.payout ?? 0n;
+    const ticket = row.paid ?? 0n;
+    if (payout <= ticket || ticket <= 0n) continue;
+    const over = payout - ticket;
+    settleOverTotal += over;
+    settleOverCount += 1;
+    if (row.lane === "v6" || row.lane === "paid") {
+      settleOverV6 += over;
+      settleOverV6Count += 1;
+    }
+  }
+  return { settleOverTotal, settleOverCount, settleOverV6, settleOverV6Count };
+}
+
 function burnCountsFromRuns(rows) {
   let v5BurnCount = 0;
   let v6BurnCount = 0;
@@ -1065,6 +1099,13 @@ const social = Object.values(socialByAddr)
     tgBlock: r.tgBlock || 0,
   }));
 
+const {
+  settleOverTotal,
+  settleOverCount,
+  settleOverV6,
+  settleOverV6Count,
+} = settleOverFromRows(rows);
+
 const snapshot = {
   at: new Date().toISOString(),
   block: latest,
@@ -1089,6 +1130,10 @@ const snapshot = {
   extraSinceRunId,
   extraPaidTotal: weiStr(extraPaidTotal),
   extraPaidCount,
+  settleOverTotal: weiStr(settleOverTotal),
+  settleOverCount,
+  settleOverV6: weiStr(settleOverV6),
+  settleOverV6Count,
   extraFundedTotal: weiStr(extraFundedTotal),
   extraWithdrawnTotal: weiStr(extraWithdrawnTotal),
   xClaimCount,

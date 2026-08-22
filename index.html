@@ -44,7 +44,7 @@
       href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@500;700&family=Noto+Sans+SC:wght@500;700&family=Noto+Sans+JP:wght@500;700&family=Noto+Sans+KR:wght@500;700&family=Noto+Sans+Thai:wght@500;700&family=Press+Start+2P&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="./styles.css?v=58" />
+    <link rel="stylesheet" href="./styles.css?v=60" />
   </head>
   <body>
     <div class="crt">
@@ -130,7 +130,7 @@
 
             <p class="play-now" data-i18n="playNow">PICK A TICKET</p>
             <p class="free-offer" data-i18n="freeOffer">New wallets play two 1 LIM SCOUT runs free. Jump, catch coins, keep them.</p>
-            <p class="reward-line" data-i18n="inviteBoost">Extra over the ticket is yours. Cap: 1 LIM ×2, others ×1.5. Caught LIM × 105%+. Friend plays: +5%. Extra run: +0.1%. Reward % cap 200%.</p>
+            <p class="reward-line" data-i18n="inviteBoost">Caught LIM × 105%+. Extra over the ticket goes to today's floor (VAULT 15 → keep 10). Friend plays: +5%. Extra run: +0.1%. Reward % cap 200%.</p>
             <div class="tickets" id="tickets"></div>
             <button type="button" class="rules-jump" id="openRules" data-i18n="openRules">HOW TO PLAY</button>
             <div class="crew" id="playCrew">
@@ -183,18 +183,18 @@
                   </li>
                   <li>
                     <strong data-i18n="ruleStep2Title">② Overtime</strong>
-                    <p data-i18n="ruleStep2Body">Keep running after the ticket is in for extra LIM. SCOUT (1 LIM) caps at ×2 (~2 LIM). Other tickets cap at ×1.5 (e.g. 10 LIM ticket → ~15 LIM max).</p>
+                    <p data-i18n="ruleStep2Body">Keep running after the ticket is in. Extra over the ticket goes to today's floor; you keep the ticket. SCOUT (1 LIM) caps at ×2 (keep 1, 1 to floor). Other tickets cap at ×1.5 (VAULT 15 → keep 10, 5 to floor).</p>
                   </li>
                   <li>
                     <strong data-i18n="ruleStep3Title">③ Settle</strong>
-                    <p data-i18n="ruleStep3Body">The run ends on-chain. LIM lands in your wallet — check the tx on BSCScan.</p>
+                    <p data-i18n="ruleStep3Body">The run settles on-chain. Ticket LIM returns to your wallet. Extra over the ticket is sent to today's equal-split floor. Check the tx on BSCScan.</p>
                   </li>
                 </ol>
               </section>
 
               <section class="rules-block">
                 <h3 data-i18n="ruleBoostTitle">📈 Settle bonus</h3>
-                <p class="rules-intro" data-i18n="ruleInvitePay">Caught LIM × 105%+. Invites and extra runs are separate, one reward % cap at 200%. Each friend who plays from your link adds +5%. Four friends is 125% from invites. On your own, every extra run you start adds +0.1% — no invite needed. Payout this run cannot pass the LIM cap: 1 LIM tickets ×2, others ×1.5.</p>
+                <p class="rules-intro" data-i18n="ruleInvitePay">Caught LIM × 105%+. Invites and extra runs are separate, one reward % cap at 200%. You keep the ticket. Extra over the ticket goes to today's equal-split floor. Caps: 1 LIM ×2 (keep 1), others ×1.5 (VAULT 15 → keep 10, 5 to floor).</p>
               </section>
 
               <section class="rules-block">
@@ -210,7 +210,7 @@
 
               <section class="rules-block">
                 <h3 data-i18n="ruleFloorTitle">📊 Floor pool</h3>
-                <p class="rules-intro" data-i18n="ruleFloorBody">Separate from the 50% daily score pool. One equal share per address that finishes a settled run today. As more wallets play, the pool keeps growing (currently seeded with 500 LIM). Claim at Singapore midnight — use CLAIM FLOOR on the POOLS tab, not the same button as the daily board. Unclaimed leftover rolls into the next day's floor pool.</p>
+                <p class="rules-intro" data-i18n="ruleFloorBody">Separate from the 50% daily score pool. Paid overtime (LIM over the ticket) is sent here. One equal share per address that finishes a settled run today. Claim at Singapore midnight with CLAIM FLOOR. Unclaimed leftover rolls into the next day's floor pool.</p>
               </section>
 
               <section class="rules-block">
@@ -218,10 +218,10 @@
                 <dl class="rules-faq">
                   <dt data-i18n="ruleFaq1Q">Out of free runs?</dt>
                   <dd data-i18n="ruleFaq1A">Buy SCOUT (1 LIM) or any other ticket with your LIM.</dd>
-                  <dt data-i18n="ruleFaq2Q">Why is settle higher than what I caught?</dt>
-                  <dd data-i18n="ruleFaq2A">105% base + invite / extra-run boosts (200% cap total), still within the per-run LIM cap.</dd>
+                  <dt data-i18n="ruleFaq2Q">Where does overtime LIM go?</dt>
+                  <dd data-i18n="ruleFaq2A">You keep the ticket. Extra over the ticket goes to today's equal-split floor. Invite / extra-run boosts still apply on-chain, then anything above the ticket is sent to the floor.</dd>
                   <dt data-i18n="ruleFaq6Q">Is 200% the max I can take home?</dt>
-                  <dd data-i18n="ruleFaq6A">200% is the settle bonus rate cap (105% + friends + extra runs). A separate per-run LIM cap still applies: 1 LIM tickets ×2, other tickets ×1.5. Extra over the ticket is yours, inside that LIM cap.</dd>
+                  <dd data-i18n="ruleFaq6A">200% is the settle bonus rate cap. You still only take home the ticket. Extra over the ticket (VAULT 15 → 5 LIM) goes to today's floor.</dd>
                   <dt data-i18n="ruleFaq7Q">What is the floor pool?</dt>
                   <dd data-i18n="ruleFaq7A">An equal-split bonus pool — not the 50% score board. Play and settle today to get a share. Pool grows as more addresses join (500 LIM seeded now). Claim at Singapore midnight with CLAIM FLOOR. Unclaimed leftover rolls into the next day's pool.</dd>
                   <dt data-i18n="ruleFaq3Q">Why can't I claim?</dt>
@@ -291,7 +291,7 @@
               <img class="invite-ico" src="./assets/icon-invite.png?v=2" alt="" />
               <div class="invite-copy">
                 <p class="stat-k" data-i18n="inviteTitle">INVITE FRIENDS</p>
-                <p class="invite-lead" data-i18n="inviteLead">Caught LIM × 105%+. Two separate boosts, one 200% reward % cap. Friends who play from your link: +5% each. Extra runs you start: +0.1% each, even if you never invite. Extra LIM over the ticket is yours, capped at ×2 on 1 LIM tickets and ×1.5 on the rest.</p>
+                <p class="invite-lead" data-i18n="inviteLead">Share your link. Each friend who plays adds +5%. Extra runs +0.1%. Boost 105%–200%. You keep the ticket; extra over the ticket goes to today's equal-split floor.</p>
                 <div class="crew crew-invite">
                   <p class="crew-k" data-i18n="crewTitle">CREW · 4 FRIENDS = 125%</p>
                   <div class="crew-slots" data-crew-slots></div>
@@ -404,11 +404,11 @@
           </div>
         </div>
         <p id="payCopy"></p>
-        <p class="eligible" data-i18n="eligible">Catch them all — this run burns nothing. Missed: daily 50% · invite 20% · burn 30%.</p>
+        <p class="eligible" data-i18n="eligible">Catch the ticket — this run burns nothing. Extra over the ticket goes to today's floor. Missed: daily 50% · invite 20% · burn 30%.</p>
         <div class="meter-preview">
           <img src="./assets/hero-cat.png?v=3" alt="" />
           <img class="coin-logo" src="./assets/coin.png?v=4" alt="" />
-          <span data-i18n="payHint">Ticket is chopped into coins. Catch them with the Catbox.</span>
+          <span data-i18n="payHint">Ticket is chopped into coins. Catch the ticket to keep it. Extra over the ticket goes to today's floor.</span>
         </div>
         <p class="tx-line" id="payStatus"></p>
         <div class="row">
@@ -422,7 +422,8 @@
           <div class="hud">
             <span class="hud-chip tier" id="hudTier"></span>
             <span class="hud-chip score"><small data-i18n="hudScore">SCORE</small><b id="hudScore">0</b></span>
-            <span class="hud-chip grab"><img class="coin-logo" src="./assets/coin.png?v=4" alt="" /><small>LIM</small><b id="hudRebate">0%</b></span>
+            <span class="hud-chip grab"><img class="coin-logo" src="./assets/coin.png?v=4" alt="" /><small data-i18n="hudKeep">KEEP</small><b id="hudRebate">0</b></span>
+            <span class="hud-chip floor hidden" id="hudFloorChip"><small data-i18n="hudFloor">FLOOR</small><b id="hudFloorAmt">+0</b></span>
             <span class="hud-chip bonus"><small data-i18n="rewardCap">REWARD</small><b id="hudBonus">105%</b></span>
             <span class="hud-chip friend hidden" id="hudFriend" data-i18n="friendRun">CREW RUN</span>
           </div>
@@ -530,11 +531,11 @@
       </div>
     </div>
 
-    <script src="./config.js?v=39"></script>
+    <script src="./config.js?v=40"></script>
     <script src="https://cdn.jsdelivr.net/npm/ethers@6.13.5/dist/ethers.umd.min.js"></script>
-    <script src="./chain.js?v=101"></script>
-    <script src="./i18n.js?v=109"></script>
-    <script src="./game.js?v=120"></script>
+    <script src="./chain.js?v=102"></script>
+    <script src="./i18n.js?v=111"></script>
+    <script src="./game.js?v=123"></script>
     <script src="./bgm.js?v=26"></script>
   </body>
 </html>

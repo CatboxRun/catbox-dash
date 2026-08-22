@@ -313,6 +313,138 @@ const CatboxChain = (() => {
     return (await tx.wait()).hash;
   }
 
+  function floorDueKey(addr = account) {
+    return `catbox-floor-due-${String(addr || "").toLowerCase()}`;
+  }
+
+  function readFloorOverage(addr = account) {
+    if (!addr) return null;
+    try {
+      const raw = localStorage.getItem(floorDueKey(addr));
+      if (!raw) return null;
+      const o = JSON.parse(raw);
+      const extra = BigInt(o?.extra || "0");
+      if (extra <= 0n) return null;
+      return { runId: String(o.runId || ""), extra };
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function writeFloorOverage(addr, runId, extra) {
+    if (!addr || extra == null || extra <= 0n) return;
+    try {
+      localStorage.setItem(floorDueKey(addr), JSON.stringify({ runId: String(runId || ""), extra: extra.toString() }));
+    } catch (_) {}
+  }
+
+  function clearFloorOverageMark(addr = account) {
+    if (!addr) return;
+    try {
+      localStorage.removeItem(floorDueKey(addr));
+    } catch (_) {}
+  }
+
+  function hasFloorOverage(addr = account) {
+    const due = readFloorOverage(addr);
+    return Boolean(due && due.extra > 0n);
+  }
+
+  async function fundFloorAmount(extraWei) {
+    if (!extraWei || extraWei <= 0n) return null;
+    if (!(await isFloorDeployed())) throw new Error("NO_FLOOR");
+    await connect();
+    const s = await signer();
+    const dest = floorCfg().address;
+    const lim = limContract(s);
+    const floor = floorContract(s);
+    const bal = await lim.balanceOf(account);
+    if (bal < extraWei) throw new Error("FLOOR_DUE");
+    const allow = await lim.allowance(account, dest);
+    if (allow < extraWei) {
+      const txA = await lim.approve(dest, ethers.MaxUint256);
+      await txA.wait();
+    }
+    const tx = await floor.fund(extraWei);
+    return (await tx.wait()).hash;
+  }
+
+  async function clearFloorOverage() {
+    const due = readFloorOverage(account);
+    if (!due || due.extra <= 0n) return null;
+    const hash = await fundFloorAmount(due.extra);
+    const runId = due.runId;
+    clearFloorOverageMark(account);
+    if (runId) {
+      try {
+        await recordFloor(runId, true);
+      } catch (_) {}
+    }
+    return hash;
+  }
+
+  async function sendPaidOverageToFloor(payout, paidWei, runId, onFloor) {
+    if (!payout || !paidWei || payout <= paidWei) {
+      return { payout, floorHash: "", floorExtra: 0n };
+    }
+    const floorExtra = payout - paidWei;
+    writeFloorOverage(account, runId, floorExtra);
+    if (typeof onFloor === "function") onFloor();
+    let lastErr = null;
+    let floorHash = "";
+    for (let i = 0; i < 2; i++) {
+      try {
+        floorHash = (await fundFloorAmount(floorExtra)) || "";
+        if (floorHash) {
+          clearFloorOverageMark(account);
+          lastErr = null;
+          break;
+        }
+      } catch (e) {
+        lastErr = e;
+        await new Promise((r) => setTimeout(r, 1200));
+      }
+    }
+    if (!floorHash) {
+      const err = new Error("FLOOR_DUE");
+      err.cause = lastErr;
+      err.floorExtra = floorExtra;
+      throw err;
+    }
+    return { payout: paidWei, floorHash, floorExtra };
+  }
+
+  function limPayoutFromReceipt(rec) {
+    let payout = 0n;
+    const limI = new ethers.Interface(["event Transfer(address indexed from, address indexed to, uint256 value)"]);
+    for (const log of rec.logs || []) {
+      try {
+        if (String(log.address).toLowerCase() !== String(cfg.lim).toLowerCase()) continue;
+        const ev = limI.parseLog(log);
+        if (
+          ev?.name === "Transfer" &&
+          account &&
+          ev.args.to &&
+          String(ev.args.to).toLowerCase() === String(account).toLowerCase()
+        ) {
+          payout += ev.args.value;
+        }
+      } catch (_) {}
+    }
+    return payout;
+  }
+
+  async function assertFloorOverageCleared(addr = account) {
+    const due = readFloorOverage(addr);
+    if (!due || due.extra <= 0n) return;
+    try {
+      await fundFloorAmount(due.extra);
+      clearFloorOverageMark(addr);
+    } catch (_) {
+      throw new Error("FLOOR_DUE");
+    }
+  }
+
   async function claimFloor() {
     await connect();
     if (!(await isFloorDeployed())) throw new Error("NONE");
@@ -1139,6 +1271,7 @@ const CatboxChain = (() => {
   async function approveAndEnter(tierId = 0) {
     await connect();
     assertNotBanned();
+    await assertFloorOverageCleared();
     const s = await signer();
     const lim = limContract(s);
     const id = Number(tierId);
@@ -1222,7 +1355,7 @@ const CatboxChain = (() => {
     return extra > cap ? cap : extra;
   }
 
-  async function settleRun(got, ticket, score, onExtra) {
+  async function settleRun(got, ticket, score, onExtra, onFloor) {
     await connect();
     const s = await signer();
     const lane = await activeLane(account);
@@ -1230,6 +1363,12 @@ const CatboxChain = (() => {
     const freeLane = lane.lane === "free";
     const game = freeLane ? freeGameContract(s) : paidGameContract(s);
     const runId = lane.runId;
+    let paidWei = ethers.parseUnits(String(ticket), 18);
+    try {
+      const raw = await game.runs(runId);
+      const paid = raw?.paid != null ? raw.paid : raw?.[1];
+      if (paid && paid > 0n) paidWei = paid;
+    } catch (_) {}
     const capAtTicket = freeLane;
     const extraAmt = capAtTicket ? extraWeiFromGot(got, ticket) : 0n;
     const safeScore = capBoardScore(score, ticket);
@@ -1268,6 +1407,19 @@ const CatboxChain = (() => {
         if (extraHash) extraPaid = extraAmt;
       } catch (_) {}
     }
+    let floorHash = "";
+    let floorExtra = 0n;
+    if (!freeLane) {
+      try {
+        const claw = await sendPaidOverageToFloor(payout, paidWei, runId, onFloor);
+        payout = claw.payout;
+        floorHash = claw.floorHash;
+        floorExtra = claw.floorExtra;
+      } catch (e) {
+        if (e?.message === "FLOOR_DUE") e.settleHash = rec.hash;
+        throw e;
+      }
+    }
     try {
       await recordFloor(runId, !freeLane);
     } catch (e1) {
@@ -1276,7 +1428,16 @@ const CatboxChain = (() => {
         await recordFloor(runId, !freeLane);
       } catch (_) {}
     }
-    return { hash: rec.hash, burned, payout: payout + extraPaid, extraHash, extraPaid, lane: lane.lane };
+    return {
+      hash: rec.hash,
+      burned,
+      payout: payout + extraPaid,
+      extraHash,
+      extraPaid,
+      lane: lane.lane,
+      floorHash,
+      floorExtra,
+    };
   }
 
   /** Close a stuck on-chain run (refresh / failed start). Settles full ticket as collected so LIM isn't burned. */
@@ -1295,14 +1456,25 @@ const CatboxChain = (() => {
       ticket = 0n;
     }
     // Prefer refunding the ticket; fall back to zero-collect settle if runs() ABI mismatches.
+    let rec;
     try {
       const tx = await game.settle(ticket > 0n ? ticket : 0n, 0n);
-      return (await tx.wait()).hash;
+      rec = await tx.wait();
     } catch (e) {
       if (ticket === 0n) throw e;
       const tx = await game.settle(0n, 0n);
-      return (await tx.wait()).hash;
+      rec = await tx.wait();
     }
+    if (lane.lane !== "free" && ticket > 0n && rec) {
+      const payout = limPayoutFromReceipt(rec);
+      try {
+        await sendPaidOverageToFloor(payout, ticket, lane.runId);
+      } catch (e) {
+        if (e?.message === "FLOOR_DUE") e.settleHash = rec.hash;
+        throw e;
+      }
+    }
+    return rec.hash;
   }
 
   function assertBoardWithdrawAllowed() {
@@ -3171,6 +3343,8 @@ const CatboxChain = (() => {
     isFloorDeployed,
     floorPendingOf,
     recordFloor,
+    hasFloorOverage,
+    clearFloorOverage,
     claimFloor,
     floorPoolBalance,
     withdrawWeekly,

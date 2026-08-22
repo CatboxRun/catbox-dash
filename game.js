@@ -10,9 +10,11 @@ function payoutCap(ticket) {
   return n <= 1 ? +(n * 2).toFixed(6) : +(n * 1.5).toFixed(6);
 }
 
-function displayPayout(got, ticket, bps) {
+function displayPayout(got, ticket, bps, free) {
   const cap = payoutCap(ticket);
-  return Math.min(Number(got) * (Number(bps || 10500) / 10000), cap);
+  const raw = Math.min(Number(got) * (Number(bps || 10500) / 10000), cap);
+  if (!free) return Math.min(raw, Number(ticket) || 0);
+  return raw;
 }
 
 function playerTag() {
@@ -1864,7 +1866,7 @@ function refreshOver() {
   const invAmt = leftover * 0.2;
   const burnShown = typeof burned === "number" ? burned : burnAmt;
   const pct = fmtRewardPct(bps || window._rewardBps || 10500).replace("%", "");
-  const paid = payout != null ? payout : displayPayout(got, ticket, bps || window._rewardBps || 10500);
+  const paid = payout != null ? payout : displayPayout(got, ticket, bps || window._rewardBps || 10500, lastFinish?.free);
   $("overResult").innerHTML = t(cap ? "resultFull" : "resultPart", {
     coins,
     got: got.toFixed(4),
@@ -1967,6 +1969,7 @@ async function payAndStart() {
       /user rejected|user denied|rejected the request/i.test(String(e?.shortMessage || ""));
     if (msg === "NO_WALLET") status.textContent = t("noWallet");
     else if (msg === "BANNED") status.textContent = t("banned");
+    else if (msg === "FLOOR_DUE") status.textContent = t("floorDue");
     else if (msg === "NO_LIM") status.textContent = t("noLim");
     else if (msg === "ACTIVE_RUN") {
       status.textContent = t("clearingRun");
@@ -1987,6 +1990,7 @@ async function payAndStart() {
           /user rejected|user denied|rejected the request/i.test(em);
         if (em === "NO_LIM") status.textContent = t("noLim");
         else if (em === "BANNED") status.textContent = t("banned");
+        else if (em === "FLOOR_DUE") status.textContent = t("floorDue");
         else if (em === "ACTIVE_RUN") status.textContent = t("activeRun");
         else if (rej2) status.textContent = t("txRejected");
         else status.textContent = t("txFail");
@@ -2237,7 +2241,9 @@ function startRun(tier, teach, freeRun) {
   }
   $("hudTier").textContent = `${tierText(tier.id).name} · ${tier.cost} LIM`;
   $("rebateBar").style.width = "0%";
-  $("hudRebate").textContent = `0.00/${payoutCap(tier.cost)} LIM`;
+  $("rebateBar")?.parentElement?.classList.remove("to-floor");
+  paintHudLim();
+  $("hudFloorChip")?.classList.add("hidden");
   if ($("hudBonus")) $("hudBonus").textContent = fmtRewardPct(window._rewardBps || 10500);
   const friendChip = $("hudFriend");
   if (friendChip) friendChip.classList.toggle("hidden", !run.friend);
@@ -2302,6 +2308,43 @@ function placeCoin(run, x, y, amount, extra) {
 
 function limCap(run) {
   return payoutCap(run.tier.cost);
+}
+
+function paintHudLim() {
+  if (!run) return;
+  const ticket = Number(run.tier.cost) || 0;
+  const cap = limCap(run);
+  const got = Number(run.collected) || 0;
+  const keep = ticket > 0 ? Math.min(got, ticket) : got;
+  const extra = ticket > 0 ? Math.max(0, got - ticket) : 0;
+  const extraCap = Math.max(0, cap - ticket);
+  const grab = $("hudRebate");
+  const floorChip = $("hudFloorChip");
+  const floorAmt = $("hudFloorAmt");
+  const bar = $("rebateBar");
+  const barWrap = bar?.parentElement;
+  if (run.free) {
+    if (grab) grab.textContent = `${got.toFixed(2)}/${cap}`;
+    if (floorChip) floorChip.classList.add("hidden");
+    if (bar) bar.style.width = `${Math.min(100, cap > 0 ? (got / cap) * 100 : 0)}%`;
+    barWrap?.classList.remove("to-floor");
+    return;
+  }
+  if (grab) grab.textContent = `${keep.toFixed(2)}/${ticket}`;
+  if (floorChip && floorAmt) {
+    const show = extra > 0 || Boolean(run.overtime);
+    floorChip.classList.toggle("hidden", !show);
+    floorAmt.textContent = `+${extra.toFixed(2)}`;
+  }
+  if (bar) {
+    if (got <= ticket || extraCap <= 0) {
+      bar.style.width = `${Math.min(100, ticket > 0 ? (keep / ticket) * 100 : 0)}%`;
+      barWrap?.classList.remove("to-floor");
+    } else {
+      bar.style.width = `${Math.min(100, (extra / extraCap) * 100)}%`;
+      barWrap?.classList.add("to-floor");
+    }
+  }
 }
 
 function canSpawnLim(run) {
@@ -2899,10 +2942,7 @@ function tick() {
   if (run.flash > 0) run.flash -= 1;
   if (run.t - (run.lastJumpT || 0) < 96) addRaw(0.22);
   if ((run.t & 3) === 0) {
-    const cap = limCap(run);
-    const pct = (run.collected / cap) * 100;
-    $("hudRebate").textContent = `${run.collected.toFixed(3)}/${cap} LIM`;
-    $("rebateBar").style.width = `${Math.min(100, pct)}%`;
+    paintHudLim();
     $("hudScore").textContent = String(boardScore());
   }
   if (!run.tutorial) {
@@ -2976,90 +3016,128 @@ function aabb(x, y, w, h, x2, y2, w2, h2) {
   return x < x2 + w2 && x + w > x2 && y < y2 + h2 && y + h > y2;
 }
 
-function worldPal(night, veil) {
+function worldPal(dusk, veil) {
+  if (dusk) {
+    return {
+      skyTop: veil ? "#e8b89a" : "#f0b478",
+      skyMid: veil ? "#efc4a0" : "#f6c090",
+      skyHor: veil ? "#f0c8a8" : "#f0a070",
+      far: "#8a746c",
+      farHi: "#b89888",
+      mid: "#6e7a62",
+      midHi: "#9aaa78",
+      near: "#5a6e52",
+      bush: "#3d7a48",
+      bushHi: "#e0b45a",
+      cloud: "#ffe8c8",
+      dirt: "#c4a07a",
+      dirtMid: "#a88060",
+      dirtDk: "#8a6448",
+      grass: "#4a9a52",
+      grassHi: "#8ed46a",
+      lip: "#e0b45a",
+      pit: "#8a7060",
+      pit2: "#6a5040",
+    };
+  }
   return {
-    skyTop: veil ? "#c5d2e4" : "#cfe0f2",
-    skyMid: veil ? "#d7e2ee" : "#dde8f4",
-    skyHor: veil ? "#efe3cf" : "#f6ead4",
-    far: "#b7c6b4",
-    farHi: "#d2ddd0",
-    mid: "#9eb49a",
-    midHi: "#c3d2be",
-    near: "#88a384",
-    bush: "#5f9a62",
-    bushHi: "#d4b45a",
-    cloud: "#fffef8",
-    dirt: "#cbb392",
-    dirtMid: "#b99a78",
-    dirtDk: "#9e8060",
-    grass: "#6fb86a",
-    grassHi: "#a4dc86",
-    lip: "#d4b45a",
-    pit: "#c4b49c",
-    pit2: "#a89478",
+    skyTop: veil ? "#c5d8ee" : "#b8d6f4",
+    skyMid: veil ? "#d7e4f2" : "#d2e6f8",
+    skyHor: veil ? "#f0e4d0" : "#f8ead0",
+    far: "#9eb8a8",
+    farHi: "#c8dcc8",
+    mid: "#7fa882",
+    midHi: "#b4d0a8",
+    near: "#6a9870",
+    bush: "#3f8a4a",
+    bushHi: "#c8dc6a",
+    cloud: "#fffdf8",
+    dirt: "#d4b48c",
+    dirtMid: "#b8946c",
+    dirtDk: "#8e6c48",
+    grass: "#58b05a",
+    grassHi: "#9ee078",
+    lip: "#e0c46a",
+    pit: "#c8b49a",
+    pit2: "#a08868",
   };
 }
 
 function fillHill(x, baseY, w, h, color, hi) {
-  const step = liteDraw() ? 8 : 4;
+  const cx = x + w / 2;
+  ctx.beginPath();
+  ctx.ellipse(cx, baseY, Math.max(8, w / 2), Math.max(6, h), 0, Math.PI, 0, true);
   ctx.fillStyle = color;
-  for (let i = 0; i < h; i += step) {
-    const t = i / h;
-    const half = (w / 2) * Math.sqrt(Math.max(0, 1 - t * t));
-    ctx.fillRect(
-      Math.round(x + w / 2 - half),
-      Math.round(baseY - i - step),
-      Math.max(2, Math.round(half * 2)),
-      step + 1,
-    );
-  }
+  ctx.fill();
   if (hi) {
+    ctx.save();
+    ctx.globalAlpha = 0.28;
+    ctx.beginPath();
+    ctx.ellipse(cx - w * 0.14, baseY - h * 0.12, w * 0.16, h * 0.52, 0, Math.PI, 0, true);
     ctx.fillStyle = hi;
-    const hiStep = step + 2;
-    for (let i = Math.floor(h * 0.28); i < h * 0.82; i += hiStep) {
-      const t = i / h;
-      const half = (w / 2) * Math.sqrt(Math.max(0, 1 - t * t));
-      ctx.fillRect(
-        Math.round(x + w / 2 - half),
-        Math.round(baseY - i),
-        Math.max(2, Math.round(half * 0.22)),
-        2,
-      );
-    }
+    ctx.fill();
+    ctx.restore();
   }
 }
 
 function drawPixelCloud(x, y, s, color) {
-  ctx.fillStyle = "rgba(10, 20, 36, 0.18)";
-  ctx.fillRect(x + 4 * s, y + 8 * s, 24 * s, 6 * s);
+  ctx.fillStyle = "rgba(28, 40, 64, 0.12)";
+  ctx.beginPath();
+  ctx.ellipse(x + 16 * s, y + 11 * s, 22 * s, 6 * s, 0, 0, Math.PI * 2);
+  ctx.fill();
   ctx.fillStyle = color;
-  ctx.fillRect(x, y, 26 * s, 10 * s);
-  ctx.fillRect(x + 8 * s, y - 6 * s, 16 * s, 10 * s);
-  ctx.fillRect(x + 18 * s, y - 2 * s, 12 * s, 8 * s);
-  ctx.fillRect(x - 4 * s, y + 2 * s, 10 * s, 6 * s);
-  ctx.fillStyle = "rgba(255, 255, 255, 0.35)";
-  ctx.fillRect(x + 10 * s, y - 4 * s, 8 * s, 3 * s);
+  ctx.beginPath();
+  ctx.ellipse(x + 14 * s, y + 6 * s, 18 * s, 8 * s, 0, 0, Math.PI * 2);
+  ctx.ellipse(x + 5 * s, y + 8 * s, 10 * s, 6 * s, 0, 0, Math.PI * 2);
+  ctx.ellipse(x + 24 * s, y + 7 * s, 11 * s, 7 * s, 0, 0, Math.PI * 2);
+  ctx.ellipse(x + 15 * s, y + 1 * s, 9 * s, 6 * s, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = "rgba(255, 255, 255, 0.5)";
+  ctx.beginPath();
+  ctx.ellipse(x + 12 * s, y + 1 * s, 6 * s, 3 * s, 0, 0, Math.PI * 2);
+  ctx.fill();
 }
 
 function drawBush(x, y, pal) {
+  ctx.fillStyle = "rgba(0,0,0,0.16)";
+  ctx.beginPath();
+  ctx.ellipse(x + 14, y - 2, 16, 4, 0, 0, Math.PI * 2);
+  ctx.fill();
   ctx.fillStyle = pal.bush;
-  ctx.fillRect(x, y - 12, 28, 12);
-  ctx.fillRect(x + 6, y - 22, 16, 12);
-  ctx.fillRect(x + 14, y - 18, 18, 12);
-  ctx.fillRect(x - 4, y - 10, 12, 10);
+  ctx.beginPath();
+  ctx.ellipse(x + 12, y - 10, 14, 10, 0, 0, Math.PI * 2);
+  ctx.ellipse(x + 22, y - 12, 10, 9, 0, 0, Math.PI * 2);
+  ctx.ellipse(x + 4, y - 9, 9, 8, 0, 0, Math.PI * 2);
+  ctx.fill();
   ctx.fillStyle = pal.bushHi;
-  ctx.fillRect(x + 8, y - 18, 4, 4);
-  ctx.fillRect(x + 18, y - 12, 3, 3);
+  ctx.globalAlpha = 0.45;
+  ctx.beginPath();
+  ctx.ellipse(x + 8, y - 14, 4, 3, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.globalAlpha = 1;
 }
 
 function drawTree(x, y, pal) {
-  ctx.fillStyle = "#3a2418";
-  ctx.fillRect(x + 7, y - 24, 6, 24);
+  ctx.fillStyle = "rgba(0,0,0,0.16)";
+  ctx.beginPath();
+  ctx.ellipse(x + 11, y - 2, 10, 4, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = "#4a2e1c";
+  ctx.fillRect(x + 8, y - 28, 6, 28);
+  ctx.fillStyle = "#6e4430";
+  ctx.fillRect(x + 11, y - 28, 2, 26);
   ctx.fillStyle = pal.bush;
-  ctx.fillRect(x, y - 40, 20, 18);
-  ctx.fillRect(x + 4, y - 50, 14, 14);
+  ctx.beginPath();
+  ctx.ellipse(x + 11, y - 42, 15, 17, 0, 0, Math.PI * 2);
+  ctx.ellipse(x + 2, y - 34, 9, 10, 0, 0, Math.PI * 2);
+  ctx.ellipse(x + 20, y - 34, 9, 10, 0, 0, Math.PI * 2);
+  ctx.fill();
   ctx.fillStyle = pal.bushHi;
-  ctx.fillRect(x + 6, y - 44, 4, 4);
+  ctx.globalAlpha = 0.4;
+  ctx.beginPath();
+  ctx.ellipse(x + 6, y - 48, 6, 6, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.globalAlpha = 1;
 }
 
 function drawPipe(o, night) {
@@ -3087,6 +3165,8 @@ function drawPipe(o, night) {
   ctx.fillRect(x - 5, y, w + 10, capH);
   ctx.fillStyle = "#ffe08a";
   ctx.fillRect(x - 5, y, w + 10, 3);
+  ctx.fillStyle = "rgba(255, 255, 255, 0.28)";
+  ctx.fillRect(x + w - 5, y + capH, 3, Math.max(6, h - capH - 6));
   ctx.fillStyle = "#c49a4a";
   ctx.fillRect(x - 5, y + capH - 3, w + 10, 3);
   ctx.fillStyle = "#152238";
@@ -3117,50 +3197,38 @@ function drawBrick(o, night) {
   ctx.fillRect(x + 4, y + 4, 4, 4);
 }
 
-function drawSky(pal, night, W, H) {
+function drawSky(pal, dusk, W, H) {
   const g = ctx.createLinearGradient(0, 0, 0, H);
   g.addColorStop(0, pal.skyTop);
-  g.addColorStop(0.42, pal.skyMid);
-  g.addColorStop(0.72, pal.skyHor);
-  g.addColorStop(1, night ? "#d8c4a8" : "#e8c48a");
+  g.addColorStop(0.38, pal.skyMid);
+  g.addColorStop(0.68, pal.skyHor);
+  g.addColorStop(1, dusk ? "#e88858" : "#f0c888");
   ctx.fillStyle = g;
   ctx.fillRect(0, 0, W, H);
-  if (night) {
-    const stars = liteDraw() ? 18 : 56;
-    for (let i = 0; i < stars; i++) {
-      const sx = (((i * 97 - run.scroll * 0.04) % W) + W) % W;
-      const sy = 12 + (i * 37) % 176;
-      ctx.fillStyle = i % 6 === 0 ? "#ffe08a" : "rgba(214,230,255,0.7)";
-      ctx.fillRect(sx, sy, i % 7 === 0 ? 2 : 1, i % 7 === 0 ? 2 : 1);
-    }
-    ctx.fillStyle = "rgba(230, 184, 76, 0.18)";
-    ctx.fillRect(724, 32, 48, 48);
-    ctx.fillStyle = "#ffe08a";
-    ctx.fillRect(736, 44, 28, 28);
-    ctx.fillStyle = pal.skyTop;
-    ctx.fillRect(746, 48, 20, 20);
-  } else {
-    const sunX = 780;
-    const sunY = 48;
-    ctx.fillStyle = "rgba(255, 210, 80, 0.16)";
-    ctx.fillRect(sunX - 28, sunY - 28, 76, 76);
-    ctx.fillStyle = "rgba(255, 210, 80, 0.28)";
-    ctx.fillRect(sunX - 10, sunY - 10, 42, 42);
-    ctx.fillStyle = "#f0c14a";
-    ctx.fillRect(sunX, sunY, 24, 24);
-    ctx.fillStyle = "#ffe08a";
-    ctx.fillRect(sunX + 6, sunY + 6, 10, 10);
-    ctx.fillStyle = "rgba(230, 184, 76, 0.45)";
-    ctx.fillRect(sunX - 8, sunY + 8, 8, 2);
-    ctx.fillRect(sunX + 24, sunY + 8, 8, 2);
-    ctx.fillRect(sunX + 10, sunY - 10, 2, 8);
-    for (let i = 0; i < 3; i++) {
-      const bx = (((i * 280 - run.scroll * 0.05) % (W + 80)) + W + 80) % (W + 80) - 20;
-      ctx.fillStyle = "#3a5070";
-      ctx.fillRect(bx, 92 + i * 10, 10, 3);
-      ctx.fillRect(bx + 8, 90 + i * 10, 10, 3);
-    }
-  }
+  const sunX = dusk ? 640 : 790;
+  const sunY = dusk ? 92 : 52;
+  const glow = dusk ? "255, 160, 70" : "255, 210, 80";
+  ctx.fillStyle = `rgba(${glow}, 0.16)`;
+  ctx.beginPath();
+  ctx.arc(sunX, sunY, 54, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = `rgba(${glow}, 0.28)`;
+  ctx.beginPath();
+  ctx.arc(sunX, sunY, 32, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = dusk ? "#ffc070" : "#ffe08a";
+  ctx.beginPath();
+  ctx.arc(sunX, sunY, 18, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = dusk ? "#ffe0a8" : "#fff6c8";
+  ctx.beginPath();
+  ctx.arc(sunX - 5, sunY - 5, 6, 0, Math.PI * 2);
+  ctx.fill();
+  const haze = ctx.createLinearGradient(0, H * 0.42, 0, H * 0.72);
+  haze.addColorStop(0, "rgba(255, 255, 255, 0)");
+  haze.addColorStop(1, dusk ? "rgba(255, 170, 90, 0.22)" : "rgba(255, 236, 200, 0.18)");
+  ctx.fillStyle = haze;
+  ctx.fillRect(0, H * 0.42, W, H * 0.3);
 }
 
 function drawParallax(pal, night, W) {
@@ -3184,11 +3252,11 @@ function drawParallax(pal, night, W) {
       const id = base + i;
       const sx = id * span - off;
       const hh = 22 + hash11(id * 13) * 40;
-      ctx.fillStyle = "#0a1420";
+      ctx.fillStyle = "#2a1c18";
       ctx.fillRect(sx, 300 - hh, 18, hh);
-      ctx.fillStyle = "#1a2838";
+      ctx.fillStyle = "#3a2820";
       ctx.fillRect(sx + 18, 308 - hh * 0.7, 10, hh * 0.7);
-      ctx.fillStyle = "#e6b84c";
+      ctx.fillStyle = "#ffc070";
       if (hash11(id + 3) > 0.38) ctx.fillRect(sx + 4, 300 - hh + 8, 3, 3);
       if (hash11(id + 7) > 0.5) ctx.fillRect(sx + 10, 300 - hh + 16, 3, 3);
       if (hash11(id + 11) > 0.55) ctx.fillRect(sx + 21, 308 - hh * 0.7 + 10, 3, 3);
@@ -3295,6 +3363,10 @@ function drawGround(pal, W, H) {
     }
     sx = e;
   }
+  ctx.fillStyle = pal.dirtDk;
+  ctx.fillRect(0, H - 44, W, 44);
+  ctx.fillStyle = "rgba(40, 24, 12, 0.2)";
+  ctx.fillRect(0, H - 14, W, 14);
 }
 
 function drawLight(o, night) {
@@ -3414,7 +3486,9 @@ function drawCat() {
   ctx.translate(PLAYER_SX, run.y + bob);
   ctx.scale(2 - stretch, stretch);
   if (imgCat.complete && imgCat.naturalWidth) {
+    ctx.imageSmoothingEnabled = true;
     ctx.drawImage(imgCat, -24, -30, 48, 48);
+    ctx.imageSmoothingEnabled = false;
   } else {
     ctx.fillStyle = "#c49a4a";
     ctx.fillRect(-16, -10, 32, 24);
@@ -3483,12 +3557,12 @@ function drawPopped() {
 function draw() {
   const W = canvas.width;
   const H = canvas.height;
-  const night = run.night;
+  const dusk = Boolean(run.overtime);
   const veil = run.invuln > 0;
-  const pal = worldPal(night, veil);
+  const pal = worldPal(dusk, veil);
   const lite = liteDraw();
-  drawSky(pal, night, W, H);
-  drawParallax(pal, night, W);
+  drawSky(pal, dusk, W, H);
+  drawParallax(pal, dusk, W);
   drawGround(pal, W, H);
   drawLedges(pal);
 
@@ -3496,10 +3570,10 @@ function draw() {
     if (o.x < -90 || o.x > W + 90) continue;
     if (o.kind === "coin" && !o.hit) drawCoin(o);
     if (o.kind === "beam") {
-      if (o.style === "brick") drawBrick(o, night);
-      else drawPipe(o, night);
+      if (o.style === "brick") drawBrick(o, dusk);
+      else drawPipe(o, dusk);
     }
-    if (o.kind === "light") drawLight(o, night);
+    if (o.kind === "light") drawLight(o, dusk);
   }
 
   drawFx();
@@ -3551,11 +3625,78 @@ function finish(whyKey) {
     burnHash: "",
     tx: "",
     bps: window._rewardBps || 10500,
-    payout: displayPayout(got, ticket, window._rewardBps || 10500),
+    payout: displayPayout(got, ticket, window._rewardBps || 10500, Boolean(run.free)),
   };
   show(over);
   refreshOver();
   settleOnchain(got, ticket, dailyScore);
+}
+
+function paintSettledTx(el, rec) {
+  if (!rec?.hash) {
+    el.textContent = "";
+    return;
+  }
+  lastFinish.tx = rec.hash;
+  lastFinish.burnHash = rec.burned > 0n ? rec.hash : "";
+  if (rec.burned > 0n) lastFinish.burned = Number(ethers.formatUnits(rec.burned, 18));
+  if (rec.payout != null && rec.payout > 0n) {
+    lastFinish.payout = Number(ethers.formatUnits(rec.payout, 18));
+  }
+  const fair = displayPayout(
+    lastFinish.got,
+    lastFinish.ticket,
+    lastFinish.bps || window._rewardBps || 10500,
+    lastFinish.free,
+  );
+  if (Number(lastFinish.payout) + 0.05 < Number(fair)) {
+    showToast(
+      t("settleShortfall", {
+        fair: Number(fair).toFixed(2),
+        paid: Number(lastFinish.payout).toFixed(2),
+      }),
+    );
+  }
+  const settleLink = `<a class="tx-view" href="${CatboxChain.txUrl(rec.hash)}" target="_blank" rel="noopener">${t("viewTx")}</a>`;
+  const paidLim = CatboxChain.formatLim(rec.payout != null ? rec.payout : ethers.parseUnits(String(lastFinish.payout || 0), 18));
+  const floorLink = rec.floorHash
+    ? ` · <a class="tx-view" href="${CatboxChain.txUrl(rec.floorHash)}" target="_blank" rel="noopener">${t("floorSent")}</a>`
+    : "";
+  const extraLink = rec.extraHash
+    ? ` · <a class="tx-view" href="${CatboxChain.txUrl(rec.extraHash)}" target="_blank" rel="noopener">+extra</a>`
+    : "";
+  el.classList.add("settled");
+  el.style.cursor = "";
+  el.onclick = null;
+  el.innerHTML = `<span class="ok">${t("settledTx", { n: paidLim })}</span> · ${settleLink}${floorLink}${extraLink}`;
+  refreshOver();
+}
+
+async function retryFloorOverage(el) {
+  if (!el || !window.CatboxChain) return;
+  el.onclick = null;
+  el.textContent = t("settlingFloor");
+  try {
+    const hash = await CatboxChain.clearFloorOverage();
+    lastFinish.floorHash = hash || lastFinish.floorHash;
+    if (lastFinish.ticket != null) lastFinish.payout = lastFinish.ticket;
+    el.classList.add("settled");
+    el.style.cursor = "";
+    const settleLink = lastFinish.tx
+      ? ` · <a class="tx-view" href="${CatboxChain.txUrl(lastFinish.tx)}" target="_blank" rel="noopener">${t("viewTx")}</a>`
+      : "";
+    const floorLink = hash
+      ? ` · <a class="tx-view" href="${CatboxChain.txUrl(hash)}" target="_blank" rel="noopener">${t("floorSent")}</a>`
+      : "";
+    el.innerHTML = `<span class="ok">${t("settledTx", { n: String(lastFinish.payout) })}</span>${settleLink}${floorLink}`;
+    refreshOver();
+    window._settleBusy = false;
+  } catch (_) {
+    el.classList.remove("settled");
+    el.textContent = t("floorDue");
+    el.style.cursor = "pointer";
+    el.onclick = () => retryFloorOverage(el);
+  }
 }
 
 async function settleOnchain(got, ticket, score) {
@@ -3565,46 +3706,38 @@ async function settleOnchain(got, ticket, score) {
   window._settleBusy = true;
   try {
     el.classList.remove("settled");
+    el.onclick = null;
     el.textContent = t("settling");
     const wait = 5500 - (Date.now() - (run?.startedMs || Date.now()));
     if (wait > 0) await new Promise((r) => setTimeout(r, wait));
-    const rec = await CatboxChain.settleRun(got, ticket, score, () => {
-      el.textContent = t("settlingExtra");
-    });
-    if (rec?.hash) {
-      lastFinish.tx = rec.hash;
-      lastFinish.burnHash = rec.burned > 0n ? rec.hash : "";
-      if (rec.burned > 0n) lastFinish.burned = Number(ethers.formatUnits(rec.burned, 18));
-      if (rec.payout != null && rec.payout > 0n) {
-        lastFinish.payout = Number(ethers.formatUnits(rec.payout, 18));
-      }
-      const fair = displayPayout(got, ticket, lastFinish.bps || window._rewardBps || 10500);
-      if (Number(lastFinish.payout) + 0.05 < Number(fair)) {
-        showToast(
-          t("settleShortfall", {
-            fair: Number(fair).toFixed(2),
-            paid: Number(lastFinish.payout).toFixed(2),
-          }),
-        );
-      }
-      const settleLink = `<a class="tx-view" href="${CatboxChain.txUrl(rec.hash)}" target="_blank" rel="noopener">${t("viewTx")}</a>`;
-      const paidLim = CatboxChain.formatLim(rec.payout != null ? rec.payout : ethers.parseUnits(String(lastFinish.payout || 0), 18));
-      el.classList.add("settled");
-      el.innerHTML = rec.extraHash
-        ? `<span class="ok">${t("settledTx", { n: paidLim })}</span> · ${settleLink} · <a class="tx-view" href="${CatboxChain.txUrl(rec.extraHash)}" target="_blank" rel="noopener">+extra</a>`
-        : `<span class="ok">${t("settledTx", { n: paidLim })}</span> · ${settleLink}`;
-      refreshOver();
-    } else {
-      el.textContent = "";
-    }
+    const rec = await CatboxChain.settleRun(
+      got,
+      ticket,
+      score,
+      () => {
+        el.textContent = t("settlingExtra");
+      },
+      () => {
+        el.textContent = t("settlingFloor");
+      },
+    );
+    paintSettledTx(el, rec);
     await syncOnchainPool();
     refreshInviteUi();
     refreshClaimUi();
     await refreshFreeUi();
     pullLiveBoards(true);
+    window._settleBusy = false;
   } catch (e) {
+    if (e?.message === "FLOOR_DUE") {
+      if (e.settleHash) lastFinish.tx = e.settleHash;
+      el.classList.remove("settled");
+      el.textContent = t("floorDue");
+      el.style.cursor = "pointer";
+      el.onclick = () => retryFloorOverage(el);
+      return;
+    }
     el.textContent = t("txFail");
-  } finally {
     window._settleBusy = false;
   }
 }
