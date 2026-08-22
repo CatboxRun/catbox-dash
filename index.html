@@ -15,12 +15,12 @@
     <link rel="apple-touch-icon" href="./assets/favicon.png?v=6" />
     <title>CATBOX DASH · LIMINAL</title>
     <meta property="og:title" content="CATBOX DASH · 100,000 LIM AIRDROP" />
-    <meta property="og:description" content="Play to get it. Jump for LIM coins — keep what you catch." />
+    <meta property="og:description" content="Jump for LIM coins. Ticket back to wallet — overtime grows today's floor." />
     <meta property="og:image" content="https://catboxrun.github.io/catbox-dash/lim-airdrop-100000-poster.png" />
     <meta property="og:url" content="https://catboxrun.github.io/catbox-dash/" />
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="CATBOX DASH · 100,000 LIM AIRDROP" />
-    <meta name="twitter:description" content="Play to get it. Jump for LIM coins — keep what you catch." />
+    <meta name="twitter:description" content="Jump for LIM coins. Ticket back to wallet — overtime grows today's floor." />
     <meta name="twitter:image" content="https://catboxrun.github.io/catbox-dash/lim-airdrop-100000-poster.png" />
     <script>
       (function () {
@@ -44,7 +44,7 @@
       href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@500;700&family=Noto+Sans+SC:wght@500;700&family=Noto+Sans+JP:wght@500;700&family=Noto+Sans+KR:wght@500;700&family=Noto+Sans+Thai:wght@500;700&family=Press+Start+2P&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="./styles.css?v=60" />
+    <link rel="stylesheet" href="./styles.css?v=61" />
   </head>
   <body>
     <div class="crt">
@@ -94,7 +94,7 @@
               <div class="hero-copy">
                 <img class="hero-mascot" src="./assets/hero-cat.png?v=3" alt="Catbox" />
                 <div class="hero-text">
-                  <h1 data-i18n="hero">JUMP FOR THE COINS.<br />KEEP WHAT YOU CATCH.</h1>
+                  <h1 data-i18n="hero">JUMP FOR THE COINS.<br />SEED TODAY'S FLOOR.</h1>
                 </div>
               </div>
             </section>
@@ -130,7 +130,7 @@
 
             <p class="play-now" data-i18n="playNow">PICK A TICKET</p>
             <p class="free-offer" data-i18n="freeOffer">New wallets play two 1 LIM SCOUT runs free. Jump, catch coins, keep them.</p>
-            <p class="reward-line" data-i18n="inviteBoost">Caught LIM × 105%+. Extra over the ticket goes to today's floor (VAULT 15 → keep 10). Friend plays: +5%. Extra run: +0.1%. Reward % cap 200%.</p>
+            <p class="reward-line" data-i18n="inviteBoost">Caught LIM × 105%+ · Friend plays +5% · Extra run +0.1% · Cap 200% · Overtime seeds today's floor (VAULT 15 → 10 + 5 to floor)</p>
             <div class="tickets" id="tickets"></div>
             <button type="button" class="rules-jump" id="openRules" data-i18n="openRules">HOW TO PLAY</button>
             <div class="crew" id="playCrew">
@@ -183,18 +183,18 @@
                   </li>
                   <li>
                     <strong data-i18n="ruleStep2Title">② Overtime</strong>
-                    <p data-i18n="ruleStep2Body">Keep running after the ticket is in. Extra over the ticket goes to today's floor; you keep the ticket. SCOUT (1 LIM) caps at ×2 (keep 1, 1 to floor). Other tickets cap at ×1.5 (VAULT 15 → keep 10, 5 to floor).</p>
+                    <p data-i18n="ruleStep2Body">Keep running after the ticket is in. Ticket LIM is heading back to your wallet. Overtime LIM grows today's floor — claim your share at midnight. SCOUT (1 LIM) caps at ×2 (1 to wallet, 1 to floor). Other tickets cap at ×1.5 (VAULT 15 → 10 to wallet, 5 to floor).</p>
                   </li>
                   <li>
                     <strong data-i18n="ruleStep3Title">③ Settle</strong>
-                    <p data-i18n="ruleStep3Body">The run settles on-chain. Ticket LIM returns to your wallet. Extra over the ticket is sent to today's equal-split floor. Check the tx on BSCScan.</p>
+                    <p data-i18n="ruleStep3Body">The run settles on-chain. Ticket LIM lands in your wallet. Overtime LIM grows today's floor — claim your share at midnight. Your wallet may ask up to 3 times in a row — confirm each one. Check the tx on BSCScan.</p>
                   </li>
                 </ol>
               </section>
 
               <section class="rules-block">
                 <h3 data-i18n="ruleBoostTitle">📈 Settle bonus</h3>
-                <p class="rules-intro" data-i18n="ruleInvitePay">Caught LIM × 105%+. Invites and extra runs are separate, one reward % cap at 200%. You keep the ticket. Extra over the ticket goes to today's equal-split floor. Caps: 1 LIM ×2 (keep 1), others ×1.5 (VAULT 15 → keep 10, 5 to floor).</p>
+                <p class="rules-intro" data-i18n="ruleInvitePay">Caught LIM × 105%+. Invites and extra runs are separate, one reward % cap at 200%. Ticket LIM returns to your wallet. Overtime grows today's equal-split floor — settle today, claim at midnight. Caps: 1 LIM ×2 (1 to wallet, 1 to floor), others ×1.5 (VAULT 15 → 10 to wallet, 5 to floor).</p>
               </section>
 
               <section class="rules-block">
@@ -210,7 +210,7 @@
 
               <section class="rules-block">
                 <h3 data-i18n="ruleFloorTitle">📊 Floor pool</h3>
-                <p class="rules-intro" data-i18n="ruleFloorBody">Separate from the 50% daily score pool. Paid overtime (LIM over the ticket) is sent here. One equal share per address that finishes a settled run today. Claim at Singapore midnight with CLAIM FLOOR. Unclaimed leftover rolls into the next day's floor pool.</p>
+                <p class="rules-intro" data-i18n="ruleFloorBody">Separate from the 50% daily score pool. Paid overtime grows this pool. One equal share per address that finishes a settled run today. Claim at Singapore midnight with CLAIM FLOOR. Unclaimed leftover rolls into the next day's floor pool.</p>
               </section>
 
               <section class="rules-block">
@@ -219,11 +219,13 @@
                   <dt data-i18n="ruleFaq1Q">Out of free runs?</dt>
                   <dd data-i18n="ruleFaq1A">Buy SCOUT (1 LIM) or any other ticket with your LIM.</dd>
                   <dt data-i18n="ruleFaq2Q">Where does overtime LIM go?</dt>
-                  <dd data-i18n="ruleFaq2A">You keep the ticket. Extra over the ticket goes to today's equal-split floor. Invite / extra-run boosts still apply on-chain, then anything above the ticket is sent to the floor.</dd>
-                  <dt data-i18n="ruleFaq6Q">Is 200% the max I can take home?</dt>
-                  <dd data-i18n="ruleFaq6A">200% is the settle bonus rate cap. You still only take home the ticket. Extra over the ticket (VAULT 15 → 5 LIM) goes to today's floor.</dd>
+                  <dd data-i18n="ruleFaq2A">Overtime LIM seeds today's equal-split floor. Ticket LIM is already back in your wallet. Boosts still count for ranking. Settle today, then claim your floor share at Singapore midnight.</dd>
+                  <dt data-i18n="ruleFaq8Q">Why does my wallet pop up three times?</dt>
+                  <dd data-i18n="ruleFaq8A">That's settle after each run. Up to three confirms in a row: ticket LIM back to your wallet, then overtime into today's floor. Confirm each one — don't cancel.</dd>
+                  <dt data-i18n="ruleFaq6Q">Does 200% mean 200% LIM in my wallet?</dt>
+                  <dd data-i18n="ruleFaq6A">200% is the ranking rate cap. Ticket LIM returns to your wallet. Overtime (VAULT 15 → 5 LIM) grows today's floor — play today and claim your share at midnight.</dd>
                   <dt data-i18n="ruleFaq7Q">What is the floor pool?</dt>
-                  <dd data-i18n="ruleFaq7A">An equal-split bonus pool — not the 50% score board. Play and settle today to get a share. Pool grows as more addresses join (500 LIM seeded now). Claim at Singapore midnight with CLAIM FLOOR. Unclaimed leftover rolls into the next day's pool.</dd>
+                  <dd data-i18n="ruleFaq7A">Equal-split bonus pool — not the 50% score board. Paid overtime grows this pool. Settle a run today to earn a share. Claim at Singapore midnight with CLAIM FLOOR. If you miss that window, your share stays in the pool for the next day's players.</dd>
                   <dt data-i18n="ruleFaq3Q">Why can't I claim?</dt>
                   <dd data-i18n="ruleFaq3A">Usually outside the claim window (Singapore midnight hour), or nothing pending yet.</dd>
                   <dt data-i18n="ruleFaq4Q">Where does LIM come from / how do I sell?</dt>
@@ -291,7 +293,7 @@
               <img class="invite-ico" src="./assets/icon-invite.png?v=2" alt="" />
               <div class="invite-copy">
                 <p class="stat-k" data-i18n="inviteTitle">INVITE FRIENDS</p>
-                <p class="invite-lead" data-i18n="inviteLead">Share your link. Each friend who plays adds +5%. Extra runs +0.1%. Boost 105%–200%. You keep the ticket; extra over the ticket goes to today's equal-split floor.</p>
+                <p class="invite-lead" data-i18n="inviteLead">Share your link. Each friend who plays adds +5%. Extra runs +0.1%. Boost 105%–200%. Ticket LIM returns to your wallet. Overtime grows today's floor — claim your share at midnight.</p>
                 <div class="crew crew-invite">
                   <p class="crew-k" data-i18n="crewTitle">CREW · 4 FRIENDS = 125%</p>
                   <div class="crew-slots" data-crew-slots></div>
@@ -404,11 +406,11 @@
           </div>
         </div>
         <p id="payCopy"></p>
-        <p class="eligible" data-i18n="eligible">Catch the ticket — this run burns nothing. Extra over the ticket goes to today's floor. Missed: daily 50% · invite 20% · burn 30%.</p>
+        <p class="eligible" data-i18n="eligible">Catch the ticket — this run burns nothing. Overtime grows today's floor. Missed: daily 50% · invite 20% · burn 30%.</p>
         <div class="meter-preview">
           <img src="./assets/hero-cat.png?v=3" alt="" />
           <img class="coin-logo" src="./assets/coin.png?v=4" alt="" />
-          <span data-i18n="payHint">Ticket is chopped into coins. Catch the ticket to keep it. Extra over the ticket goes to today's floor.</span>
+          <span data-i18n="payHint">Ticket is chopped into coins. Catch it back to your wallet. Keep running to grow today's floor.</span>
         </div>
         <p class="tx-line" id="payStatus"></p>
         <div class="row">
@@ -449,6 +451,7 @@
           <img class="coin-logo" src="./assets/coin.png?v=4" alt="" />
         </div>
         <p id="overWhy" class="over-why"></p>
+        <p class="over-settle-hint" id="overSettleHint" data-i18n="settleWalletHint">After this run, your wallet may ask up to 3 times. Confirm each one — ticket LIM back, then overtime seeds today's floor.</p>
         <div class="result" id="overResult"></div>
         <p class="posted" id="overPosted"></p>
         <div id="overShare" class="over-share hidden">
@@ -534,8 +537,8 @@
     <script src="./config.js?v=40"></script>
     <script src="https://cdn.jsdelivr.net/npm/ethers@6.13.5/dist/ethers.umd.min.js"></script>
     <script src="./chain.js?v=102"></script>
-    <script src="./i18n.js?v=111"></script>
-    <script src="./game.js?v=123"></script>
+    <script src="./i18n.js?v=115"></script>
+    <script src="./game.js?v=125"></script>
     <script src="./bgm.js?v=26"></script>
   </body>
 </html>

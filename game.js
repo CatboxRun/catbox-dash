@@ -1940,13 +1940,6 @@ async function payAndStart() {
     }
     free = freeForTier(selected);
     teach = shouldTeach(selected);
-    if (!free && typeof CatboxChain.bonusPoolAmt === "function") {
-      try {
-        const bonus = await CatboxChain.bonusPoolAmt();
-        const minKeep = ethers.parseUnits(String(Math.max(5, selected.cost)), 18);
-        if (bonus < minKeep) showToast(t("bonusPoolLow"));
-      } catch (_) {}
-    }
     const me = CatboxChain.account;
     const stuck = me ? await CatboxChain.activeRun(me) : 0n;
     if (stuck && stuck !== 0n) {
@@ -3628,8 +3621,14 @@ function finish(whyKey) {
     payout: displayPayout(got, ticket, window._rewardBps || 10500, Boolean(run.free)),
   };
   show(over);
+  showSettleWalletHint(true);
   refreshOver();
   settleOnchain(got, ticket, dailyScore);
+}
+
+function showSettleWalletHint(on) {
+  const hint = $("overSettleHint");
+  if (hint) hint.classList.toggle("hidden", !on);
 }
 
 function paintSettledTx(el, rec) {
@@ -3669,6 +3668,7 @@ function paintSettledTx(el, rec) {
   el.style.cursor = "";
   el.onclick = null;
   el.innerHTML = `<span class="ok">${t("settledTx", { n: paidLim })}</span> · ${settleLink}${floorLink}${extraLink}`;
+  showSettleWalletHint(false);
   refreshOver();
 }
 
@@ -3689,6 +3689,7 @@ async function retryFloorOverage(el) {
       ? ` · <a class="tx-view" href="${CatboxChain.txUrl(hash)}" target="_blank" rel="noopener">${t("floorSent")}</a>`
       : "";
     el.innerHTML = `<span class="ok">${t("settledTx", { n: String(lastFinish.payout) })}</span>${settleLink}${floorLink}`;
+    showSettleWalletHint(false);
     refreshOver();
     window._settleBusy = false;
   } catch (_) {
