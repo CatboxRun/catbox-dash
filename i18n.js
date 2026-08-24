@@ -201,7 +201,7 @@ const I18N = {
     tutJump: "TAP TO JUMP",
     tutJumpSub: "TAP AGAIN IN AIR · DOUBLE JUMP",
     tutCoin: "COINS = TICKET LIM",
-    tutCoinSub: "TICKET BACK · OVERTIME 50 / 50"
+    tutCoinSub: "TICKET BACK · OVERTIME 50 / 50",
     tutLight: "WALK UNDER LIGHTS",
     tutLightSub: "DON'T JUMP INTO THE BEAM",
     tutPipe: "JUMP RED PIPES & GOLD BRICKS",
@@ -215,7 +215,7 @@ const I18N = {
     howPipe: "JUMP RED PIPES",
     howGap: "JUMP GAPS",
     coinsOut: "Keep running for score — crash ends the run.",
-    coinsOutFull: "TICKET BACK · OVERTIME 50 / 50"
+    coinsOutFull: "TICKET BACK · OVERTIME 50 / 50",
     grab25: "QUARTER TICKET LOCKED",
     grab50: "HALF TICKET IN",
     grab75: "THREE QUARTERS — ONE TO GO",
@@ -534,7 +534,7 @@ const I18N = {
     tutJump: "点击跳跃",
     tutJumpSub: "空中再点一次 · 二段跳",
     tutCoin: "金币 = 门票 LIM",
-    tutCoinSub: "跳起来捡 · 门票回钱包 · 加时 50/50"
+    tutCoinSub: "跳起来捡 · 门票回钱包 · 加时 50/50",
     tutLight: "探照灯贴地走",
     tutLightSub: "别跳进光柱",
     tutPipe: "跳过红管和金砖",
@@ -548,7 +548,7 @@ const I18N = {
     howPipe: "跳过红管",
     howGap: "跳过缺口",
     coinsOut: "继续跑冲榜 · 撞上才结束",
-    coinsOutFull: "门票已回 · 加时 50% 底池 / 50% 销毁"
+    coinsOutFull: "门票已回 · 加时 50% 底池 / 50% 销毁",
     grab25: "四分之一入手",
     grab50: "半票入手",
     grab75: "还差四分之一",
@@ -735,7 +735,7 @@ const I18N = {
     tutJump: "タップでジャンプ",
     tutJumpSub: "空中でもう一度 · 二段ジャンプ",
     tutCoin: "コイン = チケット LIM",
-    tutCoinSub: "チケットはウォレットへ · 超過は 50/50"
+    tutCoinSub: "チケットはウォレットへ · 超過は 50/50",
     tutLight: "ライトの下を歩く",
     tutLightSub: "ビームに飛び込まない",
     tutPipe: "赤いパイプと金ブロックを跳ぶ",
@@ -765,10 +765,10 @@ const I18N = {
     grab50: "ハーフチケット",
     grab75: "あと1/4",
     trackHaste: "コースが加速している",
-    coinsOutFull: "チケット回収 · 超過は 50/50"
+    coinsOutFull: "チケット回収 · 超過は 50/50",
     overFullK: "チケット完走",
     overPartK: "一部回収",
-    overFullT: "オーバータイムは 50 / 50"
+    overFullT: "オーバータイムは 50 / 50",
     overPartT: "取った分をキープ",
     resultFull: "コイン {coins} · {got} LIM 取得 · {pct}% ブースト · チケット {paid} LIM はウォレットへ · オーバータイム 50% 底池 / 50% バーン（上限 {cap}）<br>LIMシャード {score}",
     resultPart: "コイン {coins} · {got} / {ticket} LIM × {pct}% = 精算 {paid} LIM<br>LIMシャード {score}<br>残り {left} → 日次 {week} / 招待 {invite} / バーン {burn}",
@@ -857,7 +857,7 @@ const I18N = {
     ruleFaq6Q: "200% が持ち帰り上限？",
     ruleFaq6A: "200% はランキング用の精算率上限。チケット LIM はウォレットへ。有料オーバータイム（VAULT 15 → 手元 10）は 50% 底池 / 50% バーン。今日プレイすれば深夜に底池の取り分を受け取れる。",
     ruleFaq7Q: "底池とは？",
-    ruleFaq7A: "均等分配のボーナスプール。50% スコア日次ボードとは別。有料オーバータイムの半分がここに入り、残り半分はバーン。今日 settle すれば1口。シンガポール 0:00 に底池受取。未受取分は翌日の底池へ繰り越し。"
+    ruleFaq7A: "均等分配のボーナスプール。50% スコア日次ボードとは別。有料オーバータイムの半分がここに入り、残り半分はバーン。今日 settle すれば1口。シンガポール 0:00 に底池受取。未受取分は翌日の底池へ繰り越し。",
     ruleFaq3Q: "受け取れないときは？",
     ruleFaq3A: "受取ウィンドウ外（シンガポール深夜1時間）か、pending がまだない。",
     ruleFaq4Q: "LIM の入手 / 売却は？",
@@ -1033,13 +1033,13 @@ const I18N = {
     boardWalletCol: "지갑",
     boardSnapNoteAt: "보드는 약 10분마다 갱신됩니다. 최근 {t}",
     boardSnapNoteStale: "보드 갱신 중… 이전 {t}",
-    rule1: "집은 티켓 LIM은 지갑으로. 티켓을 채우면 leftover 소각은 건너뜁니다. 유료 오버타임은 50% 베이스 풀 / 50% 소각. 자정에 베이스 풀 몫을 받을 수 있습니다."
+    rule1: "집은 티켓 LIM은 지갑으로. 티켓을 채우면 leftover 소각은 건너뜁니다. 유료 오버타임은 50% 베이스 풀 / 50% 소각. 자정에 베이스 풀 몫을 받을 수 있습니다.",
     rule2: "놓친 코인: 일간 50% / 초대 20% / 소각 30%",
-    rule3: "집은 LIM × 105%부터. 초대와 추가 런은 따로 쌓이고 보상% 상한 200%. 초대 1명 +5%(4명이면 초대분 125%). 추가 런마다 +0.1%. 티켓 LIM은 지갑으로. 유료 오버타임은 50% 베이스 풀 / 50% 소각. 상한: 1 LIM ×2, 나머지 ×1.5 (VAULT 15→지갑 10)."
-    ruleInvitePay: "집은 LIM × 105%부터. 초대와 추가 런은 따로, 보상% 상한 200%. 링크에서 뛴 친구 1명 +5%. 4명이면 초대분 125%. 추가 런마다 +0.1%. 티켓 LIM은 지갑으로. 유료 오버타임은 50% 베이스 풀 / 50% 소각. 상한: 1 LIM ×2, 나머지 ×1.5(VAULT 15→지갑 10)."
+    rule3: "집은 LIM × 105%부터. 초대와 추가 런은 따로 쌓이고 보상% 상한 200%. 초대 1명 +5%(4명이면 초대분 125%). 추가 런마다 +0.1%. 티켓 LIM은 지갑으로. 유료 오버타임은 50% 베이스 풀 / 50% 소각. 상한: 1 LIM ×2, 나머지 ×1.5 (VAULT 15→지갑 10).",
+    ruleInvitePay: "집은 LIM × 105%부터. 초대와 추가 런은 따로, 보상% 상한 200%. 링크에서 뛴 친구 1명 +5%. 4명이면 초대분 125%. 추가 런마다 +0.1%. 티켓 LIM은 지갑으로. 유료 오버타임은 50% 베이스 풀 / 50% 소각. 상한: 1 LIM ×2, 나머지 ×1.5(VAULT 15→지갑 10).",
     ruleBoostTitle: "📈 정산 보너스",
-    inviteBoost: "집은 LIM × 105%+ · 친구 +5% · 추가 런 +0.1% · 상한 200% · 오버타임 50% 베이스 풀 / 50% 소각 (VAULT 15→지갑 10)"
-    inviteLead: "링크를 공유하세요. 친구가 한 판 플레이할 때마다 정산 +5%. 추가 런마다 +0.1%. 보너스 105%부터 상한 200%. 티켓 LIM은 지갑으로. 유료 오버타임은 50% 베이스 풀 / 50% 소각."
+    inviteBoost: "집은 LIM × 105%+ · 친구 +5% · 추가 런 +0.1% · 상한 200% · 오버타임 50% 베이스 풀 / 50% 소각 (VAULT 15→지갑 10)",
+    inviteLead: "링크를 공유하세요. 친구가 한 판 플레이할 때마다 정산 +5%. 추가 런마다 +0.1%. 보너스 105%부터 상한 200%. 티켓 LIM은 지갑으로. 유료 오버타임은 50% 베이스 풀 / 50% 소각.",
     crewTitle: "크루 · 4명이면 125%",
     crewNeed1: "1명만 더 오면 125%. 링크 복사.",
     crewNeedN: "{n}자리 남음. 다음 친구면 {next}%. 4명이면 125%.",
@@ -1066,7 +1066,7 @@ const I18N = {
     tutJump: "탭해서 점프",
     tutJumpSub: "공중에서 한 번 더 · 더블 점프",
     tutCoin: "코인 = 티켓 LIM",
-    tutCoinSub: "티켓은 지갑으로 · 초과 50/50"
+    tutCoinSub: "티켓은 지갑으로 · 초과 50/50",
     tutLight: "라이트 아래로 걷기",
     tutLightSub: "빔 속으로 점프하지 말 것",
     tutPipe: "빨간 파이프·금 벽돌 점프",
@@ -1096,10 +1096,10 @@ const I18N = {
     grab50: "하프 티켓",
     grab75: "4분의 1 남음",
     trackHaste: "트랙이 가속 중",
-    coinsOutFull: "티켓 회수 · 초과 50/50"
+    coinsOutFull: "티켓 회수 · 초과 50/50",
     overFullK: "티켓 완료",
     overPartK: "부분 회수",
-    overFullT: "오버타임 50 / 50"
+    overFullT: "오버타임 50 / 50",
     overPartT: "획득분 유지",
     resultFull: "코인 {coins} · {got} LIM 획득 · {pct}% 부스트 · 티켓 {paid} LIM 지갑으로 · 오버타임 50% 베이스 풀 / 50% 소각 (상한 {cap})<br>보드 {score}",
     resultPart: "코인 {coins} · {got} / {ticket} LIM × {pct}% = 정산 {paid} LIM<br>보드 {score}<br>잔여 {left} → 일간 {week} / 초대 {invite} / 소각 {burn}",
@@ -1397,7 +1397,7 @@ const I18N = {
     tutJump: "CHẠM ĐỂ NHẢY",
     tutJumpSub: "CHẠM LẦN NỮA TRÊN KHÔNG · NHẢY ĐÔI",
     tutCoin: "COIN = LIM VÉ",
-    tutCoinSub: "VÉ VỀ VÍ · OVERTIME 50/50"
+    tutCoinSub: "VÉ VỀ VÍ · OVERTIME 50/50",
     tutLight: "ĐI DƯỚI ĐÈN",
     tutLightSub: "ĐỪNG NHẢY VÀO CHÙM SÁNG",
     tutPipe: "NHẢY ỐNG ĐỎ & GẠCH VÀNG",
@@ -1427,10 +1427,10 @@ const I18N = {
     grab50: "Nửa vé vào túi",
     grab75: "Còn một phần tư",
     trackHaste: "Đường đua đang tăng tốc",
-    coinsOutFull: "HẾT VÉ · OVERTIME 50/50"
+    coinsOutFull: "HẾT VÉ · OVERTIME 50/50",
     overFullK: "HẾT VÉ",
     overPartK: "NHẶT MỘT PHẦN",
-    overFullT: "OVERTIME 50 / 50"
+    overFullT: "OVERTIME 50 / 50",
     overPartT: "GIỮ PHẦN ĐÃ NHẶT",
     resultFull: "Coin {coins} · {got} LIM · boost {pct}% · vé {paid} LIM về ví · overtime 50% quỹ nền / 50% đốt (trần {cap})<br>Bảng {score}",
     resultPart: "Coin {coins} · {got} / {ticket} LIM × {pct}% = {paid} LIM<br>Bảng {score}<br>Còn {left} → ngày {week} / mời {invite} / đốt {burn}",
@@ -1728,7 +1728,7 @@ const I18N = {
     tutJump: "แตะเพื่อกระโดด",
     tutJumpSub: "แตะอีกครั้งกลางอากาศ · ดับเบิลจัมป์",
     tutCoin: "เหรียญ = LIM ตั๋ว",
-    tutCoinSub: "ตั๋วกลับกระเป๋า · โอเวอร์ไทม์ 50/50"
+    tutCoinSub: "ตั๋วกลับกระเป๋า · โอเวอร์ไทม์ 50/50",
     tutLight: "เดินใต้ไฟส่อง",
     tutLightSub: "อย่ากระโดดเข้าลำแสง",
     tutPipe: "กระโดดท่อแดงและอิฐทอง",
@@ -1758,10 +1758,10 @@ const I18N = {
     grab50: "ได้ครึ่งตั๋ว",
     grab75: "เหลืออีกหนึ่งในสี่",
     trackHaste: "สนามกำลังเร่ง",
-    coinsOutFull: "เก็บตั๋วแล้ว · โอเวอร์ไทม์ 50/50"
+    coinsOutFull: "เก็บตั๋วแล้ว · โอเวอร์ไทม์ 50/50",
     overFullK: "เก็บตั๋วครบ",
     overPartK: "เก็บได้บางส่วน",
-    overFullT: "โอเวอร์ไทม์ 50 / 50"
+    overFullT: "โอเวอร์ไทม์ 50 / 50",
     overPartT: "เก็บส่วนที่ได้",
     resultFull: "เหรียญ {coins} · {got} LIM · บูสต์ {pct}% · ตั๋ว {paid} LIM กลับกระเป๋า · โอเวอร์ไทม์ 50% กองทุนฐาน / 50% เบิร์น (เพดาน {cap})<br>บอร์ด {score}",
     resultPart: "เหรียญ {coins} · {got} / {ticket} LIM × {pct}% = {paid} LIM<br>บอร์ด {score}<br>เหลือ {left} → รายวัน {week} / ชวน {invite} / เบิร์น {burn}",
@@ -2059,7 +2059,7 @@ const I18N = {
     tutJump: "ТАП — ПРЫЖОК",
     tutJumpSub: "ТАП В ВОЗДУХЕ · ДВОЙНОЙ ПРЫЖОК",
     tutCoin: "МОНЕТЫ = LIM БИЛЕТА",
-    tutCoinSub: "БИЛЕТ НА КОШЕЛЁК · ОВЕРТАЙМ 50/50"
+    tutCoinSub: "БИЛЕТ НА КОШЕЛЁК · ОВЕРТАЙМ 50/50",
     tutLight: "ИДИТЕ ПОД ПРОЖЕКТОРАМИ",
     tutLightSub: "НЕ ПРЫГАЙТЕ В ЛУЧ",
     tutPipe: "ПРЫГАЙТЕ КРАСНЫЕ ТРУБЫ",
@@ -2089,10 +2089,10 @@ const I18N = {
     grab50: "Половина билета",
     grab75: "Осталась четверть",
     trackHaste: "Трасса ускоряется",
-    coinsOutFull: "БИЛЕТ СОБРАН · ОВЕРТАЙМ 50/50"
+    coinsOutFull: "БИЛЕТ СОБРАН · ОВЕРТАЙМ 50/50",
     overFullK: "БИЛЕТ СОБРАН",
     overPartK: "ЧАСТИЧНЫЙ СБОР",
-    overFullT: "ОВЕРТАЙМ 50 / 50"
+    overFullT: "ОВЕРТАЙМ 50 / 50",
     overPartT: "ОСТАВЛЯЕТЕ СОБРАННОЕ",
     resultFull: "Монеты {coins} · {got} LIM · буст {pct}% · билет {paid} LIM на кошелёк · овертайм 50% пул / 50% сжигание (потолок {cap})<br>Борд {score}",
     resultPart: "Монеты {coins} · {got} / {ticket} LIM × {pct}% = расчёт {paid} LIM<br>Борд {score}<br>Остаток {left} → день {week} / инвайт {invite} / сжигание {burn}",
