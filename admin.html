@@ -160,6 +160,38 @@
       }
       table.social { min-width: 720px; }
       .admin-toolbar .ghost.deploy { border-color: var(--gold); color: var(--gold-hi); }
+      .fund-panel {
+        border: 2px solid var(--gold);
+        background: #0b1220;
+        padding: 12px 12px 10px;
+        margin: 0 0 14px;
+      }
+      .fund-panel h2 {
+        font-family: "Press Start 2P", monospace;
+        font-size: 10px;
+        color: var(--gold-hi);
+        margin: 0 0 10px;
+        line-height: 1.6;
+      }
+      .fund-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        align-items: center;
+      }
+      .fund-row select,
+      .fund-row input[type="number"] {
+        background: #101c32;
+        color: var(--ink);
+        border: 2px solid var(--line);
+        padding: 8px 10px;
+        font: inherit;
+        min-height: 36px;
+      }
+      .fund-row select { min-width: 160px; }
+      .fund-row input[type="number"] { width: 110px; }
+      .fund-row .quick { min-height: 32px; padding: 4px 10px; }
+      .fund-note { color: var(--dim); font-size: 12px; margin: 8px 0 0; }
     </style>
   </head>
   <body>
@@ -186,6 +218,27 @@
         <div class="admin-toolbar">
           <input id="filter" type="search" placeholder="按地址筛选" autocomplete="off" />
           <button class="ghost" id="refreshBtn" type="button">刷新快照</button>
+        </div>
+        <div class="fund-panel">
+          <h2>补充 LIM</h2>
+          <div class="chips" id="fundChips"></div>
+          <div class="fund-row">
+            <select id="fundTarget" aria-label="补充目标">
+              <option value="day">V6 日榜</option>
+              <option value="invite">V6 邀请池</option>
+              <option value="floor">均分底池</option>
+              <option value="extra">Extra 免费加时</option>
+              <option value="v5free">V5 免费侦察</option>
+            </select>
+            <input id="fundAmt" type="number" min="1" step="1" value="100" inputmode="decimal" />
+            <button class="ghost quick" type="button" data-amt="50">50</button>
+            <button class="ghost quick" type="button" data-amt="100">100</button>
+            <button class="ghost quick" type="button" data-amt="200">200</button>
+            <button class="ghost quick" type="button" data-amt="500">500</button>
+            <button class="primary" id="fundGo" type="button">钱包确认补充</button>
+          </div>
+          <p class="fund-note">从当前 owner 钱包打出。不碰 V6 freePool（付费加时仍由 sink 拆）。首次可能先弹 approve。</p>
+          <p class="status-line" id="fundStatus"></p>
         </div>
         <p class="status-line" id="status"></p>
         <div class="chips" id="addrChips"></div>
@@ -248,9 +301,9 @@
       </section>
     </div>
 
-    <script src="./config.js?v=40"></script>
+    <script src="./config.js?v=41"></script>
     <script src="https://cdn.jsdelivr.net/npm/ethers@6.13.5/dist/ethers.umd.min.js"></script>
-    <script src="./chain.js?v=102"></script>
-    <script src="./admin.js?v=20"></script>
+    <script src="./chain.js?v=105"></script>
+    <script src="./admin.js?v=21"></script>
   </body>
 </html>

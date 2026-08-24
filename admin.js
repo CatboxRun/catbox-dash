@@ -164,6 +164,7 @@ function renderAddrChips() {
     ["LIM", cfg.lim],
     ["V5 免费/免费池", free],
     ["V6 付费/日邀池", paid],
+    ["均分底池", cfg.floor?.address],
     ["Extra 加时", cfg.extra?.address],
     ["Social", cfg.social?.address],
     ["Owner", cfg.owner],
@@ -319,8 +320,89 @@ function paintSortHeaders() {
   });
 }
 
-function setStatus(msg) {
-  $("status").textContent = msg || "";
+function setFundStatus(msg) {
+  const el = $("fundStatus");
+  if (el) el.innerHTML = msg || "";
+}
+
+async function refreshFundChips() {
+  const el = $("fundChips");
+  if (!el || !window.CatboxChain) return;
+  try {
+    const [pool, extra, floor, ownerLim] = await Promise.all([
+      CatboxChain.poolBalance(),
+      CatboxChain.extraPoolAmt(),
+      CatboxChain.floorPoolBalance(),
+      CatboxChain.limBalance(CatboxChain.account),
+    ]);
+    const rows = [
+      ["主控钱包", `${lim(ownerLim)} LIM`],
+      ["V6 日榜", `${lim(pool.dayScore ?? pool.week)} LIM`],
+      ["V6 邀请池", `${lim(pool.invite)} LIM`],
+      ["均分底池", `${lim(floor.livePool)} LIM · ${floor.liveCount} 人`],
+      ["Extra 加时", `${lim(extra)} LIM`],
+      ["V5 免费池", `${lim(pool.free)} LIM`],
+    ];
+    el.innerHTML = rows.map(([k, v]) => `<div class="chip"><span>${k}</span><b>${v}</b></div>`).join("");
+  } catch (_) {
+    el.innerHTML = `<div class="chip"><span>池子</span><b>读取失败</b></div>`;
+  }
+}
+
+let fundBusy = false;
+
+async function fundFromOwner() {
+  if (fundBusy || !window.CatboxChain) return;
+  if (!CatboxChain.isOwner()) {
+    setFundStatus("无权限：请用 owner 钱包");
+    return;
+  }
+  const target = $("fundTarget")?.value || "day";
+  const amt = Number($("fundAmt")?.value || 0);
+  if (!Number.isFinite(amt) || amt <= 0) {
+    setFundStatus("请输入大于 0 的 LIM");
+    return;
+  }
+  const names = {
+    day: "V6 日榜",
+    invite: "V6 邀请池",
+    floor: "均分底池",
+    extra: "Extra 免费加时",
+    v5free: "V5 免费侦察",
+  };
+  fundBusy = true;
+  $("fundGo").disabled = true;
+  setFundStatus(`确认钱包：向${names[target] || target} 打 ${amt} LIM…`);
+  try {
+    let hash = "";
+    if (target === "day") hash = await CatboxChain.fundBoards(amt, 0);
+    else if (target === "invite") hash = await CatboxChain.fundBoards(0, amt);
+    else if (target === "floor") hash = await CatboxChain.fundFloor(amt);
+    else if (target === "extra") hash = await CatboxChain.fundExtra(amt);
+    else if (target === "v5free") hash = await CatboxChain.fundFreePool(amt);
+    else throw new Error("BAD_TARGET");
+    const href = CatboxChain.txUrl(hash);
+    setFundStatus(
+      `已打入 ${amt} LIM · <a href="${href}" target="_blank" rel="noopener">${hash.slice(0, 10)}…</a>`,
+    );
+    await refreshFundChips();
+  } catch (e) {
+    const msg = e?.message || "";
+    const rejected =
+      e?.code === 4001 ||
+      e?.code === "ACTION_REJECTED" ||
+      /user rejected|user denied|rejected the request/i.test(msg);
+    if (msg === "NO_LIM") setFundStatus("钱包 LIM 不够");
+    else if (msg === "NOT_OWNER") setFundStatus("无权限：请切换到 owner 钱包");
+    else if (msg === "PAID_NOT_READY") setFundStatus("V6 付费合约未就绪");
+    else if (msg === "NO_FLOOR") setFundStatus("底池合约未部署");
+    else if (msg === "NO_EXTRA") setFundStatus("Extra 合约未部署");
+    else if (rejected) setFundStatus("已取消");
+    else setFundStatus(`失败：${e?.shortMessage || msg || "请重试"}`);
+  } finally {
+    fundBusy = false;
+    $("fundGo").disabled = false;
+  }
 }
 
 function paintWalletBtn() {
@@ -354,6 +436,7 @@ function paintGate() {
   show($("gate"), false);
   show($("board"), true);
   show($("denied"), false);
+  refreshFundChips();
   return true;
 }
 
@@ -365,6 +448,7 @@ function applySnapshot(snap) {
   paintSortHeaders();
   renderTable();
   renderSocial();
+  refreshFundChips();
   const when = snap.at ? new Date(snap.at).toLocaleString() : "—";
   const v5n = snap.v5Runs ?? allRows.filter((r) => r.lane === "v5" || r.lane === "free").length;
   const v6n = snap.v6Runs ?? allRows.filter((r) => r.lane === "v6" || r.lane === "paid").length;
@@ -420,6 +504,12 @@ function boot() {
   $("walletBtn").onclick = connectWallet;
   $("gateConnect").onclick = connectWallet;
   $("refreshBtn").onclick = () => loadRuns();
+  $("fundGo").onclick = fundFromOwner;
+  document.querySelectorAll("[data-amt]").forEach((btn) => {
+    btn.onclick = () => {
+      $("fundAmt").value = btn.getAttribute("data-amt");
+    };
+  });
   setInterval(() => {
     if (paintGate() && !loading) loadRuns();
   }, 5 * 60 * 1000);

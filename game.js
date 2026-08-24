@@ -2330,7 +2330,7 @@ function paintHudLim() {
   if (floorChip && floorAmt) {
     const show = extra > 0 || Boolean(run.overtime);
     floorChip.classList.toggle("hidden", !show);
-    floorAmt.textContent = `+${extra.toFixed(2)}`;
+    floorAmt.textContent = `+${(extra / 2).toFixed(2)}`;
   }
   if (bar) {
     if (got <= ticket || extraCap <= 0) {
@@ -3064,15 +3064,24 @@ function worldPal(dusk, veil) {
 
 function fillHill(x, baseY, w, h, color, hi) {
   const cx = x + w / 2;
-  ctx.beginPath();
-  ctx.ellipse(cx, baseY, Math.max(8, w / 2), Math.max(6, h), 0, Math.PI, 0, true);
+  const rx = Math.max(8, w / 2);
+  const ry = Math.max(6, h);
+  const hill = (hx, hy, hrx, hry) => {
+    ctx.beginPath();
+    ctx.moveTo(hx - hrx, hy);
+    for (let i = 1; i <= 16; i++) {
+      const a = Math.PI * (1 - i / 16);
+      ctx.lineTo(hx + Math.cos(a) * hrx, hy - Math.sin(a) * hry);
+    }
+    ctx.closePath();
+  };
+  hill(cx, baseY, rx, ry);
   ctx.fillStyle = color;
   ctx.fill();
   if (hi) {
     ctx.save();
     ctx.globalAlpha = 0.28;
-    ctx.beginPath();
-    ctx.ellipse(cx - w * 0.14, baseY - h * 0.12, w * 0.16, h * 0.52, 0, Math.PI, 0, true);
+    hill(cx - rx * 0.28, baseY - ry * 0.45, rx * 0.22, ry * 0.32);
     ctx.fillStyle = hi;
     ctx.fill();
     ctx.restore();
@@ -3720,17 +3729,9 @@ async function settleOnchain(got, ticket, score) {
     el.textContent = t("settling");
     const wait = 5500 - (Date.now() - (run?.startedMs || Date.now()));
     if (wait > 0) await new Promise((r) => setTimeout(r, wait));
-    const rec = await CatboxChain.settleRun(
-      got,
-      ticket,
-      score,
-      () => {
-        el.textContent = t("settlingExtra");
-      },
-      () => {
-        el.textContent = t("settlingFloor");
-      },
-    );
+    const rec = await CatboxChain.settleRun(got, ticket, score, () => {
+      el.textContent = t("settlingExtra");
+    });
     paintSettledTx(el, rec);
     await syncOnchainPool();
     refreshInviteUi();
@@ -3739,14 +3740,6 @@ async function settleOnchain(got, ticket, score) {
     pullLiveBoards(true);
     window._settleBusy = false;
   } catch (e) {
-    if (e?.message === "FLOOR_DUE") {
-      if (e.settleHash) lastFinish.tx = e.settleHash;
-      el.classList.remove("settled");
-      el.textContent = t("floorDue");
-      el.style.cursor = "pointer";
-      el.onclick = () => retryFloorOverage(el);
-      return;
-    }
     el.textContent = t("txFail");
     window._settleBusy = false;
   }
