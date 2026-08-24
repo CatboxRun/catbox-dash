@@ -359,6 +359,7 @@ async function syncOnchainPool() {
     const deployed = await CatboxChain.isDeployed();
     if (!deployed) {
       if ($("weekPoolAmt")) $("weekPoolAmt").textContent = "—";
+      if ($("floorPoolAmt")) $("floorPoolAmt").textContent = "—";
       if ($("invitePoolAmt")) $("invitePoolAmt").textContent = "—";
       if ($("burnedAmt")) $("burnedAmt").textContent = "—";
       if ($("daySplitLive")) {
@@ -379,14 +380,17 @@ async function syncOnchainPool() {
     try {
       const floor = await CatboxChain.floorPoolBalance();
       const el = $("floorPoolAmt");
-      if (el && floor) {
-        el.textContent = t("floorLive", {
+      if (el) el.textContent = `${CatboxChain.formatLim(floor.livePool)} LIM`;
+      const meta = $("floorPoolMeta");
+      if (meta) {
+        meta.textContent = t("floorLive", {
           pool: CatboxChain.formatLim(floor.livePool),
           n: String(floor.liveCount),
         });
-        el.classList.remove("hidden");
       }
-    } catch (_) {}
+    } catch (_) {
+      if ($("floorPoolAmt")) $("floorPoolAmt").textContent = "—";
+    }
     const dayLive = $("daySplitLive");
     const inviteLive = $("inviteTopLive");
     if (dayLive) {

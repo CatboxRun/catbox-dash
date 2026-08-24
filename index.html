@@ -44,7 +44,7 @@
       href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@500;700&family=Noto+Sans+SC:wght@500;700&family=Noto+Sans+JP:wght@500;700&family=Noto+Sans+KR:wght@500;700&family=Noto+Sans+Thai:wght@500;700&family=Press+Start+2P&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="./styles.css?v=61" />
+    <link rel="stylesheet" href="./styles.css?v=62" />
   </head>
   <body>
     <div class="crt">
@@ -103,10 +103,6 @@
               <p class="kicker" data-i18n="noticeKicker">NOTICE</p>
               <div class="notice-viewport">
                 <ol class="notice-list" id="noticeList">
-                  <li>
-                    <b data-i18n="notice5Title">Today's floor pool funded</b>
-                    <p data-i18n="notice5Body">Today's floor pool airdrop has been topped up with 500 LIM. When the Singapore midnight countdown ends, come online and tap CLAIM FLOOR on the POOLS tab. Addresses that settled a run today share equally.</p>
-                  </li>
                   <li>
                     <b data-i18n="notice4Title">Burn contract coming</b>
                     <p data-i18n="notice4Body">The burn contract is coming soon: when a run triggers burn, the burn contract will execute a corresponding burn on-chain. The floor pool contract is now live, and the daily floor pool will continue to grow as more addresses participate. Addresses that play and settle today can claim that day's floor pool distribution at 00:00 Singapore time.</p>
@@ -241,10 +237,12 @@
             <div class="split-row two-plus-burn">
               <div class="split week">
                 <img src="./assets/icon-trophy.png?v=2" alt="" />
-                <b>50%</b><span data-i18n="weekBoard">DAILY · 50%</span><i id="weekPoolAmt">0</i>
+                <b>50%</b><span data-i18n="weekBoard">DAILY · 50%</span><i id="weekPoolAmt">—</i>
                 <small class="split-note" data-i18n="daySplitNote">Split by LIM shards · claim at Singapore midnight.</small>
+                <span class="split-k" data-i18n="hudFloor">FLOOR</span>
+                <i id="floorPoolAmt">—</i>
                 <small class="split-note" data-i18n="floorSplitNote">Floor pool: equal split among today's players · separate claim.</small>
-                <small id="floorPoolAmt" class="split-live hidden"></small>
+                <small id="floorPoolMeta" class="split-live"></small>
                 <small id="daySplitLive" class="split-live hidden"></small>
                 <button class="ghost split-claim" id="claimDailyBtn" type="button" disabled data-i18n="claimFloor">CLAIM FLOOR</button>
               </div>
@@ -537,8 +535,8 @@
     <script src="./config.js?v=41"></script>
     <script src="https://cdn.jsdelivr.net/npm/ethers@6.13.5/dist/ethers.umd.min.js"></script>
     <script src="./chain.js?v=104"></script>
-    <script src="./i18n.js?v=118"></script>
-    <script src="./game.js?v=128"></script>
+    <script src="./i18n.js?v=119"></script>
+    <script src="./game.js?v=129"></script>
     <script src="./bgm.js?v=26"></script>
   </body>
 </html>
