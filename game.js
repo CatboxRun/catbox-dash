@@ -3745,8 +3745,15 @@ async function settleOnchain(got, ticket, score) {
   }
 }
 
-mountLangs();
-applyI18n();
+try {
+  if (typeof mountLangs === "function") mountLangs();
+  if (typeof applyI18n === "function") applyI18n();
+  else renderTickets();
+} catch (_) {
+  try {
+    renderTickets();
+  } catch (_) {}
+}
 bootTutorial();
 bootLobbyTabs();
 bootNoticeCarousel();

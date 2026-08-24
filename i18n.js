@@ -1013,7 +1013,7 @@ const I18N = {
     kicker: "스킬 런 · LIM 소모",
     hero: "코인을 점프해 받아라\n티켓 환급 · 초과 50/50",
     lede: "티켓은 트랙 위 LIM 코인으로 쪼개집니다. Catbox로 점프해 모으세요. 티켓 LIM은 지갑으로. 유료 오버타임은 50% 베이스 풀 / 50% 소각.",
-    playLead: "새 지갑은 SCOUT 2판 무료. 유료 런은 티켓 LIM이 지갑으로 돌아옵니다. 오버타임은 50% 오늘 베이스 풀, 50% 소각. 자정에 베이스 풀 몫을 받으세요. 친구를 데려오면 정산 비율이 올라갑니다."
+    playLead: "새 지갑은 SCOUT 2판 무료. 유료 런은 티켓 LIM이 지갑으로 돌아옵니다. 오버타임은 50% 오늘 베이스 풀, 50% 소각. 자정에 베이스 풀 몫을 받으세요. 친구를 데려오면 정산 비율이 올라갑니다.",
     noticeKicker: "공지",
     noticeTitle: "게시판",
     notice1Title: "앰배서더 모집",
@@ -2431,7 +2431,9 @@ function applyI18n() {
     const cur = LANGS.find((l) => l.id === lang) || LANGS[0];
     now.textContent = cur.label;
   }
-  if (typeof renderTickets === "function") renderTickets();
+  try {
+    if (typeof renderTickets === "function") renderTickets();
+  } catch (_) {}
   if (typeof selected !== "undefined" && selected && typeof openPay === "function") {
     const payEl = document.getElementById("pay");
     if (payEl && !payEl.classList.contains("hidden")) openPay(selected);
