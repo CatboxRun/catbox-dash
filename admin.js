@@ -338,6 +338,11 @@ function paintSortHeaders() {
   });
 }
 
+function setStatus(msg) {
+  const el = $("status");
+  if (el) el.textContent = msg || "";
+}
+
 function setFundStatus(msg) {
   const el = $("fundStatus");
   if (el) el.innerHTML = msg || "";
