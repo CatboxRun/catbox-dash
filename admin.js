@@ -11,6 +11,8 @@ let sortKey = "id";
 let sortDir = "desc";
 let filterText = "";
 let loading = false;
+let page = 0;
+const PAGE_SIZE = 80;
 
 function show(el, on) {
   el.classList.toggle("hidden", !on);
@@ -244,14 +246,30 @@ function yn(v) {
   return v ? `<span class="yes">是</span>` : `<span class="no">否</span>`;
 }
 
+function renderPager(total) {
+  const info = $("pageInfo");
+  const prev = $("pagePrev");
+  const next = $("pageNext");
+  const pages = Math.max(1, Math.ceil(total / PAGE_SIZE) || 1);
+  if (page >= pages) page = pages - 1;
+  if (page < 0) page = 0;
+  const from = total ? page * PAGE_SIZE + 1 : 0;
+  const to = Math.min(total, (page + 1) * PAGE_SIZE);
+  if (info) info.textContent = total ? `${from}–${to} / ${total}` : "0";
+  if (prev) prev.disabled = page <= 0;
+  if (next) next.disabled = !total || page >= pages - 1;
+}
+
 function renderTable() {
   const rows = visibleRows();
+  renderPager(rows.length);
   const body = $("rows");
   if (!rows.length) {
     body.innerHTML = `<tr><td colspan="21" class="empty">${allRows.length ? "无匹配地址" : "暂无对局"}</td></tr>`;
     return;
   }
-  body.innerHTML = rows
+  const slice = rows.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE);
+  body.innerHTML = slice
     .map((r) => {
       const settled = yn(r.settled);
       const pay = r.free === true ? `<span class="free">免费</span>` : payLabel(r.free);
@@ -463,7 +481,12 @@ async function loadRuns() {
   loading = true;
   setStatus("加载快照…");
   try {
-    const snap = await CatboxChain.loadAdminBoard(true);
+    const snap = await CatboxChain.loadAdminBoard(true, (info) => {
+      if (info?.snap?.runs) applySnapshot(info.snap);
+      const done = info?.done ?? 0;
+      const total = info?.total ?? 0;
+      setStatus(total ? `加载对局 ${done} / ${total}…` : `加载对局 ${done}…`);
+    });
     if (!snap?.runs?.length) throw new Error("NO_SNAPSHOT");
     applySnapshot(snap);
   } catch (e) {
@@ -515,8 +538,17 @@ function boot() {
   }, 5 * 60 * 1000);
   $("filter").addEventListener("input", (e) => {
     filterText = e.target.value || "";
+    page = 0;
     renderTable();
     renderSocial();
+  });
+  $("pagePrev")?.addEventListener("click", () => {
+    page -= 1;
+    renderTable();
+  });
+  $("pageNext")?.addEventListener("click", () => {
+    page += 1;
+    renderTable();
   });
   document.querySelector("table.runs thead").addEventListener("click", (e) => {
     const th = e.target.closest("th[data-key]");
@@ -528,6 +560,7 @@ function boot() {
       sortDir = key === "id" || key === "startedAt" ? "desc" : "asc";
     }
     paintSortHeaders();
+    page = 0;
     renderTable();
   });
   $("rows").addEventListener("click", (e) => {

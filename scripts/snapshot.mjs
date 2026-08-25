@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
@@ -214,38 +214,6 @@ function toRows(map, allAddrs, keepZero = false) {
     .sort((a, b) => b.pts - a.pts || a.addr.localeCompare(b.addr));
 }
 
-const { p } = await pickProvider();
-const freeAddr = cfg.freeAddress || cfg.address;
-const freeAbi = cfg.abi;
-let paidAddr = null;
-let paidAbi = null;
-if (cfg.v6?.address) {
-  const code = await withTimeout(p.getCode(cfg.v6.address), 4000);
-  if (code && code !== "0x") {
-    paidAddr = cfg.v6.address;
-    paidAbi = cfg.v6.abi;
-  }
-}
-const boardAddr = paidAddr || freeAddr;
-const boardAbi = paidAddr ? paidAbi : freeAbi;
-console.error("snapshot free", freeAddr, "paid", paidAddr || "(none)", "boards", boardAddr);
-
-const freeGame = new Contract(freeAddr, freeAbi, p);
-const boardGame = new Contract(boardAddr, boardAbi, p);
-const freeIface = freeGame.interface;
-const boardIface = boardGame.interface;
-const latest = Number(await withTimeout(p.getBlockNumber(), 4000));
-
-let prices = [
-  10n ** 18n,
-  3n * 10n ** 18n,
-  6n * 10n ** 18n,
-  10n * 10n ** 18n,
-];
-try {
-  prices = await Promise.all([0, 1, 2, 3].map((i) => boardGame.ticketPrice(i)));
-} catch {}
-
 async function loadRunsFrom(label, addr, iface, contract, opts = {}) {
   const next = Number(await withTimeout(contract.nextRunId(), 8000));
   const fromId = Math.max(1, Number(opts.fromId || 1));
@@ -317,39 +285,158 @@ function readJsonFile(path) {
 }
 
 function prevRunToInternal(r) {
+  try {
+    if (!r?.player) return null;
+    const lane = r.lane === "paid" ? "v6" : r.lane === "free" ? "v5" : r.lane || "v5";
+    return {
+      id: r.id,
+      lane,
+      key: `${lane}-${r.id}`,
+      player: getAddress(r.player),
+      paid: BigInt(r.paid || "0"),
+      ticketLim: r.ticketLim,
+      tierId: r.tierId,
+      tierName: r.tierName,
+      startedAt: Number(r.startedAt || 0),
+      settled: Boolean(r.settled),
+      free: r.free == null ? null : Boolean(r.free),
+      collected: r.collected != null ? BigInt(r.collected) : null,
+      leftover: r.leftover != null ? BigInt(r.leftover) : null,
+      burned: r.burned != null ? BigInt(r.burned) : null,
+      score: r.score == null ? null : Number(r.score),
+      payout: r.payout != null ? BigInt(r.payout) : null,
+      rewardBps: r.rewardBps ?? 10500,
+      invites: r.invites ?? 0,
+      plays: r.plays ?? 0,
+      weekPts: BigInt(r.weekPts || "0"),
+      invitePts: BigInt(r.invitePts || "0"),
+      extraPaid: BigInt(r.extraPaid || "0"),
+      extraTx: r.extraTx || null,
+      xClaimed: Boolean(r.xClaimed),
+      tgClaimed: Boolean(r.tgClaimed),
+      referrer: r.referrer && r.referrer !== ZERO ? getAddress(r.referrer) : ZERO,
+      tx: r.tx || null,
+    };
+  } catch {
+    return null;
+  }
+}
+
+const ADMIN_HEAD_RUNS = Number(process.env.ADMIN_HEAD_RUNS || 200);
+const ADMIN_PART_RUNS = Number(process.env.ADMIN_PART_RUNS || 800);
+
+function slimAdminRun(r) {
   const lane = r.lane === "paid" ? "v6" : r.lane === "free" ? "v5" : r.lane || "v5";
-  return {
+  const o = {
     id: r.id,
     lane,
-    key: `${lane}-${r.id}`,
-    player: getAddress(r.player),
-    paid: BigInt(r.paid || "0"),
+    player: r.player,
+    paid: weiStr(r.paid) || "0",
     ticketLim: r.ticketLim,
     tierId: r.tierId,
-    tierName: r.tierName,
     startedAt: Number(r.startedAt || 0),
     settled: Boolean(r.settled),
     free: r.free == null ? null : Boolean(r.free),
-    collected: r.collected != null ? BigInt(r.collected) : null,
-    leftover: r.leftover != null ? BigInt(r.leftover) : null,
-    burned: r.burned != null ? BigInt(r.burned) : null,
-    score: r.score == null ? null : Number(r.score),
-    payout: r.payout != null ? BigInt(r.payout) : null,
-    rewardBps: r.rewardBps ?? 10500,
-    invites: r.invites ?? 0,
-    plays: r.plays ?? 0,
-    weekPts: BigInt(r.weekPts || "0"),
-    invitePts: BigInt(r.invitePts || "0"),
-    extraPaid: BigInt(r.extraPaid || "0"),
-    extraTx: r.extraTx || null,
-    xClaimed: Boolean(r.xClaimed),
-    tgClaimed: Boolean(r.tgClaimed),
-    referrer: r.referrer && r.referrer !== ZERO ? getAddress(r.referrer) : ZERO,
-    tx: r.tx || null,
   };
+  if (r.tierName) o.tierName = r.tierName;
+  const collected = weiStr(r.collected);
+  if (collected != null) o.collected = collected;
+  const leftover = weiStr(r.leftover);
+  if (leftover != null) o.leftover = leftover;
+  const burned = weiStr(r.burned);
+  if (burned != null) o.burned = burned;
+  if (r.score != null) o.score = asNum(r.score);
+  const payout = weiStr(r.payout);
+  if (payout != null) o.payout = payout;
+  if (r.rewardBps != null && Number(r.rewardBps) !== 10500) o.rewardBps = r.rewardBps;
+  if (r.invites) o.invites = r.invites;
+  if (r.plays) o.plays = r.plays;
+  const weekPts = weiStr(r.weekPts);
+  if (weekPts && weekPts !== "0") o.weekPts = weekPts;
+  const invitePts = weiStr(r.invitePts);
+  if (invitePts && invitePts !== "0") o.invitePts = invitePts;
+  const extraPaid = weiStr(r.extraPaid);
+  if (extraPaid && extraPaid !== "0") o.extraPaid = extraPaid;
+  if (r.extraTx) o.extraTx = r.extraTx;
+  if (r.xClaimed) o.xClaimed = true;
+  if (r.tgClaimed) o.tgClaimed = true;
+  if (r.referrer && r.referrer !== ZERO) o.referrer = r.referrer;
+  if (r.tx) o.tx = r.tx;
+  return o;
 }
 
+function adminPublicFields(adminSnapshot) {
+  const skip = new Set(["week", "invite", "burns", "runs"]);
+  const out = {};
+  for (const [k, v] of Object.entries(adminSnapshot || {})) {
+    if (!skip.has(k)) out[k] = v;
+  }
+  return out;
+}
+
+function writeAdminPack(adminSnapshot) {
+  const outDir = join(root, "data");
+  mkdirSync(outDir, { recursive: true });
+  const slimRuns = (adminSnapshot.runs || []).map(slimAdminRun);
+  const meta = adminPublicFields(adminSnapshot);
+  const headRuns = slimRuns.slice(0, ADMIN_HEAD_RUNS);
+  const rest = slimRuns.slice(ADMIN_HEAD_RUNS);
+
+  let names = [];
+  try {
+    names = readdirSync(outDir);
+  } catch {
+    names = [];
+  }
+  for (const name of names) {
+    if (/^admin-part-\d+\.json$/.test(name)) {
+      try {
+        unlinkSync(join(outDir, name));
+      } catch {}
+    }
+  }
+
+  const parts = [];
+  for (let i = 0; i < rest.length; i += ADMIN_PART_RUNS) {
+    const idx = String(parts.length).padStart(2, "0");
+    const name = `admin-part-${idx}.json`;
+    writeFileSync(join(outDir, name), `${JSON.stringify({ runs: rest.slice(i, i + ADMIN_PART_RUNS) })}\n`);
+    parts.push(name);
+  }
+
+  const head = { ...meta, runs: headRuns };
+  writeFileSync(join(outDir, "admin-head.json"), `${JSON.stringify(head)}\n`);
+  writeFileSync(
+    join(outDir, "admin-index.json"),
+    `${JSON.stringify({
+      at: adminSnapshot.at || null,
+      totalRuns: slimRuns.length,
+      head: "admin-head.json",
+      parts,
+    })}\n`,
+  );
+  // Legacy URL: keep this small so old admin.js does not OOM TokenPocket.
+  writeFileSync(join(outDir, "admin-board.json"), `${JSON.stringify(head)}\n`);
+  console.error("admin-pack", slimRuns.length, "head", headRuns.length, "parts", parts.length);
+}
+
+let prevAdminRunsMemo;
 function loadPrevAdminRuns() {
+  if (prevAdminRunsMemo) return prevAdminRunsMemo;
+  const collected = [];
+  const index = readJsonFile(join(root, "data/admin-index.json"));
+  const head = readJsonFile(join(root, "data/admin-head.json"));
+  if (head?.runs?.length) collected.push(...head.runs);
+  if (index?.parts?.length) {
+    for (const name of index.parts) {
+      const part = readJsonFile(join(root, "data", name));
+      if (part?.runs?.length) collected.push(...part.runs);
+    }
+  }
+  if (collected.length) {
+    prevAdminRunsMemo = collected.map(prevRunToInternal).filter(Boolean);
+    return prevAdminRunsMemo;
+  }
   const paths = [
     join(root, "data/admin-board.json"),
     join(root, "data/admin-snapshot.json"),
@@ -357,25 +444,22 @@ function loadPrevAdminRuns() {
   for (const path of paths) {
     const prev = readJsonFile(path);
     if (!prev?.runs?.length) continue;
-    return prev.runs.map(prevRunToInternal);
+    prevAdminRunsMemo = prev.runs.map(prevRunToInternal).filter(Boolean);
+    return prevAdminRunsMemo;
   }
-  return [];
+  prevAdminRunsMemo = [];
+  return prevAdminRunsMemo;
 }
 
 function loadPrevV5Runs() {
-  const paths = [
-    join(root, "data/admin-board.json"),
-    join(root, "data/v5-history.json"),
-    join(root, "data/admin-snapshot.json"),
-  ];
-  for (const path of paths) {
-    const prev = readJsonFile(path);
-    if (!prev?.runs?.length) continue;
-    return prev.runs
-      .filter((r) => r.lane === "v5" || r.lane === "free")
-      .map(prevRunToInternal);
-  }
-  return [];
+  const fromAdmin = loadPrevAdminRuns().filter((r) => r.lane === "v5" || r.lane === "free");
+  if (fromAdmin.length) return fromAdmin;
+  const prev = readJsonFile(join(root, "data/v5-history.json"));
+  if (!prev?.runs?.length) return [];
+  return prev.runs
+    .filter((r) => r.lane === "v5" || r.lane === "free")
+    .map(prevRunToInternal)
+    .filter(Boolean);
 }
 
 function mergeRunRows(...lists) {
@@ -442,6 +526,53 @@ function saveBoardWallets(addrs) {
   console.error("board-wallets", list.length);
   return list;
 }
+
+if (process.env.SPLIT_ONLY === "1") {
+  const srcPath = process.env.ADMIN_SPLIT_SRC
+    ? (process.env.ADMIN_SPLIT_SRC.startsWith("/") || /^[A-Za-z]:/.test(process.env.ADMIN_SPLIT_SRC)
+      ? process.env.ADMIN_SPLIT_SRC
+      : join(root, process.env.ADMIN_SPLIT_SRC))
+    : join(root, "data/admin-board.json");
+  const src = readJsonFile(srcPath);
+  if (!src?.runs?.length) {
+    console.error("SPLIT_ONLY: no runs in", srcPath);
+    process.exit(1);
+  }
+  writeAdminPack(src);
+  process.exit(0);
+}
+
+const { p } = await pickProvider();
+const freeAddr = cfg.freeAddress || cfg.address;
+const freeAbi = cfg.abi;
+let paidAddr = null;
+let paidAbi = null;
+if (cfg.v6?.address) {
+  const code = await withTimeout(p.getCode(cfg.v6.address), 4000);
+  if (code && code !== "0x") {
+    paidAddr = cfg.v6.address;
+    paidAbi = cfg.v6.abi;
+  }
+}
+const boardAddr = paidAddr || freeAddr;
+const boardAbi = paidAddr ? paidAbi : freeAbi;
+console.error("snapshot free", freeAddr, "paid", paidAddr || "(none)", "boards", boardAddr);
+
+const freeGame = new Contract(freeAddr, freeAbi, p);
+const boardGame = new Contract(boardAddr, boardAbi, p);
+const freeIface = freeGame.interface;
+const boardIface = boardGame.interface;
+const latest = Number(await withTimeout(p.getBlockNumber(), 4000));
+
+let prices = [
+  10n ** 18n,
+  3n * 10n ** 18n,
+  6n * 10n ** 18n,
+  10n * 10n ** 18n,
+];
+try {
+  prices = await Promise.all([0, 1, 2, 3].map((i) => boardGame.ticketPrice(i)));
+} catch {}
 
 const prevSnapEarly = readJsonFile(join(root, "data/snapshot.json")) || {};
 
@@ -1192,8 +1323,7 @@ const outFile = join(outDir, "snapshot.json");
 const adminFile = join(outDir, "admin-snapshot.json");
 writeFileSync(outFile, `${JSON.stringify(snapshot)}\n`);
 writeFileSync(adminFile, `${JSON.stringify(adminSnapshot)}\n`);
-const adminBoardFile = join(outDir, "admin-board.json");
-writeFileSync(adminBoardFile, `${JSON.stringify(adminSnapshot)}\n`);
+writeAdminPack(adminSnapshot);
 const v5HistoryFile = join(outDir, "v5-history.json");
 const v5History = {
   at: snapshot.at,
@@ -1204,7 +1334,7 @@ const v5History = {
   burnCount: snapshot.burnCount,
   v5BurnCount: snapshot.v5BurnCount,
   v6BurnCount: snapshot.v6BurnCount,
-  runs: adminSnapshot.runs.filter((r) => r.lane === "v5"),
+  runs: adminSnapshot.runs.filter((r) => r.lane === "v5").map(slimAdminRun),
   social,
 };
 writeFileSync(v5HistoryFile, `${JSON.stringify(v5History)}\n`);

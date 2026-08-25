@@ -45,7 +45,14 @@ jobs:
           if [ -f package.json ] && ! git ls-files --error-unmatch package.json >/dev/null 2>&1; then
             rm -f package.json
           fi
-          git add data/snapshot.json data/board-wallets.json data/v5-history.json data/admin-board.json
+          git add data/snapshot.json data/board-wallets.json data/v5-history.json \
+            data/admin-board.json data/admin-head.json data/admin-index.json
+          shopt -s nullglob
+          parts=(data/admin-part-*.json)
+          if [ ${#parts[@]} -gt 0 ]; then
+            git add "${parts[@]}"
+          fi
+          git add -u -- data/
           if git diff --staged --quiet; then
             echo "snapshot unchanged"
             exit 0

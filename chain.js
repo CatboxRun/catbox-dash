@@ -2523,7 +2523,7 @@ const CatboxChain = (() => {
       paid: reviveWei(r.paid) ?? 0n,
       ticketLim: r.ticketLim,
       tierId: r.tierId,
-      tierName: r.tierName,
+      tierName: r.tierName || TIER_NAMES[Number(r.tierId)] || null,
       startedAt: Number(r.startedAt || 0),
       settled: Boolean(r.settled),
       free: r.free == null ? null : Boolean(r.free),
@@ -3265,67 +3265,68 @@ const CatboxChain = (() => {
     };
   }
 
-  async function loadAdminBoard(force) {
+  async function fetchAdminJson(path) {
+    const res = await fetch(`${path}?t=${Date.now()}`, { cache: "no-store" });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return res.json();
+  }
+
+  function boardFromHead(head, revivedRuns, totalHint) {
+    const board = reviveAdminBoard({ ...head, runs: [] });
+    board.runs = revivedRuns;
+    const total = Number(totalHint || revivedRuns.length);
+    board.totalRuns = total;
+    board.v5Runs = revivedRuns.filter((r) => r.lane === "v5" || r.lane === "free").length;
+    board.v6Runs = revivedRuns.filter((r) => r.lane === "v6" || r.lane === "paid").length;
+    return board;
+  }
+
+  async function loadAdminBoard(force, onProgress) {
     if (force) adminBoardCache = null;
     else if (adminBoardCache) return adminBoardCache;
-    const paths = ["./data/admin-board.json", "./data/admin-snapshot.json"];
-    for (const path of paths) {
+
+    const emit = (board, total) => {
+      if (onProgress) {
+        onProgress({
+          done: board.runs.length,
+          total: Number(total || board.runs.length),
+          snap: board,
+        });
+      }
+      return board;
+    };
+
+    try {
+      const index = await fetchAdminJson("./data/admin-index.json");
+      const headName = index.head || "admin-head.json";
+      if (!/^admin[-a-z0-9.]+$/i.test(headName)) throw new Error("BAD_HEAD");
+      const head = await fetchAdminJson(`./data/${headName}`);
+      let revived = (head.runs || []).map((r) => reviveRunFromSnap(r)).filter(Boolean);
+      const total = Number(index.totalRuns || revived.length);
+      let board = emit(boardFromHead(head, revived, total), total);
+      for (const name of index.parts || []) {
+        if (!/^admin-part-\d+\.json$/.test(name)) continue;
+        const part = await fetchAdminJson(`./data/${name}`);
+        revived = mergeRunRows(
+          revived,
+          (part.runs || []).map((r) => reviveRunFromSnap(r)).filter(Boolean),
+        );
+        board = emit(boardFromHead(head, revived, total), total);
+      }
+      adminBoardCache = board;
+      return adminBoardCache;
+    } catch (_) {}
+
+    const fallbacks = ["./data/admin-head.json", "./data/admin-board.json"];
+    for (const path of fallbacks) {
       try {
-        const res = await fetch(`${path}?t=${Date.now()}`, { cache: "no-store" });
-        if (!res.ok) continue;
-        adminBoardCache = reviveAdminBoard(await res.json());
-        return adminBoardCache;
+        const raw = await fetchAdminJson(path);
+        adminBoardCache = reviveAdminBoard(raw);
+        if (adminBoardCache?.runs?.length) return adminBoardCache;
       } catch (_) {}
     }
-    try {
-      const [hist, snap] = await Promise.all([loadOwnerHistory(true), loadSnapshot(true)]);
-      if (!hist?.runs?.length && !snap) {
-        adminBoardCache = null;
-        return null;
-      }
-      const v6Runs = (snap?.runs || [])
-        .map((r) => reviveRunFromSnap(r))
-        .filter(Boolean);
-      const merged = mergeRunRows(hist?.runs || [], v6Runs);
-      adminBoardCache = reviveAdminBoard({
-        ...(snap || {}),
-        ...(hist || {}),
-        at: snap?.at || hist?.at || null,
-        runs: merged.map((r) => ({
-          id: r.id,
-          lane: r.lane,
-          player: r.player,
-          paid: String(r.paid ?? 0n),
-          ticketLim: r.ticketLim,
-          tierId: r.tierId,
-          tierName: r.tierName,
-          startedAt: r.startedAt,
-          settled: r.settled,
-          free: r.free,
-          collected: r.collected != null ? String(r.collected) : null,
-          leftover: r.leftover != null ? String(r.leftover) : null,
-          burned: r.burned != null ? String(r.burned) : null,
-          score: r.score,
-          payout: r.payout != null ? String(r.payout) : null,
-          rewardBps: r.rewardBps,
-          invites: r.invites,
-          plays: r.plays,
-          weekPts: String(r.weekPts ?? 0n),
-          invitePts: String(r.invitePts ?? 0n),
-          extraPaid: String(r.extraPaid ?? 0n),
-          extraTx: r.extraTx,
-          xClaimed: r.xClaimed,
-          tgClaimed: r.tgClaimed,
-          referrer: r.referrer,
-          tx: r.tx,
-        })),
-        social: hist?.social || snap?.social || [],
-      });
-      return adminBoardCache;
-    } catch (_) {
-      adminBoardCache = null;
-      return null;
-    }
+    adminBoardCache = null;
+    return null;
   }
 
   return {
