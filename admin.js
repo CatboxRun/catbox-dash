@@ -1,6 +1,6 @@
 /* global ethers, CatboxChain */
 
-const OWNER_HINT = "用 owner 钱包连接后查看对局。TokenPocket / MetaMask 均可。";
+const OWNER_HINT = "对局列表会自动加载。补充 LIM 请用 owner 钱包连接。TokenPocket / MetaMask 均可。";
 const ZERO = "0x0000000000000000000000000000000000000000";
 
 const $ = (id) => document.getElementById(id);
@@ -432,33 +432,26 @@ function paintWalletBtn() {
 
 function paintGate() {
   const acc = CatboxChain.account;
-  const owner = acc && CatboxChain.isOwner();
+  const owner = !!(acc && CatboxChain.isOwner());
   paintWalletBtn();
+  show($("board"), true);
+  show($("gate"), !owner);
+  show($("denied"), !!(acc && !owner));
+  const fund = $("fundPanel");
+  if (fund) show(fund, owner);
+  const who = CatboxChain.cfg?.owner ? CatboxChain.short(CatboxChain.cfg.owner) : "";
   if (!acc) {
-    show($("gate"), true);
-    show($("board"), false);
-    show($("denied"), false);
-    const who = CatboxChain.cfg?.owner ? CatboxChain.short(CatboxChain.cfg.owner) : "";
     $("gateHint").textContent = window.ethereum
       ? `${OWNER_HINT}${who ? ` Owner：${who}` : ""}`
-      : "请用 TokenPocket 或 MetaMask 打开此页。";
-    return false;
-  }
-  if (!owner) {
-    show($("gate"), true);
-    show($("board"), false);
-    show($("denied"), true);
+      : "对局列表会自动加载。补充 LIM 请用 TokenPocket 或 MetaMask 打开此页。";
+  } else if (!owner) {
     $("gateHint").textContent = OWNER_HINT;
-    return false;
   }
-  show($("gate"), false);
-  show($("board"), true);
-  show($("denied"), false);
-  refreshFundChips();
+  if (owner) refreshFundChips();
   return true;
 }
 
-function applySnapshot(snap) {
+function applySnapshot(snap, opts) {
   allRows = snap.runs || [];
   socialRows = snap.social || [];
   renderAddrChips();
@@ -466,7 +459,7 @@ function applySnapshot(snap) {
   paintSortHeaders();
   renderTable();
   renderSocial();
-  refreshFundChips();
+  if (!opts?.skipFund && CatboxChain.account && CatboxChain.isOwner()) refreshFundChips();
   const when = snap.at ? new Date(snap.at).toLocaleString() : "—";
   const v5n = snap.v5Runs ?? allRows.filter((r) => r.lane === "v5" || r.lane === "free").length;
   const v6n = snap.v6Runs ?? allRows.filter((r) => r.lane === "v6" || r.lane === "paid").length;
@@ -476,13 +469,17 @@ function applySnapshot(snap) {
 }
 
 async function loadRuns() {
-  if (!paintGate()) return;
+  paintGate();
   if (loading) return;
   loading = true;
   setStatus("加载快照…");
   try {
     const snap = await CatboxChain.loadAdminBoard(true, (info) => {
-      if (info?.snap?.runs) applySnapshot(info.snap);
+      if (info?.snap?.runs?.length) {
+        try {
+          applySnapshot(info.snap, { skipFund: true });
+        } catch (_) {}
+      }
       const done = info?.done ?? 0;
       const total = info?.total ?? 0;
       setStatus(total ? `加载对局 ${done} / ${total}…` : `加载对局 ${done}…`);
@@ -499,11 +496,6 @@ async function loadRuns() {
             ? "暂无快照数据，请等 CI 跑完或稍后再试"
             : `加载失败：${e?.shortMessage || e?.message || "请重试"}`;
     setStatus(msg);
-    if (e?.message === "NOT_OWNER") {
-      show($("denied"), true);
-      show($("gate"), true);
-      show($("board"), false);
-    }
   } finally {
     loading = false;
   }
@@ -514,11 +506,12 @@ async function connectWallet() {
     $("walletBtn").textContent = "连接中…";
     $("gateConnect").textContent = "连接中…";
     await CatboxChain.connect();
-    await loadRuns();
+    paintGate();
+    if (!allRows.length) await loadRuns();
   } catch (e) {
     paintWalletBtn();
     if (e?.message === "NO_WALLET") {
-      $("gateHint").textContent = "请用 TokenPocket 或 MetaMask 打开此页。";
+      $("gateHint").textContent = "对局列表会自动加载。补充 LIM 请用 TokenPocket 或 MetaMask 打开此页。";
     }
   }
 }
@@ -534,7 +527,7 @@ function boot() {
     };
   });
   setInterval(() => {
-    if (paintGate() && !loading) loadRuns();
+    if (!loading) loadRuns();
   }, 5 * 60 * 1000);
   $("filter").addEventListener("input", (e) => {
     filterText = e.target.value || "";
@@ -569,19 +562,12 @@ function boot() {
     copyText(btn.getAttribute("data-copy"), btn);
   });
   window.addEventListener("catbox-wallet", () => {
-    if (paintGate()) loadRuns();
-    else {
-      allRows = [];
-      socialRows = [];
-      renderAddrChips();
-      renderChips({});
-      renderTable();
-      renderSocial();
-    }
+    paintGate();
   });
 
   paintGate();
   renderAddrChips();
+  loadRuns();
   if (window.ethereum) {
     Promise.race([
       window.ethereum.request({ method: "eth_accounts" }),
@@ -590,7 +576,7 @@ function boot() {
       .then(async (accs) => {
         if (accs?.[0]) {
           await CatboxChain.connect();
-          await loadRuns();
+          paintGate();
         }
       })
       .catch(() => paintGate());

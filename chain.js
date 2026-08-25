@@ -3266,9 +3266,15 @@ const CatboxChain = (() => {
   }
 
   async function fetchAdminJson(path) {
-    const res = await fetch(`${path}?t=${Date.now()}`, { cache: "no-store" });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    return res.json();
+    const ctrl = typeof AbortController === "function" ? new AbortController() : null;
+    const timer = ctrl ? setTimeout(() => ctrl.abort(), 12000) : null;
+    try {
+      const res = await fetch(`${path}?v=${Date.now()}`, ctrl ? { signal: ctrl.signal } : undefined);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return await res.json();
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
   }
 
   function boardFromHead(head, revivedRuns, totalHint) {
@@ -3285,17 +3291,18 @@ const CatboxChain = (() => {
     if (force) adminBoardCache = null;
     else if (adminBoardCache) return adminBoardCache;
 
-    const emit = (board, total) => {
+    const emit = (board, total, paint) => {
       if (onProgress) {
         onProgress({
-          done: board.runs.length,
-          total: Number(total || board.runs.length),
-          snap: board,
+          done: board?.runs?.length || 0,
+          total: Number(total || board?.runs?.length || 0),
+          snap: paint ? board : null,
         });
       }
       return board;
     };
 
+    let board = null;
     try {
       const index = await fetchAdminJson("./data/admin-index.json");
       const headName = index.head || "admin-head.json";
@@ -3303,19 +3310,39 @@ const CatboxChain = (() => {
       const head = await fetchAdminJson(`./data/${headName}`);
       let revived = (head.runs || []).map((r) => reviveRunFromSnap(r)).filter(Boolean);
       const total = Number(index.totalRuns || revived.length);
-      let board = emit(boardFromHead(head, revived, total), total);
-      for (const name of index.parts || []) {
-        if (!/^admin-part-\d+\.json$/.test(name)) continue;
-        const part = await fetchAdminJson(`./data/${name}`);
-        revived = mergeRunRows(
-          revived,
-          (part.runs || []).map((r) => reviveRunFromSnap(r)).filter(Boolean),
+      board = emit(boardFromHead(head, revived, total), total, true);
+      const parts = (index.parts || []).filter((name) => /^admin-part-\d+\.json$/.test(name));
+      const batch = 3;
+      for (let i = 0; i < parts.length; i += batch) {
+        const chunk = parts.slice(i, i + batch);
+        const results = await Promise.all(
+          chunk.map(async (name) => {
+            try {
+              return await fetchAdminJson(`./data/${name}`);
+            } catch (_) {
+              return null;
+            }
+          }),
         );
-        board = emit(boardFromHead(head, revived, total), total);
+        for (const part of results) {
+          if (!part?.runs?.length) continue;
+          revived = mergeRunRows(
+            revived,
+            (part.runs || []).map((r) => reviveRunFromSnap(r)).filter(Boolean),
+          );
+        }
+        board = boardFromHead(head, revived, total);
+        emit(board, total, false);
       }
+      board = emit(board, total, true);
       adminBoardCache = board;
-      return adminBoardCache;
-    } catch (_) {}
+      if (adminBoardCache?.runs?.length) return adminBoardCache;
+    } catch (_) {
+      if (board?.runs?.length) {
+        adminBoardCache = board;
+        return adminBoardCache;
+      }
+    }
 
     const fallbacks = ["./data/admin-head.json", "./data/admin-board.json"];
     for (const path of fallbacks) {

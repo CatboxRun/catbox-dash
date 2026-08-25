@@ -217,17 +217,17 @@
 
       <section id="gate" class="admin-gate">
         <h1>OWNER</h1>
-        <p id="gateHint">用 owner 钱包连接后查看对局。TokenPocket / MetaMask 均可。</p>
-        <p id="denied" class="denied hidden">无权限</p>
+        <p id="gateHint">对局列表会自动加载。补充 LIM 请用 owner 钱包连接。TokenPocket / MetaMask 均可。</p>
+        <p id="denied" class="denied hidden">无权限补充 LIM</p>
         <button class="wallet-btn pulse-cta" id="gateConnect" type="button">连接钱包</button>
       </section>
 
-      <section id="board" class="panel hidden">
+      <section id="board" class="panel">
         <div class="admin-toolbar">
           <input id="filter" type="search" placeholder="按地址筛选" autocomplete="off" />
           <button class="ghost" id="refreshBtn" type="button">刷新快照</button>
         </div>
-        <div class="fund-panel">
+        <div class="fund-panel hidden" id="fundPanel">
           <h2>补充 LIM</h2>
           <div class="chips" id="fundChips"></div>
           <div class="fund-row">
@@ -316,7 +316,7 @@
 
     <script src="./config.js?v=41"></script>
     <script src="https://cdn.jsdelivr.net/npm/ethers@6.13.5/dist/ethers.umd.min.js"></script>
-    <script src="./chain.js?v=106"></script>
-    <script src="./admin.js?v=22"></script>
+    <script src="./chain.js?v=107"></script>
+    <script src="./admin.js?v=23"></script>
   </body>
 </html>
