@@ -6,10 +6,10 @@ const TIERS = [
 ];
 
 const TICKET_MASCOTS = [
-  "./assets/ticket-scout.png?v=1",
-  "./assets/ticket-runner.png?v=1",
-  "./assets/ticket-phantom.png?v=1",
-  "./assets/ticket-vault.png?v=1",
+  "./assets/ticket-scout.png?v=2",
+  "./assets/ticket-runner.png?v=2",
+  "./assets/ticket-phantom.png?v=2",
+  "./assets/ticket-vault.png?v=2",
 ];
 
 function ticketMascot(id) {
@@ -1557,8 +1557,10 @@ const PLAYER_SX = 160;
 
 const imgCoin = new Image();
 imgCoin.src = "./assets/coin.png?v=4";
-const imgCat = new Image();
-imgCat.src = "./assets/catbox.png?v=3";
+const imgCatFallback = new Image();
+imgCatFallback.src = "./assets/catbox.png?v=3";
+const catMarks = [null, null, null, null];
+const imgCats = [null, null, null, null];
 let coinMark = null;
 function punchCoinMark() {
   try {
@@ -1622,6 +1624,96 @@ imgCoin.addEventListener("error", () => {
   imgCoin.src = `./assets/coin.png?v=4&r=${Date.now()}`;
 });
 if (imgCoin.complete) punchCoinMark();
+
+function isPaperPixel(r, g, b, a) {
+  if (a < 12) return true;
+  const mx = r > g ? (r > b ? r : b) : g > b ? g : b;
+  const mn = r < g ? (r < b ? r : b) : g < b ? g : b;
+  const lum = (r + g + b) / 3;
+  return lum > 208 && r >= 218 && b >= 165 && mx - mn < 72 && r + 12 >= g && g + 18 >= b;
+}
+
+function punchMascot(im, id) {
+  try {
+    if (!im.naturalWidth) return;
+    const w = im.naturalWidth;
+    const h = im.naturalHeight;
+    const c = document.createElement("canvas");
+    c.width = w;
+    c.height = h;
+    const g = c.getContext("2d");
+    g.drawImage(im, 0, 0);
+    const img = g.getImageData(0, 0, w, h);
+    const d = img.data;
+    const seen = new Uint8Array(w * h);
+    const q = [];
+    const push = (x, y) => {
+      if (x < 0 || y < 0 || x >= w || y >= h) return;
+      const idx = y * w + x;
+      if (seen[idx]) return;
+      seen[idx] = 1;
+      q.push(idx);
+    };
+    for (let x = 0; x < w; x++) {
+      push(x, 0);
+      push(x, h - 1);
+    }
+    for (let y = 0; y < h; y++) {
+      push(0, y);
+      push(w - 1, y);
+    }
+    while (q.length) {
+      const idx = q.pop();
+      const i = idx * 4;
+      if (!isPaperPixel(d[i], d[i + 1], d[i + 2], d[i + 3])) continue;
+      d[i + 3] = 0;
+      const x = idx % w;
+      const y = (idx / w) | 0;
+      push(x + 1, y);
+      push(x - 1, y);
+      push(x, y + 1);
+      push(x, y - 1);
+    }
+    g.putImageData(img, 0, 0);
+    catMarks[id] = c;
+  } catch (_) {
+    catMarks[id] = im;
+  }
+}
+
+function runCatSprite() {
+  const id = Math.max(0, Math.min(3, Number(run?.tier?.id) || 0));
+  return catMarks[id] || imgCats[id] || imgCatFallback;
+}
+
+TICKET_MASCOTS.forEach((src, id) => {
+  const im = new Image();
+  im.onload = () => punchMascot(im, id);
+  im.addEventListener("error", () => { catMarks[id] = imgCatFallback; });
+  imgCats[id] = im;
+  im.src = src;
+  if (im.complete && im.naturalWidth) punchMascot(im, id);
+});
+
+function fillRoundRect(x, y, w, h, r, fill, stroke) {
+  const rr = Math.max(0, Math.min(r, w / 2, h / 2));
+  ctx.beginPath();
+  ctx.moveTo(x + rr, y);
+  ctx.arcTo(x + w, y, x + w, y + h, rr);
+  ctx.arcTo(x + w, y + h, x, y + h, rr);
+  ctx.arcTo(x, y + h, x, y, rr);
+  ctx.arcTo(x, y, x + w, y, rr);
+  ctx.closePath();
+  if (fill) {
+    ctx.fillStyle = fill;
+    ctx.fill();
+  }
+  if (stroke) {
+    ctx.strokeStyle = stroke;
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+  }
+}
 
 let selected = null;
 let run = null;
@@ -1800,9 +1892,9 @@ function freeForTier(tier) {
 function renderTickets() {
   const glyphs = [
     "./assets/coin.png?v=4",
-    "./assets/icon-ticket-glass.png?v=1",
-    "./assets/icon-trophy-glass.png?v=1",
-    "./assets/icon-burn-glass.png?v=1",
+    "./assets/icon-ticket-glass.png?v=2",
+    "./assets/icon-trophy-glass.png?v=2",
+    "./assets/icon-burn-glass.png?v=2",
   ];
   $("tickets").innerHTML = TIERS.map((tier) => {
     const copy = tierText(tier.id);
@@ -1813,7 +1905,7 @@ function renderTickets() {
       <img class="ticket-mascot" src="${mascots[tier.id]}" alt="" />
       <img class="ticket-coin" src="${glyphs[tier.id]}" alt="" />
       ${free ? `<span class="free-badge">${t("freeScout")} · ${tier.cost} LIM</span>` : ""}
-      <div class="cost"><img src="./assets/icon-ticket-glass.png?v=1" alt="" />${free ? t("freeScout") + " · " : ""}${tier.cost} LIM</div>
+      <div class="cost"><img src="./assets/icon-ticket-glass.png?v=2" alt="" />${free ? t("freeScout") + " · " : ""}${tier.cost} LIM</div>
       <h3>${copy.name}</h3>
       <p>${copy.blurb}</p>
       <div class="meta">${tier.mult}×</div>
@@ -3447,9 +3539,9 @@ function drawLight(o, night) {
   ctx.fillRect(mid - 1, lgy - 10, 2, 4);
   if (!liteDraw()) {
     ctx.font = lang === "en" ? "8px 'Press Start 2P'" : "12px 'Noto Sans SC', 'Noto Sans', sans-serif";
-    ctx.fillStyle = "#000";
+    ctx.fillStyle = "#1c2740";
     ctx.fillText(t("stayLow"), mid - 31, lgy + 16);
-    ctx.fillStyle = "#ffe08a";
+    ctx.fillStyle = "#a67c12";
     ctx.fillText(t("stayLow"), mid - 32, lgy + 15);
   }
 }
@@ -3506,8 +3598,10 @@ function drawCat() {
   const bob = onFloor ? Math.sin(run.t * 0.35) * 2 : 0;
   const air = Math.max(0, run.ground - run.y);
   const sh = Math.max(6, 18 - air * 0.08);
-  ctx.fillStyle = "rgba(0, 0, 0, 0.28)";
-  ctx.fillRect(PLAYER_SX - sh / 2, run.ground + 4, sh, 5);
+  ctx.fillStyle = "rgba(0, 0, 0, 0.22)";
+  ctx.beginPath();
+  ctx.ellipse(PLAYER_SX, run.ground + 6, sh, 4, 0, 0, Math.PI * 2);
+  ctx.fill();
   if (!onFloor && run.vy < -1) {
     ctx.fillStyle = "rgba(240, 193, 74, 0.12)";
     ctx.fillRect(PLAYER_SX - 18, run.y - 8, 10, 22);
@@ -3516,9 +3610,11 @@ function drawCat() {
   ctx.save();
   ctx.translate(PLAYER_SX, run.y + bob);
   ctx.scale(2 - stretch, stretch);
-  if (imgCat.complete && imgCat.naturalWidth) {
+  const spr = runCatSprite();
+  const ready = spr && (spr.naturalWidth || spr.width);
+  if (ready) {
     ctx.imageSmoothingEnabled = true;
-    ctx.drawImage(imgCat, -24, -30, 48, 48);
+    ctx.drawImage(spr, -28, -44, 56, 56);
     ctx.imageSmoothingEnabled = false;
   } else {
     ctx.fillStyle = "#c49a4a";
@@ -3543,30 +3639,37 @@ function drawTutorialCallout() {
   const sub = t(pair[1]);
   const a = run.tutAnchor || { x: PLAYER_SX + 10, y: run.y - 58 };
   ctx.font = lang === "en" ? "10px 'Press Start 2P'" : "13px 'Noto Sans', 'Noto Sans SC', sans-serif";
-  const pad = 10;
+  const pad = 12;
   const tw = Math.min(420, Math.max(ctx.measureText(title).width, ctx.measureText(sub).width) + pad * 2);
-  const th = 44;
+  const th = 48;
   let bx = Math.round(a.x - tw / 2);
   let by = Math.round(a.y - th - 10);
   bx = Math.max(8, Math.min(canvas.width - tw - 8, bx));
   by = Math.max(8, Math.min(canvas.height - th - 18, by));
-  ctx.fillStyle = "#000";
-  ctx.fillRect(bx - 3, by - 3, tw + 6, th + 6);
-  ctx.fillStyle = "#f0c14a";
-  ctx.fillRect(bx - 2, by - 2, tw + 4, th + 4);
-  ctx.fillStyle = "rgba(8, 14, 28, 0.94)";
-  ctx.fillRect(bx, by, tw, th);
-  ctx.fillStyle = "#ffe08a";
-  ctx.fillText(title, bx + pad, by + 18);
-  ctx.fillStyle = "#d6e6ff";
-  ctx.fillText(sub, bx + pad, by + 36);
-  const px = Math.round(Math.max(bx + 12, Math.min(bx + tw - 16, a.x)));
-  ctx.fillStyle = "#f0c14a";
-  ctx.fillRect(px, by + th + 2, 8, 8);
+  fillRoundRect(bx, by, tw, th, 12, "rgba(255, 248, 238, 0.94)", "rgba(201, 162, 39, 0.42)");
+  ctx.fillStyle = "#a67c12";
+  ctx.fillText(title, bx + pad, by + 20);
+  ctx.fillStyle = "#1c2740";
+  ctx.fillText(sub, bx + pad, by + 38);
+  const px = Math.round(Math.max(bx + 14, Math.min(bx + tw - 18, a.x)));
+  ctx.fillStyle = "rgba(255, 248, 238, 0.94)";
+  ctx.beginPath();
+  ctx.moveTo(px, by + th + 7);
+  ctx.lineTo(px + 8, by + th - 1);
+  ctx.lineTo(px - 8, by + th - 1);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = "rgba(201, 162, 39, 0.42)";
+  ctx.lineWidth = 1.25;
+  ctx.beginPath();
+  ctx.moveTo(px - 7, by + th - 1);
+  ctx.lineTo(px, by + th + 7);
+  ctx.lineTo(px + 7, by + th - 1);
+  ctx.stroke();
   if (run.tutId === "jump" && (run.t % 24) < 12) {
-    ctx.fillStyle = "#ffe08a";
-    ctx.fillRect(PLAYER_SX + 22, run.y - 48, 10, 14);
-    ctx.fillRect(PLAYER_SX + 24, run.y - 36, 6, 10);
+    fillRoundRect(PLAYER_SX + 18, run.y - 52, 12, 22, 6, "#c9a227");
+    ctx.fillStyle = "#fff8ee";
+    ctx.fillRect(PLAYER_SX + 22, run.y - 46, 4, 8);
   }
 }
 
@@ -3574,12 +3677,12 @@ function drawPopped() {
   const items = liteDraw() ? run.popped.slice(-3) : run.popped;
   ctx.font = lang === "en" ? "10px 'Press Start 2P'" : "13px 'Noto Sans', 'Noto Sans SC', sans-serif";
   for (const n of items) {
-    ctx.fillStyle = "#000";
+    ctx.fillStyle = "rgba(28, 40, 64, 0.55)";
     ctx.fillText(n.text, n.x - 19, n.y - (21 - n.t));
-    ctx.fillStyle = n.gold ? "#ffe08a" : "#d6e6ff";
+    ctx.fillStyle = n.gold ? "#a67c12" : "#3a6aa8";
     ctx.fillText(n.text, n.x - 20, n.y - (22 - n.t));
     if (n.combo) {
-      ctx.fillStyle = "#7fb0ff";
+      ctx.fillStyle = "#3a6aa8";
       ctx.fillText(n.combo, n.x - 16, n.y - (36 - n.t));
     }
   }
