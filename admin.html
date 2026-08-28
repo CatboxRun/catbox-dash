@@ -30,16 +30,18 @@
       href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@500;700&family=Press+Start+2P&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="./styles.css?v=60" />
+    <link rel="stylesheet" href="./styles.css?v=70" />
     <style>
       .admin-page { max-width: 1180px; }
       .admin-page .sub { word-break: break-word; }
       .admin-gate {
-        border: 3px solid var(--gold);
-        background: #0b1220;
+        border: 1px solid var(--line);
+        background: var(--glass-strong);
         padding: 28px 18px;
         text-align: center;
         margin-top: 18px;
+        border-radius: var(--radius);
+        backdrop-filter: blur(16px);
       }
       .admin-gate h1 {
         font-family: "Press Start 2P", monospace;
@@ -65,9 +67,10 @@
       .admin-toolbar input[type="search"] {
         flex: 1;
         min-width: 180px;
-        background: #0b1220;
+        background: var(--glass-strong);
         color: var(--ink);
-        border: 2px solid var(--line);
+        border: 1px solid var(--line);
+        border-radius: var(--radius-sm);
         padding: 8px 10px;
         font: inherit;
       }
@@ -82,10 +85,11 @@
         margin: 10px 0 14px;
       }
       .chip {
-        border: 2px solid var(--line);
-        background: #0b1220;
+        border: 1px solid var(--line);
+        background: var(--glass);
         padding: 8px 10px;
         min-width: 92px;
+        border-radius: var(--radius-sm);
       }
       .chip span {
         display: block;
@@ -101,9 +105,10 @@
       }
       .table-wrap {
         overflow: auto;
-        border: 2px solid var(--line);
-        background: #0b1220;
+        border: 1px solid var(--line);
+        background: var(--glass-strong);
         max-height: calc(100vh - 260px);
+        border-radius: var(--radius);
       }
       table.runs {
         width: 100%;
@@ -122,7 +127,7 @@
       table.runs th {
         position: sticky;
         top: 0;
-        background: #101c32;
+        background: #fff8ee;
         color: var(--gold);
         font-size: 11px;
         cursor: pointer;
@@ -136,7 +141,7 @@
         font-family: ui-monospace, Menlo, Consolas, monospace;
         font-size: 11px;
       }
-      table.runs a { color: #8ec0ff; }
+      table.runs a { color: var(--blue); }
       table.runs .copy {
         margin-left: 6px;
         padding: 2px 6px;
@@ -145,8 +150,9 @@
         color: var(--gold);
         background: transparent;
         border: 1px solid var(--line);
+        border-radius: var(--radius-pill);
       }
-      table.runs .yes { color: #7dffb1; }
+      table.runs .yes { color: #2f8a58; }
       table.runs .no { color: #ff8a8a; }
       table.runs .free { color: var(--gold-hi); }
       .status-line { color: var(--dim); min-height: 1.4em; margin: 8px 0; }
@@ -169,10 +175,11 @@
       table.social { min-width: 720px; }
       .admin-toolbar .ghost.deploy { border-color: var(--gold); color: var(--gold-hi); }
       .fund-panel {
-        border: 2px solid var(--gold);
-        background: #0b1220;
+        border: 1px solid var(--line);
+        background: var(--glass);
         padding: 12px 12px 10px;
         margin: 0 0 14px;
+        border-radius: var(--radius);
       }
       .fund-panel h2 {
         font-family: "Press Start 2P", monospace;
@@ -189,9 +196,10 @@
       }
       .fund-row select,
       .fund-row input[type="number"] {
-        background: #101c32;
+        background: var(--glass-strong);
         color: var(--ink);
-        border: 2px solid var(--line);
+        border: 1px solid var(--line);
+        border-radius: var(--radius-sm);
         padding: 8px 10px;
         font: inherit;
         min-height: 36px;

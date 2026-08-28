@@ -44,7 +44,7 @@
       href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@500;700&family=Noto+Sans+SC:wght@500;700&family=Noto+Sans+JP:wght@500;700&family=Noto+Sans+KR:wght@500;700&family=Noto+Sans+Thai:wght@500;700&family=Press+Start+2P&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="./styles.css?v=62" />
+    <link rel="stylesheet" href="./styles.css?v=70" />
   </head>
   <body>
     <div class="crt">
@@ -92,7 +92,7 @@
               <img class="hero-art" src="./assets/hero-run.png?v=2" alt="" />
               <div class="hero-veil"></div>
               <div class="hero-copy">
-                <img class="hero-mascot" src="./assets/hero-cat.png?v=3" alt="Catbox" />
+                <img class="hero-mascot" src="./assets/ticket-scout.png?v=1" alt="Catbox" />
                 <div class="hero-text">
                   <h1 data-i18n="hero">JUMP FOR THE COINS.<br />TICKET BACK · OVERTIME 50 / 50.</h1>
                 </div>
@@ -143,7 +143,7 @@
               <h2 data-i18n="rulesTitle">HOW TO PLAY</h2>
               <div class="how-strip" aria-label="How to play">
                 <div class="how-item">
-                  <img src="./assets/hero-cat.png?v=3" alt="" />
+                  <img src="./assets/ticket-scout.png?v=1" alt="" />
                   <span data-i18n="howJump">TAP · JUMP</span>
                 </div>
                 <div class="how-item">
@@ -236,7 +236,7 @@
           <div class="lobby-pane pane-pool hidden" data-pane="pool">
             <div class="split-row two-plus-burn">
               <div class="split week">
-                <img src="./assets/icon-trophy.png?v=2" alt="" />
+              <img src="./assets/icon-trophy-glass.png?v=1" alt="" />
                 <b>50%</b><span data-i18n="weekBoard">DAILY · 50%</span><i id="weekPoolAmt">—</i>
                 <small class="split-note" data-i18n="daySplitNote">Split by LIM shards · claim at Singapore midnight.</small>
                 <span class="split-k" data-i18n="hudFloor">FLOOR</span>
@@ -247,14 +247,14 @@
                 <button class="ghost split-claim" id="claimDailyBtn" type="button" disabled data-i18n="claimFloor">CLAIM FLOOR</button>
               </div>
               <div class="split invite">
-                <img src="./assets/icon-invite.png?v=2" alt="" />
+              <img src="./assets/icon-invite-glass.png?v=1" alt="" />
                 <b>20%</b><span data-i18n="inviteBoard">INVITE · 20%</span><i id="invitePoolAmt">0</i>
                 <small class="split-note" data-i18n="inviteTopNote">Split by LIM points. Same midnight hour.</small>
                 <small id="inviteTopLive" class="split-live hidden"></small>
                 <button class="ghost split-claim" id="claimInviteBtn" type="button" disabled data-i18n="claimInvite">CLAIM INVITE</button>
               </div>
               <div class="split burn">
-                <img src="./assets/icon-burn.png?v=2" alt="" />
+              <img src="./assets/icon-burn-glass.png?v=1" alt="" />
                 <b>30%</b><span data-i18n="burnTitle">BURN</span><i id="burnedAmt">0</i>
               </div>
             </div>
@@ -269,16 +269,16 @@
             </div>
             <div class="boards two">
               <article class="stat board">
-                <p class="stat-k"><img src="./assets/icon-trophy.png?v=2" alt="" /><span data-i18n="weekBoardHead">DAILY · 50% · LIM shards</span></p>
+                <p class="stat-k"><img src="./assets/icon-trophy-glass.png?v=1" alt="" /><span data-i18n="weekBoardHead">DAILY · 50% · LIM shards</span></p>
                 <ol class="board-list" id="weekList"></ol>
               </article>
               <article class="stat invite-stat">
-                <p class="stat-k"><img src="./assets/icon-invite.png?v=2" alt="" /><span data-i18n="inviteBoardHead">INVITE · 20% · LIM points</span></p>
+                <p class="stat-k"><img src="./assets/icon-invite-glass.png?v=1" alt="" /><span data-i18n="inviteBoardHead">INVITE · 20% · LIM points</span></p>
                 <ol class="board-list" id="inviteList"></ol>
               </article>
             </div>
             <article class="stat burn-stat burn-log">
-              <p class="stat-k"><img src="./assets/icon-burn.png?v=2" alt="" /><span data-i18n="burnLog">BURN HASHES · 30% TO DEAD</span></p>
+              <p class="stat-k"><img src="./assets/icon-burn-glass.png?v=1" alt="" /><span data-i18n="burnLog">BURN HASHES · 30% TO DEAD</span></p>
               <p class="dead-line">
                 <a id="deadLink" href="https://bscscan.com/address/0x000000000000000000000000000000000000dEaD" target="_blank" rel="noopener noreferrer">0x000000000000000000000000000000000000dEaD</a>
               </p>
@@ -288,7 +288,7 @@
 
           <div class="lobby-pane pane-more hidden" data-pane="more">
             <div class="invite-bar">
-              <img class="invite-ico" src="./assets/icon-invite.png?v=2" alt="" />
+              <img class="invite-ico" src="./assets/icon-invite-glass.png?v=1" alt="" />
               <div class="invite-copy">
                 <p class="stat-k" data-i18n="inviteTitle">INVITE FRIENDS</p>
                 <p class="invite-lead" data-i18n="inviteLead">Share your link. Each friend who plays adds +5%. Extra runs +0.1%. Boost 105%–200%. Ticket LIM returns to your wallet. Paid overtime splits 50% floor / 50% burn.</p>
@@ -316,8 +316,8 @@
 
             <section class="auto-card">
               <div class="auto-head">
-                <img src="./assets/icon-auto.png?v=2" alt="" />
-                <img src="./assets/icon-fair.png?v=2" alt="" />
+                <img src="./assets/icon-auto-glass.png?v=1" alt="" />
+                <img src="./assets/icon-fair-glass.png?v=1" alt="" />
                 <div>
                   <p class="kicker" data-i18n="autoKicker">ON-CHAIN ARCADE</p>
                   <h2 data-i18n="autoTitle">THE CONTRACT RUNS THE ARCADE</h2>
@@ -399,14 +399,14 @@
             <h1 id="payTitle">PAY</h1>
           </div>
           <div class="pay-stub-art">
-            <img src="./assets/icon-ticket.png?v=2" alt="" />
-            <img src="./assets/hero-cat.png?v=3" alt="" />
+            <img src="./assets/icon-ticket-glass.png?v=1" alt="" />
+            <img id="payMascot" src="./assets/ticket-scout.png?v=1" alt="" />
           </div>
         </div>
         <p id="payCopy"></p>
         <p class="eligible" data-i18n="eligible">Catch the ticket — leftover burn skips. Paid overtime: 50% floor / 50% burn. Missed coins: daily 50% · invite 20% · burn 30%.</p>
         <div class="meter-preview">
-          <img src="./assets/hero-cat.png?v=3" alt="" />
+          <img id="payMeterMascot" src="./assets/ticket-scout.png?v=1" alt="" />
           <img class="coin-logo" src="./assets/coin.png?v=4" alt="" />
           <span data-i18n="payHint">Ticket is chopped into coins. Catch it back to your wallet. Keep running to grow today's floor.</span>
         </div>
@@ -441,7 +441,7 @@
 
       <section id="over" class="panel hidden over-panel">
         <div class="over-stub">
-          <img src="./assets/hero-cat.png?v=3" alt="" />
+          <img id="overMascot" src="./assets/ticket-scout.png?v=1" alt="" />
           <div>
             <p class="kicker" id="overKicker">RUN OVER</p>
             <h1 id="overTitle">END</h1>
@@ -536,7 +536,7 @@
     <script src="https://cdn.jsdelivr.net/npm/ethers@6.13.5/dist/ethers.umd.min.js"></script>
     <script src="./chain.js?v=104"></script>
     <script src="./i18n.js?v=119"></script>
-    <script src="./game.js?v=129"></script>
+    <script src="./game.js?v=131"></script>
     <script src="./bgm.js?v=26"></script>
   </body>
 </html>

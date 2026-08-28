@@ -5,6 +5,21 @@ const TIERS = [
   { id: 3, name: "VAULT", cost: 10, mult: 3, speed: 2.55, speedMax: 4.6, peakAt: 96 },
 ];
 
+const TICKET_MASCOTS = [
+  "./assets/ticket-scout.png?v=1",
+  "./assets/ticket-runner.png?v=1",
+  "./assets/ticket-phantom.png?v=1",
+  "./assets/ticket-vault.png?v=1",
+];
+
+function ticketMascot(id) {
+  return TICKET_MASCOTS[Number(id)] || TICKET_MASCOTS[0];
+}
+
+function setMascot(el, id) {
+  if (el) el.src = ticketMascot(id);
+}
+
 function payoutCap(ticket) {
   const n = Number(ticket) || 0;
   return n <= 1 ? +(n * 2).toFixed(6) : +(n * 1.5).toFixed(6);
@@ -1785,19 +1800,20 @@ function freeForTier(tier) {
 function renderTickets() {
   const glyphs = [
     "./assets/coin.png?v=4",
-    "./assets/icon-ticket.png?v=2",
-    "./assets/icon-trophy.png?v=2",
-    "./assets/icon-burn.png?v=2",
+    "./assets/icon-ticket-glass.png?v=1",
+    "./assets/icon-trophy-glass.png?v=1",
+    "./assets/icon-burn-glass.png?v=1",
   ];
   $("tickets").innerHTML = TIERS.map((tier) => {
     const copy = tierText(tier.id);
     const free = freeForTier(tier);
+    const mascots = TICKET_MASCOTS;
     return `
     <button class="ticket t${tier.id}" data-id="${tier.id}">
-      <img class="ticket-mascot" src="./assets/hero-cat.png?v=3" alt="" />
+      <img class="ticket-mascot" src="${mascots[tier.id]}" alt="" />
       <img class="ticket-coin" src="${glyphs[tier.id]}" alt="" />
       ${free ? `<span class="free-badge">${t("freeScout")} · ${tier.cost} LIM</span>` : ""}
-      <div class="cost"><img src="./assets/icon-ticket.png?v=2" alt="" />${free ? t("freeScout") + " · " : ""}${tier.cost} LIM</div>
+      <div class="cost"><img src="./assets/icon-ticket-glass.png?v=1" alt="" />${free ? t("freeScout") + " · " : ""}${tier.cost} LIM</div>
       <h3>${copy.name}</h3>
       <p>${copy.blurb}</p>
       <div class="meta">${tier.mult}×</div>
@@ -1822,6 +1838,8 @@ function openPay(tier) {
   $("payGo").textContent = free ? t("payGoFree") : t("payGo");
   $("payGo").disabled = false;
   if ($("payStatus")) $("payStatus").textContent = "";
+  setMascot($("payMascot"), tier.id);
+  setMascot($("payMeterMascot"), tier.id);
   show(pay);
 }
 
@@ -1843,6 +1861,7 @@ function fmtRewardPct(bps) {
 function refreshOver() {
   if (!lastFinish || over.classList.contains("hidden")) return;
   const { cap, ticket, got, leftover, score, coins, whyKey, rank, burned, burnHash, payout, bps, free } = lastFinish;
+  setMascot($("overMascot"), lastFinish.tierId ?? selected?.id ?? 0);
   const fail = String(whyKey || "").startsWith("die");
   over.classList.toggle("cap", Boolean(cap));
   const whyEl = $("overWhy");
@@ -3633,6 +3652,7 @@ function finish(whyKey) {
     whyKey,
     rank,
     free: Boolean(run.free),
+    tierId: run.tier.id,
     burned: leftover > 0 ? +(leftover * 0.3).toFixed(6) : 0,
     burnHash: "",
     tx: "",
