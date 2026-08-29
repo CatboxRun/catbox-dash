@@ -29,8 +29,6 @@ const I18N = {
     tabPool: "POOLS",
     tabRules: "RULES",
     tabMore: "INVITE",
-    tabSicbo: "SICBO",
-    sicboJumpHint: "1–10 LIM · hit pays double",
     noticeKicker: "NOTICE",
     noticeTitle: "BOARD",
     notice1Title: "Ambassadors",
@@ -362,8 +360,6 @@ const I18N = {
     tabPool: "奖池",
     tabRules: "规则",
     tabMore: "邀请",
-    tabSicbo: "骰宝",
-    sicboJumpHint: "1–10 LIM · 押中双倍到账",
     noticeKicker: "公告",
     noticeTitle: "公告栏",
     notice1Title: "招募大使",
@@ -819,8 +815,6 @@ const I18N = {
     tabPool: "プール",
     tabRules: "ルール",
     tabMore: "招待",
-    tabSicbo: "骰宝",
-    sicboJumpHint: "1–10 LIM · 当たれば倍",
     openRules: "遊び方",
     howNote: "ライトの下は低く。赤いパイプと穴は跳ぶ。コースは止まらない。跳ばないと落ちる。",
     rulesToggle: "ルール",
@@ -1152,8 +1146,6 @@ const I18N = {
     tabPool: "풀",
     tabRules: "규칙",
     tabMore: "초대",
-    tabSicbo: "주사위",
-    sicboJumpHint: "1–10 LIM · 맞히면 두 배",
     openRules: "하는 법",
     howNote: "라이트 아래는 낮게. 빨간 파이프와 구멍은 점프. 트랙은 멈추지 않는다. 점프를 놓치면 떨어진다.",
     rulesToggle: "규칙",
@@ -1485,8 +1477,6 @@ const I18N = {
     tabPool: "HỒ",
     tabRules: "LUẬT",
     tabMore: "MỜI",
-    tabSicbo: "XÍ NGẦU",
-    sicboJumpHint: "1–10 LIM · thắng gấp đôi",
     openRules: "CÁCH CHƠI",
     howNote: "Thấp dưới đèn. Nhảy ống đỏ và hố. Đường không dừng — trượt nhảy là rơi.",
     rulesToggle: "LUẬT",
@@ -1818,8 +1808,6 @@ const I18N = {
     tabPool: "พูล",
     tabRules: "กติกา",
     tabMore: "ชวน",
-    tabSicbo: "ไฮโล",
-    sicboJumpHint: "1–10 LIM · ถูกจ่ายสองเท่า",
     openRules: "วิธีเล่น",
     howNote: "ต่ำใต้ไฟ กระโดดท่อแดงและหลุม ลู่ไม่หยุด พลาดกระโดดแล้วตก",
     rulesToggle: "กติกา",
@@ -2151,8 +2139,6 @@ const I18N = {
     tabPool: "ПУЛЫ",
     tabRules: "ПРАВИЛА",
     tabMore: "ИНВАЙТ",
-    tabSicbo: "СИК БО",
-    sicboJumpHint: "1–10 LIM · выигрыш x2",
     openRules: "КАК ИГРАТЬ",
     howNote: "Низко под светом. Прыгайте красные трубы и ямы. Трек не останавливается — промахнулись прыжком и падаете.",
     rulesToggle: "ПРАВИЛА",
@@ -2360,8 +2346,6 @@ const I18N = {
     tabPool: "KOLAM",
     tabRules: "ATURAN",
     tabMore: "UNDANG",
-    tabSicbo: "DADO",
-    sicboJumpHint: "1–10 LIM · kena bayar dobel",
     noticeKicker: "PENGUMUMAN",
     noticeTitle: "PAPAN",
     notice1Title: "Duta",
@@ -2709,8 +2693,6 @@ const I18N = {
     tabPool: "POOL",
     tabRules: "TUNTUNIN",
     tabMore: "INVITE",
-    tabSicbo: "SICBO",
-    sicboJumpHint: "1–10 LIM · tama, doble",
     noticeKicker: "PAALALA",
     noticeTitle: "BOARD",
     notice1Title: "Ambassador",
@@ -3155,7 +3137,6 @@ function applyI18n() {
   if (typeof refreshWalletUi === "function") refreshWalletUi();
   if (typeof paintSwapGo === "function") paintSwapGo();
   if (typeof refreshSwap === "function") refreshSwap();
-  if (typeof window.refreshSicboCopy === "function") window.refreshSicboCopy();
   if (typeof window.syncBgmUi === "function") window.syncBgmUi();
   if (typeof refreshTutorialCopy === "function") refreshTutorialCopy();
 }

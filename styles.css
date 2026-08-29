@@ -279,7 +279,7 @@ body:not([data-lang="en"]) .swap-head h2 { font-size: 18px; }
 }
 .lobby-tabs {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(4, 1fr);
   gap: 6px;
   margin: 0 0 10px;
 }
@@ -287,7 +287,7 @@ body:not([data-lang="en"]) .swap-head h2 { font-size: 18px; }
   font-family: "Noto Sans", "Noto Sans SC", sans-serif;
   font-size: 12px;
   font-weight: 800;
-  padding: 8px 4px;
+  padding: 8px 6px;
   min-height: 36px;
   cursor: pointer;
   color: var(--dim);
@@ -404,33 +404,6 @@ body:not([data-lang="en"]) .meme-line {
   font-weight: 800;
   line-height: 1.45;
   text-align: center;
-}
-.sicbo-jump {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-  margin: 0 0 10px;
-  padding: 10px 12px;
-  text-align: left;
-  cursor: pointer;
-  color: var(--ink);
-  background: var(--glass);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  box-shadow: var(--glow);
-  font-family: inherit;
-}
-.sicbo-jump img { width: 40px; height: 40px; }
-.sicbo-jump span { display: flex; flex-direction: column; gap: 2px; }
-.sicbo-jump b { font-size: 14px; }
-.sicbo-jump small { font-size: 11px; color: var(--dim); font-weight: 700; }
-.pane-sicbo .sicbo-page { margin: 0 auto; }
-.pane-sicbo .sicbo-subline {
-  margin: 0 0 10px;
-  font-size: 12px;
-  font-weight: 800;
-  color: var(--gold-hi);
 }
 .lobby-pane.hidden { display: none !important; }
 

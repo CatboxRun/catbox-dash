@@ -919,13 +919,10 @@ function bootLobbyTabs() {
     btn.onclick = () => {
       setTab(btn.dataset.tab);
       if (btn.dataset.tab === "pool") pullLiveBoards(true);
-      if (btn.dataset.tab === "sicbo") window.refreshSicbo?.();
     };
   });
   const open = $("openRules");
   if (open) open.onclick = () => setTab("rules");
-  const openSicbo = $("openSicbo");
-  if (openSicbo) openSicbo.onclick = () => setTab("sicbo");
   window.setLobbyTab = setTab;
 }
 
