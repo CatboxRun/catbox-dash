@@ -412,6 +412,33 @@ body:not([data-lang="en"]) .meme-line {
   font-size: 13px;
   font-weight: 700;
 }
+.illust-banner {
+  margin: 0 0 12px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--glow);
+  background: #efe3cf;
+}
+.illust-banner img {
+  display: block;
+  width: 100%;
+  height: 124px;
+  object-fit: cover;
+  object-position: center 42%;
+}
+.games-hero img { height: 132px; object-position: center 46%; }
+.pool-hero img { height: 112px; object-position: center 48%; }
+.game-card-art {
+  position: absolute;
+  inset: 0 0 34px 0;
+  width: 100%;
+  height: calc(100% - 34px);
+  object-fit: cover;
+  object-position: center 42%;
+  pointer-events: none;
+  z-index: 0;
+}
 .game-cards {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -457,6 +484,7 @@ body:not([data-lang="en"]) .meme-line {
   object-fit: contain;
   filter: drop-shadow(0 10px 16px rgba(0, 0, 0, 0.35));
   pointer-events: none;
+  z-index: 1;
 }
 .game-card-mascot {
   position: absolute;
@@ -467,12 +495,13 @@ body:not([data-lang="en"]) .meme-line {
   object-fit: contain;
   animation: mascot-bob 1.8s ease-in-out infinite;
   pointer-events: none;
+  z-index: 2;
 }
 .game-card-copy {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  z-index: 1;
+  z-index: 2;
 }
 .game-card-copy b {
   font-size: 16px;
@@ -490,6 +519,7 @@ body:not([data-lang="en"]) .meme-line {
   left: 0;
   right: 0;
   bottom: 0;
+  z-index: 2;
   text-align: center;
   padding: 7px 0;
   font-size: 11px;
@@ -498,10 +528,22 @@ body:not([data-lang="en"]) .meme-line {
   background: linear-gradient(180deg, #edd078, #c9a227);
   border-radius: 0 0 18px 18px;
 }
+.games-stage-bar {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  margin: 0 0 10px;
+}
+.games-stage:has(#laneSwitch:not(.hidden)) .daily-head,
+.games-stage:has(#laneSwitch:not(.hidden)) .track-head {
+  display: none;
+}
 .games-back {
   display: inline-flex;
   align-items: center;
-  margin: 0 0 10px;
+  align-self: flex-start;
+  margin: 0;
   padding: 8px 12px;
   font: inherit;
   font-size: 12px;
@@ -511,6 +553,32 @@ body:not([data-lang="en"]) .meme-line {
   border: 1px solid var(--line);
   border-radius: var(--radius-pill);
   cursor: pointer;
+  flex-shrink: 0;
+}
+.lane-switch {
+  display: flex;
+  flex: 1;
+  gap: 6px;
+  min-width: 0;
+}
+.lane-switch.hidden { display: none !important; }
+.lane-switch button {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 10px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--ink);
+  background: var(--glass);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+}
+.lane-switch button.on {
+  color: #1a1204;
+  background: linear-gradient(180deg, #edd078, #c9a227);
+  border-color: rgba(201, 162, 39, 0.8);
 }
 .pane-games .sicbo-page { margin: 0 auto; }
 .pane-games .sicbo-subline {
@@ -790,7 +858,23 @@ h1 { font-size: 16px; line-height: 1.6; margin: 0 0 14px; }
 .dead-line { font-size: 8px; margin: 0 0 8px; word-break: break-all; }
 .dead-line a { color: #ff8a7a; }
 .board-list a { color: var(--blue); font-size: inherit; }
-.board-list li.empty { color: var(--dim); border: 0; justify-content: flex-start; }
+.board-list li.empty {
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 16px 8px 18px;
+  text-align: center;
+  color: var(--dim);
+  border: 0;
+}
+.board-list li.empty .empty-illust {
+  width: 92px;
+  height: 92px;
+  object-fit: cover;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+}
 .tx-line.burn-tx { color: #ff8a7a; }
 .burn-log { min-height: 0; margin-bottom: 16px; }
 
@@ -1371,6 +1455,8 @@ button.primary, button.ghost {
   .ticket p { display: none; }
   .hero-art { height: 112px; }
   .hero-arcade { min-height: 112px; margin-bottom: 6px; }
+  .illust-banner img { height: 100px; }
+  .games-hero img { height: 108px; }
   .hero-mascot { width: 48px; height: 48px; }
   .hero-copy h1 { font-size: 12px; }
   body:not([data-lang="en"]) .hero-copy h1 { font-size: 15px; }
@@ -1738,6 +1824,8 @@ body:not([data-lang="en"]) .auto-card h2 { font-size: 18px; }
 @media (orientation: landscape) and (max-height: 560px) {
   .hero-art { height: 100px; }
   .hero-arcade { min-height: 100px; margin-bottom: 8px; }
+  .illust-banner img { height: 72px; }
+  .games-hero img { height: 80px; }
   .hero-mascot { display: none; }
   .auto-steps { display: none; }
   .ticket-mascot { width: 40px; height: 40px; }
@@ -1839,8 +1927,8 @@ body:not([data-lang="en"]) .how-item {
   font-weight: 700;
 }
 .how-item img {
-  width: 28px;
-  height: 28px;
+  width: 32px;
+  height: 32px;
   object-fit: contain;
   image-rendering: auto;
   background: transparent;

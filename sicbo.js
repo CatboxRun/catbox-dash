@@ -7,20 +7,22 @@
   const COPY = {
     zh: {
       sub: "提现桌 · 1–10 LIM 自选",
-      mode: "点小或大。钱包先确认下注，等 2 个块后再确认揭盅。押中双倍回钱包。",
+      mode: "先选注额，点小或大锁注。等两个块，再点揭盅。押中双倍回钱包。",
       kicker: "提现桌",
       small: "小",
       big: "大",
       smallMeta: "4–8 · 开双倍",
       bigMeta: "13–17 · 开双倍",
       open: "揭盅",
+      next: "再来一盅",
       opening: "揭盅中，请在钱包确认…",
-      wait: "已下注。等 {n} 个块再揭盅…",
-      waitReady: "可以揭盅了，请在钱包确认。",
+      wait: "已锁。再等 {n} 个块，再点揭盅。",
+      waitReady: "可以揭盅了。点揭盅，在钱包确认。",
       r1: "自选 1–10 LIM 开一盅。押中即双倍回钱包。",
       r2: "押小开 4–8，押大开 13–17。中门与围骰充实奖池。",
       r3: "216 种点数里，54 面开双倍。",
-      r4: "独立奖池。下注后等 2 个块揭盅，未揭的注回来还能继续。",
+      r4: "独立奖池。锁注后等两个块，再点揭盅。未揭的注，回来还能继续。",
+      r5: "桌池每周销毁约两成。未揭的注不烧。",
       win: "开中了。{n} LIM 已到钱包。",
       loseMid: "中门入池，再来一盅。",
       loseTriple: "围骰入池，再来一盅。",
@@ -44,20 +46,22 @@
     },
     en: {
       sub: "TABLE · 1–10 LIM",
-      mode: "Tap Small or Big. Confirm the bet, wait 2 blocks, then confirm the cup. A hit pays double.",
+      mode: "Pick a stake, then Small or Big to lock. Wait two blocks, then tap OPEN CUP. A hit pays double.",
       kicker: "TABLE",
       small: "SMALL",
       big: "BIG",
       smallMeta: "4–8 · pays double",
       bigMeta: "13–17 · pays double",
       open: "OPEN CUP",
+      next: "AGAIN",
       opening: "Opening — confirm in wallet…",
-      wait: "Bet in. Wait {n} blocks…",
-      waitReady: "Ready. Confirm the cup in your wallet.",
+      wait: "Locked. {n} blocks, then tap OPEN CUP.",
+      waitReady: "Ready. Tap OPEN CUP and confirm in the wallet.",
       r1: "Pick 1–10 LIM per cup. A hit returns double to your wallet.",
       r2: "Small opens 4–8. Big opens 13–17. Middle and triples refill the pool.",
       r3: "54 of 216 faces pay double.",
-      r4: "Own pool. Settle 2 blocks after the bet. An open cup can be finished later.",
+      r4: "Own pool. After lock, wait two blocks, then tap OPEN CUP. An open cup can be finished later.",
+      r5: "Each week about 20% of the table pool is burned. Open cups are not burned.",
       win: "Hit. {n} LIM is in the wallet.",
       loseMid: "Middle refill. Open another cup.",
       loseTriple: "Triple refill. Open another cup.",
@@ -93,7 +97,7 @@
   let pendingSide = 0;
   let pendingStake = 0;
   let stakeLim = 1;
-  let autoOpen = false;
+  let phase = "edit";
 
   function dashMode() {
     return Boolean(window.CatboxChain && $("lobby") && $("sbFelt"));
@@ -126,10 +130,12 @@
   function paintPhase() {
     const page = root();
     if (!page) return;
-    const pending = pendingLock > 0;
-    page.setAttribute("data-pending", pending ? "1" : "0");
-    page.setAttribute("data-locked", busy || pending ? "1" : "0");
-    setTxt("sbOpen", t(busy && pending ? "opening" : "open"));
+    const waiting = phase === "wait" || pendingLock > 0;
+    page.setAttribute("data-pending", waiting ? "1" : "0");
+    page.setAttribute("data-result", phase === "result" ? "1" : "0");
+    page.setAttribute("data-locked", busy || waiting || phase === "result" ? "1" : "0");
+    const label = phase === "result" ? "next" : busy && waiting ? "opening" : "open";
+    setTxt("sbOpen", t(label));
   }
   function applyCopy() {
     syncLang();
@@ -144,6 +150,7 @@
     setTxt("sbR2", t("r2"));
     setTxt("sbR3", t("r3"));
     setTxt("sbR4", t("r4"));
+    setTxt("sbR5", t("r5"));
     setTxt("sbMode", t("mode"));
     setTxt("sbStake", t("stakeLabel"));
     setTxt("sbPopOk", t("ok"));
@@ -174,7 +181,6 @@
     return window.ethereum;
   }
   async function readProvider() {
-    if (window.ethereum) return new ethers.BrowserProvider(eth(), "any");
     return new ethers.JsonRpcProvider(cfg().rpc || "https://bsc-dataseed.binance.org", 56, {
       staticNetwork: true,
       batchMaxCount: 1,
@@ -239,7 +245,7 @@
       btn.dataset.lim = String(n);
       btn.textContent = String(n);
       btn.onclick = () => {
-        if (busy || pendingLock) return;
+        if (busy || pendingLock || phase !== "edit") return;
         stakeLim = n;
         paintChips();
       };
@@ -330,20 +336,24 @@
   }
 
   async function loadOpenBet() {
-    if (!account) {
-      pendingLock = 0;
-      return null;
-    }
+    if (!account) return pendingLock ? { open: true, lockBlock: pendingLock, side: pendingSide, amount: 0n } : null;
     const g = gameContract(await readProvider());
     const b = parseBet(await g.bets(account));
     if (!b.open) {
       pendingLock = 0;
+      if (phase === "wait") {
+        phase = "edit";
+        coverCup(false);
+        $("sbSmall")?.classList.remove("picked");
+        $("sbBig")?.classList.remove("picked");
+      }
       return null;
     }
     pendingLock = b.lockBlock;
     pendingSide = b.side;
     pendingStake = Math.max(MIN_STAKE, Math.min(MAX_STAKE, Number(ethers.formatEther(b.amount || 0n))));
     stakeLim = pendingStake || stakeLim;
+    if (phase === "edit") phase = "wait";
     $("sbSmall")?.classList.toggle("picked", pendingSide === 0);
     $("sbBig")?.classList.toggle("picked", pendingSide === 1);
     coverCup(true);
@@ -360,7 +370,12 @@
       const g = gameContract(p);
       pool = await g.freePool();
       if (account) lim = await limContract(p).balanceOf(account);
-      if (!busy) await loadOpenBet();
+      if (!busy && phase !== "result") await loadOpenBet();
+      if (pendingLock && phase !== "result") {
+        const n = Number(await p.getBlockNumber());
+        const left = Math.max(0, pendingLock + 1 - n);
+        setStatus(left ? t("wait", { n: left }) : t("waitReady"));
+      }
     } catch (_) {}
     setTxt("sbWallet", t("bal", { lim: account ? fmtLim(lim) : "—", pool: fmtLim(pool) }));
     paintChips();
@@ -370,11 +385,18 @@
   function hidePop() {
     $("sbPop")?.classList.add("hidden");
   }
-  function showPop(total, line, hit) {
-    setTxt("sbPopTotal", total || "");
-    setTxt("sbPopLine", line || "");
-    $("sbPopLine")?.setAttribute("data-hit", hit ? "1" : "0");
-    $("sbPop")?.classList.remove("hidden");
+  function resetRound() {
+    phase = "edit";
+    pendingLock = 0;
+    hidePop();
+    coverCup(false);
+    setTxt("sbResult", "");
+    $("sbResult")?.removeAttribute("data-hit");
+    setTxt("sbTotal", "—");
+    setStatus("");
+    $("sbSmall")?.classList.remove("picked");
+    $("sbBig")?.classList.remove("picked");
+    paintPhase();
   }
 
   function showOutcome(side, d1, d2, d3, stake) {
@@ -387,12 +409,15 @@
     if (w.ok) line = t("win", { n: doubled });
     else if (w.why === "triple") line = t("loseTriple");
     else if (w.why === "mid") line = t("loseMid");
-    setTxt("sbResult", "");
-    $("sbResult")?.removeAttribute("data-hit");
+    setTxt("sbResult", line);
+    $("sbResult")?.setAttribute("data-hit", w.ok ? "1" : "0");
     setStatus("");
-    showPop(t("total", { n: sum }), line, w.ok);
+    hidePop();
+    phase = "result";
+    pendingLock = 0;
     $("sbSmall")?.classList.toggle("picked", side === 0);
     $("sbBig")?.classList.toggle("picked", side === 1);
+    paintPhase();
   }
 
   async function spinTo(d1, d2, d3) {
@@ -475,12 +500,16 @@
     const tx = await g.settle();
     const rec = await tx.wait();
     const ev = parseSettled(g, rec);
-    pendingLock = 0;
-    paintPhase();
     if (ev?.name === "Refunded") {
       coverCup(false);
+      phase = "result";
+      pendingLock = 0;
+      setTxt("sbTotal", "—");
+      setTxt("sbResult", t("refund"));
+      $("sbResult")?.setAttribute("data-hit", "0");
       setStatus("");
-      showPop("", t("refund"), false);
+      hidePop();
+      paintPhase();
     } else if (ev?.name === "Settled") {
       const d1 = Number(ev.args.d1);
       const d2 = Number(ev.args.d2);
@@ -489,8 +518,10 @@
       showOutcome(Number(ev.args.side), d1, d2, d3, pendingStake || stakeLim);
     } else {
       setStatus(t("refund"));
+      phase = "edit";
+      pendingLock = 0;
+      paintPhase();
     }
-    coverCup(false);
     await refreshStats();
   }
 
@@ -501,9 +532,11 @@
     await ensureBsc();
     const open = await loadOpenBet();
     if (open) {
+      phase = "wait";
+      coverCup(true);
+      paintPhase();
       setStatus(t("resume"));
       toast(t("hasOpen"));
-      await openCup();
       return;
     }
     const s = await signer();
@@ -538,12 +571,19 @@
     pendingLock = b.lockBlock;
     pendingSide = b.side;
     pendingStake = stakeLim;
+    phase = "wait";
     paintPhase();
-    await openCup();
+    setStatus(t("wait", { n: 2 }));
   }
 
   async function onSide(side) {
     if (busy || spinning) return;
+    if (phase === "result") return;
+    if (phase === "wait" || pendingLock) {
+      toast(t("hasOpen"));
+      setStatus(t("resume"));
+      return;
+    }
     hidePop();
     busy = true;
     paintPhase();
@@ -563,6 +603,10 @@
 
   async function onOpen() {
     if (busy || spinning) return;
+    if (phase === "result") {
+      resetRound();
+      return;
+    }
     busy = true;
     paintPhase();
     try {
@@ -579,18 +623,11 @@
   }
 
   async function resumeIfOpen() {
-    if (busy || spinning || autoOpen) return;
+    if (busy || spinning || phase === "result") return;
     syncAccount();
     if (!account) return;
-    try {
-      const b = await loadOpenBet();
-      if (!b) return;
-      autoOpen = true;
-      setStatus(t("resume"));
-      await onOpen();
-    } finally {
-      autoOpen = false;
-    }
+    const b = await loadOpenBet();
+    if (b) setStatus(t("resume"));
   }
 
   function bindUi() {
@@ -633,11 +670,12 @@
     window.addEventListener("catbox-wallet", () => {
       syncAccount();
       refreshStats().catch(() => {});
+      resumeIfOpen().catch(() => {});
     });
     setInterval(() => {
       if (spinning || busy) return;
       refreshStats().catch(() => {});
-    }, 4000);
+    }, 2000);
   }
 
   window.bootSicBo = bootSicBo;

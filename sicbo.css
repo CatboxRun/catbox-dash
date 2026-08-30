@@ -307,7 +307,7 @@ body[data-sicbo] {
   margin-top: 10px;
   min-height: 44px;
 }
-.sicbo-page:not([data-pending="1"]) .sicbo-open { display: none; }
+.sicbo-page:not([data-pending="1"]):not([data-result="1"]) .sicbo-open { display: none; }
 .sicbo-rules {
   margin: 14px 0 0;
   padding: 12px 14px 12px 28px;
@@ -321,17 +321,7 @@ body[data-sicbo] {
 .sicbo-rules li:last-child { margin-bottom: 0; }
 .sicbo-stats, .sicbo-status { font-size: 12px; color: var(--dim); }
 .sicbo-status { min-height: 1.4em; font-weight: 700; color: var(--ink); }
-.sicbo-pop {
-  position: absolute;
-  inset: 8px;
-  z-index: 24;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 12px;
-  background: rgba(28, 40, 64, 0.38);
-  border-radius: 16px;
-}
+.sicbo-pop { display: none !important; }
 .sicbo-pop.hidden { display: none !important; }
 .sicbo-pop-card {
   width: min(86%, 280px);

@@ -44,8 +44,10 @@
       href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@500;700&family=Noto+Sans+SC:wght@500;700&family=Noto+Sans+JP:wght@500;700&family=Noto+Sans+KR:wght@500;700&family=Noto+Sans+Thai:wght@500;700&family=Press+Start+2P&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="./styles.css?v=81" />
-    <link rel="stylesheet" href="./sicbo.css?v=10" />
+    <link rel="stylesheet" href="./styles.css?v=86" />
+    <link rel="stylesheet" href="./sicbo.css?v=11" />
+    <link rel="stylesheet" href="./daily.css?v=4" />
+    <link rel="stylesheet" href="./track.css?v=7" />
   </head>
   <body>
     <div class="crt">
@@ -141,24 +143,41 @@
 
           <div class="lobby-pane pane-games hidden" data-pane="games">
             <div class="games-catalog" id="gamesCatalog">
+              <div class="illust-banner games-hero">
+                <img src="./assets/games-hero.jpg?v=1" alt="" />
+              </div>
               <p class="kicker" data-i18n="tabGames">OTHER</p>
-              <p class="games-lead" data-i18n="gamesLead">Tap a card to open the table.</p>
+              <p class="games-lead" data-i18n="gamesLead">Tap a card to play.</p>
               <div class="game-cards">
                 <button type="button" class="game-card" id="openSicbo" data-game="sicbo">
                   <img class="game-card-cup" src="./assets/sicbo-cup.png?v=1" alt="" />
                   <img class="game-card-mascot" src="./assets/ticket-scout.png?v=2" alt="" />
                   <span class="game-card-copy">
-                    <b data-i18n="tabSicbo">SICBO</b>
+                    <b data-i18n="tabSicbo">摇一摇</b>
                     <small data-i18n="sicboJumpHint">1–10 LIM · hit pays double</small>
+                  </span>
+                  <span class="game-card-go" data-i18n="playTag">PLAY</span>
+                </button>
+                <button type="button" class="game-card game-card-daily" id="openDaily" data-game="daily">
+                  <img class="game-card-art" src="./assets/daily-card.jpg?v=1" alt="" />
+                  <span class="game-card-copy">
+                    <b data-i18n="tabDaily">DAILY</b>
+                    <small data-i18n="dailyJumpHint">One puzzle a day · 6 tries</small>
                   </span>
                   <span class="game-card-go" data-i18n="playTag">PLAY</span>
                 </button>
               </div>
             </div>
             <div class="games-stage hidden" id="gamesStage">
-              <button type="button" class="games-back" id="gamesBack" data-i18n="gamesBack">BACK</button>
+              <div class="games-stage-bar">
+                <button type="button" class="games-back" id="gamesBack" data-i18n="gamesBack">BACK</button>
+                <div class="lane-switch hidden" id="laneSwitch">
+                  <button type="button" id="laneDaily" data-i18n="laneDaily" aria-pressed="true">TODAY</button>
+                  <button type="button" id="lanePaid" data-i18n="lanePaid" aria-pressed="false">REVEAL</button>
+                </div>
+              </div>
               <div class="sicbo-page" id="sbRoot" data-mode="live">
-              <p class="sicbo-mode" id="sbMode">点小或大。钱包先确认下注，等 2 个块后再确认揭盅。押中双倍回钱包。</p>
+              <p class="sicbo-mode" id="sbMode">先选注额，点小或大锁注。等两个块，再点揭盅。押中双倍回钱包。</p>
               <p class="sicbo-subline" id="sbSub">提现桌 · 1–10 LIM 自选</p>
               <section class="sicbo-table">
                 <div class="sicbo-felt" id="sbFelt">
@@ -198,10 +217,113 @@
                 <li id="sbR1">自选 1–10 LIM 开一盅。押中即双倍回钱包。</li>
                 <li id="sbR2">押小开 4–8，押大开 13–17。中门与围骰充实奖池。</li>
                 <li id="sbR3">216 种点数里，54 面开双倍。</li>
-                <li id="sbR4">独立奖池。下注后等 2 个块揭盅，未揭的注回来还能继续。</li>
+                <li id="sbR4">独立奖池。锁注后等两个块，再点揭盅。未揭的注，回来还能继续。</li>
+                <li id="sbR5">桌池每周销毁约两成。未揭的注不烧。</li>
               </ul>
               <p class="sicbo-stats" id="sbWallet">LIM — · 奖池 —</p>
               <p class="sicbo-status" id="sbStatus"></p>
+              </div>
+              <div class="daily-page hidden" id="dyRoot">
+                <div class="daily-head">
+                  <img src="./assets/ticket-scout.png?v=2" alt="" />
+                  <p class="kicker" data-i18n="dailyKicker">CATBOX DAILY</p>
+                </div>
+                <div class="illust-banner daily-hero">
+                  <img src="./assets/daily-banner.jpg?v=1" alt="" />
+                </div>
+                <p class="daily-lead" data-i18n="dailyLead">One track for the world today. Six tries. Then wait until tomorrow.</p>
+                <div class="daily-meta">
+                  <span id="dyDate"></span>
+                  <span id="dyStreak"></span>
+                  <span id="dyTimer" class="hidden"></span>
+                </div>
+                <div class="daily-modes">
+                  <button type="button" id="dyModeFree" class="on">UNTIMED</button>
+                  <button type="button" id="dyModeTimed">60s badge</button>
+                </div>
+                <div class="daily-board" id="dyBoard" aria-label="Daily board"></div>
+                <p class="daily-status" id="dyStatus"></p>
+                <div class="daily-keys" id="dyKeys"></div>
+                <div class="daily-actions">
+                  <button type="button" id="dyDel">DEL</button>
+                  <button type="button" id="dyEnter">ENTER</button>
+                </div>
+                <div class="daily-share hidden" id="dyShareBox">
+                  <div class="daily-card" id="dyCard">
+                    <p class="daily-card-title">CATBOX DAILY</p>
+                    <p class="daily-card-meta" id="dyCardMeta"></p>
+                    <div class="daily-card-grid" id="dyCardGrid"></div>
+                    <p class="daily-card-foot" id="dyCardFoot"></p>
+                  </div>
+                  <button type="button" id="dyShare">SHARE</button>
+                  <p class="daily-share-hint" data-i18n="dailyShareHint">No spoilers. Share the card, not the track.</p>
+                </div>
+                <p class="daily-next hidden" id="dyNext"></p>
+                <button type="button" class="daily-to-track hidden" id="dyToTrack"></button>
+                <ul class="daily-rules">
+                  <li data-i18n="dailyR1">Gold — right piece, right place.</li>
+                  <li data-i18n="dailyR2">Cream — right piece, wrong place.</li>
+                  <li data-i18n="dailyR3">Dark — not on today's track. 60s is a share badge only.</li>
+                  <li data-i18n="dailyR4">桌池每周按比例销毁。</li>
+                </ul>
+                <p class="daily-free" data-i18n="dailyFree">Not a ticket. Not the floor. No wallet.</p>
+              </div>
+              <div class="track-page hidden" id="trRoot">
+                <div class="track-head">
+                  <img src="./assets/ticket-scout.png?v=2" alt="" />
+                  <p class="kicker" id="trKicker">赛道揭图</p>
+                </div>
+                <div class="illust-banner track-hero">
+                  <img src="./assets/track-banner.jpg?v=1" alt="" />
+                </div>
+                <p class="track-lead" id="trLead">摆好五格再锁。两个块后揭真图。只计对位。每局一张新图，上一局不带提示。</p>
+                <div class="track-meta">
+                  <span id="trWallet">LIM — · 奖池 —</span>
+                </div>
+                <div class="track-pay">
+                  <span><span id="trPay3k">3 格</span><b>8×</b></span>
+                  <span><span id="trPay4k">4 格</span><b>40×</b></span>
+                  <span><span id="trPay5k">5 格</span><b>200×</b></span>
+                </div>
+                <div class="track-stake">
+                  <p class="track-stake-label" id="trStake">本局额度</p>
+                  <div class="track-chips">
+                    <button type="button" class="track-chip on" data-lim="0">0</button>
+                    <button type="button" class="track-chip" data-lim="1">1</button>
+                    <button type="button" class="track-chip" data-lim="2">2</button>
+                    <button type="button" class="track-chip" data-lim="3">3</button>
+                    <button type="button" class="track-chip" data-lim="4">4</button>
+                    <button type="button" class="track-chip" data-lim="5">5</button>
+                  </div>
+                </div>
+                <p class="track-label" id="trGuessLabel">你的 5 格</p>
+                <div class="track-row" id="trGuess"></div>
+                <p class="track-label" id="trTruthLabel">揭开的赛道</p>
+                <div class="track-row" id="trTruth"></div>
+                <p class="track-status" id="trStatus"></p>
+                <div class="track-keys" id="trKeys"></div>
+                <div class="track-actions">
+                  <button type="button" id="trDel">删除</button>
+                  <button type="button" id="trGo">锁注</button>
+                </div>
+                <p class="track-hist-label hidden" id="trHistLabel"></p>
+                <div class="track-hist" id="trHist"></div>
+                <ul class="track-rules">
+                  <li id="trR1">1–5 LIM 开一局。零注练手：不进池、不派奖。</li>
+                  <li id="trR2">对位 3 格 8 倍，4 格 40 倍，5 格 200 倍（不超过桌池一半）。0–2 格不派。</li>
+                  <li id="trR3">只认位置全对。块对位错，不派。</li>
+                  <li id="trR4">独立桌池。锁图后等两个块揭图。未揭的注，回来还能继续。</li>
+                  <li id="trR5">不进日池、底池、邀请。不是门票。</li>
+                  <li id="trR6">桌池每周按比例销毁。未揭的注不烧。</li>
+                </ul>
+                <p class="track-note" id="trNote"></p>
+                <div class="track-pop hidden" id="trPop">
+                  <div class="track-pop-card" role="dialog" aria-modal="true">
+                    <p class="track-pop-hits" id="trPopHits"></p>
+                    <p class="track-pop-line" id="trPopLine"></p>
+                    <button type="button" class="primary" id="trPopOk">好</button>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -220,15 +342,15 @@
                   <span data-i18n="howCoin">COINS = LIM</span>
                 </div>
                 <div class="how-item">
-                  <i class="how-glyph light" aria-hidden="true"></i>
+                  <img src="./assets/piece-light.png?v=1" alt="" />
                   <span data-i18n="howLight">WALK UNDER LIGHTS</span>
                 </div>
                 <div class="how-item">
-                  <i class="how-glyph pipe" aria-hidden="true"></i>
+                  <img src="./assets/piece-pipe.png?v=1" alt="" />
                   <span data-i18n="howPipe">JUMP RED PIPES</span>
                 </div>
                 <div class="how-item">
-                  <i class="how-glyph gap" aria-hidden="true"></i>
+                  <img src="./assets/piece-gap.png?v=1" alt="" />
                   <span data-i18n="howGap">JUMP GAPS</span>
                 </div>
               </div>
@@ -303,6 +425,9 @@
           </div>
 
           <div class="lobby-pane pane-pool hidden" data-pane="pool">
+            <div class="illust-banner pool-hero">
+              <img src="./assets/pool-hero.jpg?v=1" alt="" />
+            </div>
             <div class="split-row two-plus-burn">
               <div class="split week">
               <img src="./assets/icon-trophy-glass.png?v=2" alt="" />
@@ -603,10 +728,13 @@
     <script src="./config.js?v=41"></script>
     <script src="https://cdn.jsdelivr.net/npm/ethers@6.13.5/dist/ethers.umd.min.js"></script>
     <script src="./chain.js?v=104"></script>
-    <script src="./i18n.js?v=125"></script>
-    <script src="./game.js?v=138"></script>
+    <script src="./i18n.js?v=130"></script>
+    <script src="./game.js?v=146"></script>
     <script src="./bgm.js?v=26"></script>
     <script src="./sicbo-config.js?v=2"></script>
-    <script src="./sicbo.js?v=10"></script>
+    <script src="./sicbo.js?v=13"></script>
+    <script src="./daily.js?v=3"></script>
+    <script src="./track-config.js?v=1"></script>
+    <script src="./track.js?v=10"></script>
   </body>
 </html>
