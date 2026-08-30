@@ -905,6 +905,18 @@ function paintOverShare() {
   if (x) x.href = shareTweetUrl();
 }
 
+function showGamesCatalog() {
+  $("gamesCatalog")?.classList.remove("hidden");
+  $("gamesStage")?.classList.add("hidden");
+}
+
+function openArcadeGame(id) {
+  if (id !== "sicbo") return;
+  $("gamesCatalog")?.classList.add("hidden");
+  $("gamesStage")?.classList.remove("hidden");
+  window.refreshSicbo?.();
+}
+
 function bootLobbyTabs() {
   const tabs = document.querySelectorAll(".lobby-tab");
   if (!tabs.length) return;
@@ -914,6 +926,7 @@ function bootLobbyTabs() {
     document.querySelectorAll(".lobby-pane").forEach((p) => {
       p.classList.toggle("hidden", p.dataset.pane !== id);
     });
+    if (id === "games") showGamesCatalog();
   };
   tabs.forEach((btn) => {
     btn.onclick = () => {
@@ -923,6 +936,10 @@ function bootLobbyTabs() {
   });
   const open = $("openRules");
   if (open) open.onclick = () => setTab("rules");
+  const openSicbo = $("openSicbo");
+  if (openSicbo) openSicbo.onclick = () => openArcadeGame("sicbo");
+  const gamesBack = $("gamesBack");
+  if (gamesBack) gamesBack.onclick = () => showGamesCatalog();
   window.setLobbyTab = setTab;
 }
 

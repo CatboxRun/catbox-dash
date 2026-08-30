@@ -279,7 +279,7 @@ body:not([data-lang="en"]) .swap-head h2 { font-size: 18px; }
 }
 .lobby-tabs {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 6px;
   margin: 0 0 10px;
 }
@@ -287,7 +287,8 @@ body:not([data-lang="en"]) .swap-head h2 { font-size: 18px; }
   font-family: "Noto Sans", "Noto Sans SC", sans-serif;
   font-size: 12px;
   font-weight: 800;
-  padding: 8px 6px;
+  line-height: 1.15;
+  padding: 8px 4px;
   min-height: 36px;
   cursor: pointer;
   color: var(--dim);
@@ -404,6 +405,119 @@ body:not([data-lang="en"]) .meme-line {
   font-weight: 800;
   line-height: 1.45;
   text-align: center;
+}
+.games-lead {
+  margin: 0 0 12px;
+  color: var(--dim);
+  font-size: 13px;
+  font-weight: 700;
+}
+.game-cards {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.game-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  min-height: 0;
+  padding: 10px 10px 36px;
+  text-align: left;
+  cursor: pointer;
+  color: #f3ead8;
+  font: inherit;
+  overflow: hidden;
+  touch-action: manipulation;
+  border: 1px solid rgba(201, 162, 39, 0.45);
+  border-radius: 18px;
+  box-shadow: var(--glow);
+  background-color: #2a1c0c;
+  background-image:
+    linear-gradient(180deg, rgba(18, 10, 4, 0.08) 12%, rgba(18, 10, 4, 0.78) 100%),
+    url("./assets/sicbo-felt.jpg?v=1");
+  background-position: center, center 38%;
+  background-size: cover, cover;
+}
+.game-card:hover {
+  transform: translateY(-3px);
+  border-color: rgba(240, 193, 74, 0.75);
+}
+.game-card-cup {
+  position: absolute;
+  left: 50%;
+  top: 18%;
+  width: 58%;
+  height: auto;
+  max-height: 46%;
+  transform: translateX(-50%);
+  object-fit: contain;
+  filter: drop-shadow(0 10px 16px rgba(0, 0, 0, 0.35));
+  pointer-events: none;
+}
+.game-card-mascot {
+  position: absolute;
+  left: 8px;
+  top: 8px;
+  width: 36px;
+  height: 36px;
+  object-fit: contain;
+  animation: mascot-bob 1.8s ease-in-out infinite;
+  pointer-events: none;
+}
+.game-card-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  z-index: 1;
+}
+.game-card-copy b {
+  font-size: 16px;
+  font-weight: 800;
+  color: #f7e7b4;
+}
+.game-card-copy small {
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.3;
+  color: rgba(243, 234, 216, 0.82);
+}
+.game-card-go {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  text-align: center;
+  padding: 7px 0;
+  font-size: 11px;
+  font-weight: 800;
+  color: #1a1204;
+  background: linear-gradient(180deg, #edd078, #c9a227);
+  border-radius: 0 0 18px 18px;
+}
+.games-back {
+  display: inline-flex;
+  align-items: center;
+  margin: 0 0 10px;
+  padding: 8px 12px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--gold-hi);
+  background: var(--glass);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+}
+.pane-games .sicbo-page { margin: 0 auto; }
+.pane-games .sicbo-subline {
+  margin: 0 0 10px;
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--gold-hi);
 }
 .lobby-pane.hidden { display: none !important; }
 
@@ -527,6 +641,8 @@ body:not([data-lang="en"]) .meme-line {
   left: 50%;
   transform: translateX(-50%);
   z-index: 80;
+  width: max-content;
+  min-width: min(220px, 90vw);
   max-width: min(92vw, 420px);
   padding: 14px 20px;
   font-size: 16px;
@@ -540,7 +656,8 @@ body:not([data-lang="en"]) .meme-line {
   box-shadow: var(--glow);
   user-select: text;
   -webkit-user-select: text;
-  word-break: break-all;
+  overflow-wrap: anywhere;
+  word-break: normal;
 }
 body[data-lang="zh"] { font-family: "Noto Sans SC", "Press Start 2P", sans-serif; }
 body[data-lang="ja"] { font-family: "Noto Sans JP", "Press Start 2P", sans-serif; }
@@ -1261,6 +1378,9 @@ button.primary, button.ghost {
   .auto-steps { display: none; }
   .auto-body { display: none; }
   .invite-ico { width: 40px; height: 40px; }
+  .lobby-tab { font-size: 11px; }
+  .game-card-copy b { font-size: 14px; }
+  .game-card-copy small { font-size: 10px; }
 }
 
 /* Phone landscape: fill the screen, canvas takes remaining height */

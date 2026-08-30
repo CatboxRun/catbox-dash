@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#f3ead8" />
+    <title>CATBOX 骰宝 · 提现桌</title>
+    <link rel="icon" href="./assets/favicon.png?v=6" type="image/png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@500;700&family=Noto+Sans+SC:wght@500;700&family=Press+Start+2P&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./styles.css?v=80" />
+    <link rel="stylesheet" href="./sicbo.css?v=10" />
+  </head>
+  <body data-lang="zh" data-sicbo="1">
+    <div class="crt sicbo-page" id="sbRoot" data-mode="live">
+      <header class="topbar">
+        <a class="sicbo-back" href="./">← DASH</a>
+        <div class="brand-text">
+          <div class="title">SIC BO</div>
+          <div class="sub" id="sbSub">提现桌 · 1–10 LIM 自选</div>
+        </div>
+        <div class="top-right">
+          <button class="wallet-btn pulse-cta" id="walletBtn" type="button">连接钱包</button>
+        </div>
+      </header>
+      <p class="sicbo-mode" id="sbMode">点小或大。钱包先确认下注，等 2 个块后再确认揭盅。押中双倍回钱包。</p>
+      <section class="sicbo-table">
+        <div class="sicbo-felt" id="sbFelt">
+          <img class="sicbo-mascot" src="./assets/ticket-scout.png?v=2" alt="" />
+          <p class="kicker" id="sbKicker">提现桌</p>
+          <div class="sicbo-stage" id="sbStage">
+            <div class="sicbo-dice" id="sbDice" aria-hidden="true"></div>
+            <img class="sicbo-cup idle" id="sbCup" src="./assets/sicbo-cup.png?v=1" alt="" />
+          </div>
+          <p class="sicbo-total" id="sbTotal">—</p>
+          <p class="sicbo-result" id="sbResult"></p>
+          <div class="sicbo-stake">
+            <p class="sicbo-stake-label" id="sbStake">本盅注额</p>
+            <div class="sicbo-chips" id="sbChips"></div>
+          </div>
+          <div class="sicbo-bets">
+            <button type="button" class="sicbo-side" id="sbSmall" data-side="0">
+              <b id="sbSmallTitle">小</b>
+              <span id="sbSmallMeta">4–8 · 开双倍</span>
+            </button>
+            <button type="button" class="sicbo-side" id="sbBig" data-side="1">
+              <b id="sbBigTitle">大</b>
+              <span id="sbBigMeta">13–17 · 开双倍</span>
+            </button>
+          </div>
+        </div>
+        <button type="button" class="primary sicbo-open" id="sbOpen">揭盅</button>
+        <div class="sicbo-pop hidden" id="sbPop">
+          <div class="sicbo-pop-card" role="dialog" aria-modal="true">
+            <p class="sicbo-pop-total" id="sbPopTotal"></p>
+            <p class="sicbo-pop-line" id="sbPopLine"></p>
+            <button type="button" class="primary" id="sbPopOk">好</button>
+          </div>
+        </div>
+      </section>
+      <ul class="sicbo-rules">
+        <li id="sbR1">自选 1–10 LIM 开一盅。押中即双倍回钱包。</li>
+        <li id="sbR2">押小开 4–8，押大开 13–17。中门与围骰充实奖池。</li>
+        <li id="sbR3">216 种点数里，54 面开双倍。</li>
+        <li id="sbR4">独立奖池。下注后等 2 个块揭盅，未揭的注回来还能继续。</li>
+      </ul>
+      <p class="sicbo-stats" id="sbWallet">LIM — · 奖池 —</p>
+      <p class="sicbo-status" id="sbStatus"></p>
+    </div>
+    <div id="toast" class="toast hidden" role="status"></div>
+    <script src="./config.js?v=41"></script>
+    <script src="./sicbo-config.js?v=2"></script>
+    <script src="https://cdn.jsdelivr.net/npm/ethers@6.13.5/dist/ethers.umd.min.js"></script>
+    <script src="./sicbo.js?v=10"></script>
+  </body>
+</html>
