@@ -44,6 +44,8 @@
       paused: "桌子暂停中。",
       resume: "你有一盅未揭。",
       ok: "好",
+      connect: "连接钱包",
+      connecting: "连接中…",
     },
     en: {
       sub: "TABLE · 1–10 LIM",
@@ -84,6 +86,8 @@
       paused: "Table is paused.",
       resume: "You have an open cup.",
       ok: "OK",
+      connect: "CONNECT",
+      connecting: "CONNECTING…",
     },
     ja: {
       sub: "出金卓 · 1–10 LIM",
@@ -381,6 +385,9 @@
   let stakeLim = 1;
   let phase = "edit";
   let lastOutcome = null;
+  let statusSpec = null;
+  let statusErr = null;
+  let lastBal = { lim: "—", pool: "—" };
 
   function dashMode() {
     return Boolean(window.CatboxChain && $("lobby") && $("sbFelt"));
@@ -402,6 +409,34 @@
   }
   function setStatus(msg) {
     setTxt("sbStatus", msg || "");
+  }
+  function paintStatus() {
+    if (statusErr) {
+      setStatus(friendly(statusErr));
+      return;
+    }
+    if (!statusSpec) return;
+    setStatus(t(statusSpec.key, statusSpec.vars));
+  }
+  function noteStatus(key, vars) {
+    statusErr = null;
+    statusSpec = { key, vars: vars || {} };
+    paintStatus();
+  }
+  function noteError(e) {
+    statusSpec = null;
+    statusErr = e;
+    const msg = friendly(e);
+    setStatus(msg);
+    return msg;
+  }
+  function clearStatus() {
+    statusSpec = null;
+    statusErr = null;
+    setStatus("");
+  }
+  function paintWallet() {
+    setTxt("sbWallet", t("bal", lastBal));
   }
   function toast(msg) {
     const el = $("toast");
@@ -439,8 +474,11 @@
     setTxt("sbMode", t("mode"));
     setTxt("sbStake", t("stakeLabel"));
     setTxt("sbPopOk", t("ok"));
+    if (!dashMode() && $("walletBtn") && !account) setTxt("walletBtn", t("connect"));
+    paintWallet();
     paintPhase();
     paintOutcome();
+    paintStatus();
   }
   function friendly(e) {
     const code = e?.code;
@@ -649,8 +687,13 @@
   }
 
   async function refreshStats() {
-    if (spinning) return;
     syncAccount();
+    if (spinning) {
+      paintWallet();
+      paintPhase();
+      paintStatus();
+      return;
+    }
     let pool = 0n;
     let lim = 0n;
     try {
@@ -659,15 +702,17 @@
       pool = await g.freePool();
       if (account) lim = await limContract(p).balanceOf(account);
       if (!busy && phase !== "result") await loadOpenBet();
-      if (pendingLock && phase !== "result") {
+      if (!busy && pendingLock && phase !== "result") {
         const n = Number(await p.getBlockNumber());
         const left = Math.max(0, pendingLock + 1 - n);
-        setStatus(left ? t("wait", { n: left }) : t("waitReady"));
+        noteStatus(left ? "wait" : "waitReady", left ? { n: left } : {});
       }
     } catch (_) {}
-    setTxt("sbWallet", t("bal", { lim: account ? fmtLim(lim) : "—", pool: fmtLim(pool) }));
+    lastBal = { lim: account ? fmtLim(lim) : "—", pool: fmtLim(pool) };
+    paintWallet();
     paintChips();
     paintPhase();
+    paintStatus();
   }
 
   function hidePop() {
@@ -682,7 +727,7 @@
     setTxt("sbResult", "");
     $("sbResult")?.removeAttribute("data-hit");
     setTxt("sbTotal", "—");
-    setStatus("");
+    clearStatus();
     $("sbSmall")?.classList.remove("picked");
     $("sbBig")?.classList.remove("picked");
     paintPhase();
@@ -713,7 +758,7 @@
     lastOutcome = { kind: "settled", side, d1, d2, d3, stake };
     setFaces(d1, d2, d3);
     paintOutcome();
-    setStatus("");
+    clearStatus();
     hidePop();
     phase = "result";
     pendingLock = 0;
@@ -731,7 +776,7 @@
     setTxt("sbTotal", "…");
     setTxt("sbResult", "");
     $("sbResult")?.removeAttribute("data-hit");
-    setStatus(t("shaking"));
+    noteStatus("shaking");
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
       setFaces(d1, d2, d3);
       if (cup) cup.className = "sicbo-cup idle";
@@ -776,14 +821,14 @@
       const n = Number(await p.getBlockNumber());
       const left = Math.max(0, lockBlock + 1 - n);
       if (n > lockBlock) {
-        setStatus(t("waitReady"));
+        noteStatus("waitReady");
         return true;
       }
-      setStatus(t("wait", { n: left }));
+      noteStatus("wait", { n: left });
       paintPhase();
       await sleep(1500);
     }
-    setStatus(t("waitReady"));
+    noteStatus("waitReady");
     return false;
   }
 
@@ -795,7 +840,7 @@
     if (!account) await connect();
     await ensureBsc();
     await waitForLock(pendingLock);
-    setStatus(t("opening"));
+    noteStatus("opening");
     paintPhase();
     await sleep(350);
     const g = gameContract(await signer());
@@ -808,7 +853,7 @@
       phase = "result";
       pendingLock = 0;
       paintOutcome();
-      setStatus("");
+      clearStatus();
       hidePop();
       paintPhase();
     } else if (ev?.name === "Settled") {
@@ -818,7 +863,7 @@
       await spinTo(d1, d2, d3);
       showOutcome(Number(ev.args.side), d1, d2, d3, pendingStake || stakeLim);
     } else {
-      setStatus(t("refund"));
+      noteStatus("refund");
       phase = "edit";
       pendingLock = 0;
       paintPhase();
@@ -836,7 +881,7 @@
       phase = "wait";
       coverCup(true);
       paintPhase();
-      setStatus(t("resume"));
+      noteStatus("resume");
       toast(t("hasOpen"));
       return;
     }
@@ -847,22 +892,22 @@
     const [free, bal] = await Promise.all([g.freePool(), lim.balanceOf(account)]);
     if (free < amount) {
       toast(t("noPool"));
-      setStatus(t("noPool"));
+      noteStatus("noPool");
       return;
     }
     if (bal < amount) {
       toast(t("needLim"));
-      setStatus(t("needLim"));
+      noteStatus("needLim");
       return;
     }
     const allow = await lim.allowance(account, sicboCfg().address);
     if (allow < amount) {
-      setStatus(t("approve"));
+      noteStatus("approve");
       toast(t("approve"));
       const txA = await lim.approve(sicboCfg().address, ethers.MaxUint256);
       await txA.wait();
     }
-    setStatus(t("paying", { n: stakeLim }));
+    noteStatus("paying", { n: stakeLim });
     $("sbSmall")?.classList.toggle("picked", side === 0);
     $("sbBig")?.classList.toggle("picked", side === 1);
     coverCup(true);
@@ -874,7 +919,7 @@
     pendingStake = stakeLim;
     phase = "wait";
     paintPhase();
-    setStatus(t("wait", { n: 2 }));
+    noteStatus("wait", { n: 2 });
   }
 
   async function onSide(side) {
@@ -882,7 +927,7 @@
     if (phase === "result") return;
     if (phase === "wait" || pendingLock) {
       toast(t("hasOpen"));
-      setStatus(t("resume"));
+      noteStatus("resume");
       return;
     }
     hidePop();
@@ -891,9 +936,7 @@
     try {
       await liveBet(side);
     } catch (e) {
-      const msg = friendly(e);
-      setStatus(msg);
-      toast(msg);
+      toast(noteError(e));
       if (pendingLock) coverCup(true);
     } finally {
       busy = false;
@@ -913,9 +956,7 @@
     try {
       await openCup();
     } catch (e) {
-      const msg = friendly(e);
-      setStatus(msg);
-      toast(msg);
+      toast(noteError(e));
     } finally {
       busy = false;
       paintPhase();
@@ -928,7 +969,7 @@
     syncAccount();
     if (!account) return;
     const b = await loadOpenBet();
-    if (b) setStatus(t("resume"));
+    if (b) noteStatus("resume");
   }
 
   function bindUi() {
@@ -945,14 +986,14 @@
     if (!dashMode() && $("walletBtn")) {
       $("walletBtn").onclick = async () => {
         try {
-          $("walletBtn").textContent = lang === "zh" ? "连接中…" : "CONNECTING…";
+          $("walletBtn").textContent = t("connecting");
           await connect();
           $("walletBtn").textContent = account ? account.slice(0, 6) + "…" + account.slice(-4) : t("needWallet");
           await refreshStats();
           resumeIfOpen().catch(() => {});
         } catch (e) {
           toast(friendly(e));
-          $("walletBtn").textContent = lang === "zh" ? "连接钱包" : "CONNECT";
+          $("walletBtn").textContent = t("connect");
         }
       };
     }

@@ -449,6 +449,7 @@
   let shownTrack = null;
   let statusSpec = null;
   let statusErr = null;
+  let lastBal = { lim: "—", pool: "—" };
 
   function dashMode() {
     return Boolean(window.CatboxChain && $("lobby") && $("trRoot"));
@@ -690,6 +691,7 @@
     setTxt("trPay5k", tt("pay5"));
     setTxt("trHistLabel", tt("hist"));
     setTxt("trDel", typeof t === "function" ? t("dailyDel") : lang === "zh" ? "删除" : "DEL");
+    setTxt("trWallet", tt("bal", lastBal));
     paintKeys();
     paintChips();
     const z = root()?.querySelector('.track-chip[data-lim="0"]');
@@ -852,8 +854,9 @@
         if (!busy) await loadOpenBet();
       }
     } catch (_) {}
-    setTxt("trWallet", tt("bal", { lim: account ? fmtLim(lim) : "—", pool: liveOk ? fmtLim(pool) : "—" }));
-    if (pendingLock && phase !== "result" && liveOk) {
+    lastBal = { lim: account ? fmtLim(lim) : "—", pool: liveOk ? fmtLim(pool) : "—" };
+    setTxt("trWallet", tt("bal", lastBal));
+    if (!busy && pendingLock && phase !== "result" && liveOk) {
       try {
         const n = Number(await (await readProvider()).getBlockNumber());
         const left = Math.max(0, pendingLock + 1 - n);

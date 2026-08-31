@@ -140,6 +140,44 @@ function parseLookupAddr(raw) {
   }
 }
 
+let lastLookup = null;
+
+function paintBoardLookup() {
+  const out = $("boardLookupOut");
+  if (!out || !lastLookup) return;
+  const L = lastLookup;
+  if (L.kind === "need") {
+    out.className = "board-lookup-out dim";
+    out.textContent = t("boardLookupNeed");
+    return;
+  }
+  if (L.kind === "bad") {
+    out.className = "board-lookup-out bad";
+    out.textContent = t("boardLookupBad");
+    return;
+  }
+  if (L.kind === "loading") {
+    out.className = "board-lookup-out dim";
+    out.textContent = t("loadingBoard");
+    return;
+  }
+  if (L.kind === "fail") {
+    out.className = "board-lookup-out bad";
+    out.textContent = t("boardLoadFail");
+    return;
+  }
+  out.className = "board-lookup-out";
+  out.textContent = t("boardLookupHit", {
+    addr: L.addr,
+    week: String(L.week),
+    invite: String(L.invite),
+    shard: t("shardUnit"),
+    pts: t("ptsUnit"),
+    weekRank: L.weekRank ? t("boardLookupRank", { n: String(L.weekRank) }) : "",
+    inviteRank: L.inviteRank ? t("boardLookupRank", { n: String(L.inviteRank) }) : "",
+  });
+}
+
 async function runBoardLookup(fromMine) {
   const input = $("boardLookup");
   const out = $("boardLookupOut");
@@ -153,38 +191,36 @@ async function runBoardLookup(fromMine) {
     }
   }
   if (!raw) {
-    out.className = "board-lookup-out dim";
-    out.textContent = t("boardLookupNeed");
+    lastLookup = { kind: "need" };
+    paintBoardLookup();
     return;
   }
   const addr = parseLookupAddr(raw);
   if (!addr) {
-    out.className = "board-lookup-out bad";
-    out.textContent = t("boardLookupBad");
+    lastLookup = { kind: "bad" };
+    paintBoardLookup();
     return;
   }
-  out.className = "board-lookup-out dim";
-  out.textContent = t("loadingBoard");
+  lastLookup = { kind: "loading" };
+  paintBoardLookup();
   try {
     const pts = await CatboxChain.boardPointsOf(addr);
     const week = rowPts({ pts: pts.week });
     const invite = rowPts({ pts: pts.invite });
     const weekRank = boardRankOf(window._liveBoards?.week, addr);
     const inviteRank = boardRankOf(window._liveBoards?.invite, addr);
-    const tag = CatboxChain.short(addr);
-    out.className = "board-lookup-out";
-    out.textContent = t("boardLookupHit", {
-      addr: tag,
-      week: String(week),
-      invite: String(invite),
-      shard: t("shardUnit"),
-      pts: t("ptsUnit"),
-      weekRank: weekRank ? t("boardLookupRank", { n: String(weekRank) }) : "",
-      inviteRank: inviteRank ? t("boardLookupRank", { n: String(inviteRank) }) : "",
-    });
+    lastLookup = {
+      kind: "hit",
+      addr: CatboxChain.short(addr),
+      week,
+      invite,
+      weekRank,
+      inviteRank,
+    };
+    paintBoardLookup();
   } catch (_) {
-    out.className = "board-lookup-out bad";
-    out.textContent = t("boardLoadFail");
+    lastLookup = { kind: "fail" };
+    paintBoardLookup();
   }
 }
 
@@ -1153,6 +1189,11 @@ async function refreshSwap() {
   paintSwapGo();
   const flip = $("swapFlip");
   if (flip) flip.setAttribute("aria-label", t("swapFlip"));
+  if (window._swapBusy) {
+    if (go) go.disabled = true;
+    if (status && !status.classList.contains("ok")) status.textContent = t(window._swapStep || "swapping");
+    return;
+  }
   if (rateEl) rateEl.textContent = "";
   if (go) go.disabled = false;
   try {
@@ -1340,7 +1381,9 @@ async function doSwap() {
       return;
     }
     status.textContent = t("swapping");
+    window._swapStep = "swapping";
     const hash = await CatboxChain.swapExact(from, to, amt, (step) => {
+      window._swapStep = step;
       status.textContent = t(step);
     });
     const n = expect && expect !== "0" ? expect : "";
@@ -1379,6 +1422,7 @@ async function doSwap() {
       : t("txFail");
   } finally {
     window._swapBusy = false;
+    window._swapStep = "";
   }
 }
 
@@ -1976,7 +2020,29 @@ function renderTickets() {
   };
 }
 
-function openPay(tier) {
+let payStatusSpec = null;
+
+function paintPayStatus() {
+  const status = $("payStatus");
+  if (!status) return;
+  if (!payStatusSpec) {
+    status.textContent = "";
+    return;
+  }
+  if (payStatusSpec.hash) {
+    const hash = payStatusSpec.hash;
+    status.innerHTML = `<a href="${CatboxChain.txUrl(hash)}" target="_blank" rel="noopener">${hash.slice(0, 10)}…</a>`;
+    return;
+  }
+  status.textContent = t(payStatusSpec.key, payStatusSpec.vars || {});
+}
+
+function setPayStatus(key, vars) {
+  payStatusSpec = key ? { key, vars: vars || {} } : null;
+  paintPayStatus();
+}
+
+function openPay(tier, opts = {}) {
   selected = tier;
   const copy = tierText(tier.id);
   const free = freeForTier(tier);
@@ -1985,8 +2051,9 @@ function openPay(tier) {
     ? t("freePay")
     : t("payCopy", { name: copy.name, cost: tier.cost, cap: payoutCap(tier.cost) });
   $("payGo").textContent = free ? t("payGoFree") : t("payGo");
-  $("payGo").disabled = false;
-  if ($("payStatus")) $("payStatus").textContent = "";
+  $("payGo").disabled = Boolean(enterBusy);
+  if (!opts.refresh && !enterBusy) payStatusSpec = null;
+  paintPayStatus();
   setMascot($("payMascot"), tier.id);
   setMascot($("payMeterMascot"), tier.id);
   show(pay);
@@ -1996,6 +2063,10 @@ function refreshHud() {
   if (!run || game.classList.contains("hidden")) return;
   const copy = tierText(run.tier.id);
   $("hudTier").textContent = `${copy.name} · ${run.tier.cost} LIM`;
+  if (run.noteKey && run.noteT > 0) {
+    const note = $("runNote");
+    if (note) note.textContent = t(run.noteKey);
+  }
 }
 
 let lastFinish = null;
@@ -2068,6 +2139,7 @@ function refreshOver() {
     }
   }
   paintOverShare();
+  paintOverTx();
 }
 
 $("payBack").onclick = () => {
@@ -2089,7 +2161,6 @@ $("again").onclick = () => {
 
 let enterBusy = false;
 async function payAndStart() {
-  const status = $("payStatus");
   const go = $("payGo");
   if (!selected || enterBusy || window._settleBusy) return;
   enterBusy = true;
@@ -2099,13 +2170,13 @@ async function payAndStart() {
   let started = false;
   try {
     if (!window.ethereum) throw new Error("NO_WALLET");
-    status.textContent = t("connecting");
+    setPayStatus("connecting");
     await CatboxChain.connect();
     if (CatboxChain.isBanned()) throw new Error("BANNED");
     if (!chainReady) {
       const deployed = await CatboxChain.isDeployed();
       if (!deployed) {
-        status.textContent = t("deployNeed");
+        setPayStatus("deployNeed");
         return;
       }
       chainReady = true;
@@ -2115,12 +2186,13 @@ async function payAndStart() {
     const me = CatboxChain.account;
     const stuck = me ? await CatboxChain.activeRun(me) : 0n;
     if (stuck && stuck !== 0n) {
-      status.textContent = t("clearingRun");
+      setPayStatus("clearingRun");
       await CatboxChain.clearActiveRun();
     }
-    status.textContent = free ? t("paying") : t("approve");
+    setPayStatus(free ? "paying" : "approve");
     const hash = await CatboxChain.approveAndEnter(selected.id);
-    status.innerHTML = `<a href="${CatboxChain.txUrl(hash)}" target="_blank" rel="noopener">${hash.slice(0, 10)}…</a>`;
+    payStatusSpec = { hash };
+    paintPayStatus();
     enterPlay();
     startRun(selected, teach, free);
     refreshInviteUi();
@@ -2132,17 +2204,18 @@ async function payAndStart() {
       e?.code === "ACTION_REJECTED" ||
       /user rejected|user denied|rejected the request/i.test(msg) ||
       /user rejected|user denied|rejected the request/i.test(String(e?.shortMessage || ""));
-    if (msg === "NO_WALLET") status.textContent = t("noWallet");
-    else if (msg === "BANNED") status.textContent = t("banned");
-    else if (msg === "FLOOR_DUE") status.textContent = t("floorDue");
-    else if (msg === "NO_LIM") status.textContent = t("noLim");
+    if (msg === "NO_WALLET") setPayStatus("noWallet");
+    else if (msg === "BANNED") setPayStatus("banned");
+    else if (msg === "FLOOR_DUE") setPayStatus("floorDue");
+    else if (msg === "NO_LIM") setPayStatus("noLim");
     else if (msg === "ACTIVE_RUN") {
-      status.textContent = t("clearingRun");
+      setPayStatus("clearingRun");
       try {
         await CatboxChain.clearActiveRun();
-        status.textContent = t("approve");
+        setPayStatus("approve");
         const hash = await CatboxChain.approveAndEnter(selected.id);
-        status.innerHTML = `<a href="${CatboxChain.txUrl(hash)}" target="_blank" rel="noopener">${hash.slice(0, 10)}…</a>`;
+        payStatusSpec = { hash };
+        paintPayStatus();
         enterPlay();
         startRun(selected, teach, free);
         refreshInviteUi();
@@ -2153,17 +2226,17 @@ async function payAndStart() {
           err?.code === 4001 ||
           err?.code === "ACTION_REJECTED" ||
           /user rejected|user denied|rejected the request/i.test(em);
-        if (em === "NO_LIM") status.textContent = t("noLim");
-        else if (em === "BANNED") status.textContent = t("banned");
-        else if (em === "FLOOR_DUE") status.textContent = t("floorDue");
-        else if (em === "ACTIVE_RUN") status.textContent = t("activeRun");
-        else if (rej2) status.textContent = t("txRejected");
-        else status.textContent = t("txFail");
+        if (em === "NO_LIM") setPayStatus("noLim");
+        else if (em === "BANNED") setPayStatus("banned");
+        else if (em === "FLOOR_DUE") setPayStatus("floorDue");
+        else if (em === "ACTIVE_RUN") setPayStatus("activeRun");
+        else if (rej2) setPayStatus("txRejected");
+        else setPayStatus("txFail");
       }
     }
-    else if (msg === "PAID_NOT_READY") status.textContent = t("paidNotReady") || "Paid lane not ready yet";
-    else if (rejected) status.textContent = t("txRejected");
-    else status.textContent = t("txFail");
+    else if (msg === "PAID_NOT_READY") setPayStatus("paidNotReady");
+    else if (rejected) setPayStatus("txRejected");
+    else setPayStatus("txFail");
   } finally {
     enterBusy = false;
     if (!started && go) go.disabled = false;
@@ -3165,6 +3238,7 @@ function tick() {
 
 function showRunNote(key, opts = {}) {
   if (opts.soft && run.notePri > 0) return;
+  run.noteKey = key;
   run.noteT = opts.soft ? 140 : 200;
   run.notePri = opts.soft ? 0 : 1;
   if (opts.flash) run.flash = Math.max(run.flash || 0, 6);
@@ -3816,6 +3890,7 @@ function finish(whyKey) {
     burned: leftover > 0 ? +(leftover * 0.3).toFixed(6) : 0,
     burnHash: "",
     tx: "",
+    txPhase: "settling",
     bps: window._rewardBps || 10500,
     payout: displayPayout(got, ticket, window._rewardBps || 10500, Boolean(run.free)),
   };
@@ -3833,6 +3908,52 @@ function showSettleWalletHint(on) {
   if (hint) hint.classList.toggle("hidden", !on);
 }
 
+function paintOverTx() {
+  const el = $("overTx");
+  if (!el || !lastFinish) return;
+  const phase = lastFinish.txPhase;
+  if (!phase) return;
+  if (phase === "settling") {
+    el.classList.remove("settled");
+    el.textContent = t("settling");
+    return;
+  }
+  if (phase === "settlingExtra") {
+    el.textContent = t("settlingExtra");
+    return;
+  }
+  if (phase === "settlingFloor") {
+    el.textContent = t("settlingFloor");
+    return;
+  }
+  if (phase === "txFail") {
+    el.textContent = t("txFail");
+    return;
+  }
+  if (phase === "floorDue") {
+    el.classList.remove("settled");
+    el.textContent = t("floorDue");
+    el.style.cursor = "pointer";
+    el.onclick = () => retryFloorOverage(el);
+    return;
+  }
+  if (phase !== "settled") return;
+  const hash = lastFinish.tx;
+  if (!hash) return;
+  const settleLink = `<a class="tx-view" href="${CatboxChain.txUrl(hash)}" target="_blank" rel="noopener">${t("viewTx")}</a>`;
+  const paid = lastFinish.paidLimStr != null ? lastFinish.paidLimStr : String(lastFinish.payout ?? "");
+  const floorLink = lastFinish.floorHash
+    ? ` · <a class="tx-view" href="${CatboxChain.txUrl(lastFinish.floorHash)}" target="_blank" rel="noopener">${t("floorSent")}</a>`
+    : "";
+  const extraLink = lastFinish.extraHash
+    ? ` · <a class="tx-view" href="${CatboxChain.txUrl(lastFinish.extraHash)}" target="_blank" rel="noopener">${t("viewExtra")}</a>`
+    : "";
+  el.classList.add("settled");
+  el.style.cursor = "";
+  el.onclick = null;
+  el.innerHTML = `<span class="ok">${t("settledTx", { n: paid })}</span> · ${settleLink}${floorLink}${extraLink}`;
+}
+
 function paintSettledTx(el, rec) {
   if (!rec?.hash) {
     el.textContent = "";
@@ -3840,6 +3961,9 @@ function paintSettledTx(el, rec) {
   }
   lastFinish.tx = rec.hash;
   lastFinish.burnHash = rec.burned > 0n ? rec.hash : "";
+  lastFinish.floorHash = rec.floorHash || lastFinish.floorHash;
+  lastFinish.extraHash = rec.extraHash || lastFinish.extraHash;
+  lastFinish.txPhase = "settled";
   if (rec.burned > 0n) lastFinish.burned = Number(ethers.formatUnits(rec.burned, 18));
   if (rec.payout != null && rec.payout > 0n) {
     lastFinish.payout = Number(ethers.formatUnits(rec.payout, 18));
@@ -3858,18 +3982,9 @@ function paintSettledTx(el, rec) {
       }),
     );
   }
-  const settleLink = `<a class="tx-view" href="${CatboxChain.txUrl(rec.hash)}" target="_blank" rel="noopener">${t("viewTx")}</a>`;
-  const paidLim = CatboxChain.formatLim(rec.payout != null ? rec.payout : ethers.parseUnits(String(lastFinish.payout || 0), 18));
-  const floorLink = rec.floorHash
-    ? ` · <a class="tx-view" href="${CatboxChain.txUrl(rec.floorHash)}" target="_blank" rel="noopener">${t("floorSent")}</a>`
-    : "";
-  const extraLink = rec.extraHash
-    ? ` · <a class="tx-view" href="${CatboxChain.txUrl(rec.extraHash)}" target="_blank" rel="noopener">+extra</a>`
-    : "";
-  el.classList.add("settled");
-  el.style.cursor = "";
-  el.onclick = null;
-  el.innerHTML = `<span class="ok">${t("settledTx", { n: paidLim })}</span> · ${settleLink}${floorLink}${extraLink}`;
+  lastFinish.paidLimStr = CatboxChain.formatLim(
+    rec.payout != null ? rec.payout : ethers.parseUnits(String(lastFinish.payout || 0), 18),
+  );
   showSettleWalletHint(false);
   refreshOver();
 }
@@ -3877,28 +3992,23 @@ function paintSettledTx(el, rec) {
 async function retryFloorOverage(el) {
   if (!el || !window.CatboxChain) return;
   el.onclick = null;
-  el.textContent = t("settlingFloor");
+  lastFinish.txPhase = "settlingFloor";
+  paintOverTx();
   try {
     const hash = await CatboxChain.clearFloorOverage();
     lastFinish.floorHash = hash || lastFinish.floorHash;
     if (lastFinish.ticket != null) lastFinish.payout = lastFinish.ticket;
-    el.classList.add("settled");
-    el.style.cursor = "";
-    const settleLink = lastFinish.tx
-      ? ` · <a class="tx-view" href="${CatboxChain.txUrl(lastFinish.tx)}" target="_blank" rel="noopener">${t("viewTx")}</a>`
-      : "";
-    const floorLink = hash
-      ? ` · <a class="tx-view" href="${CatboxChain.txUrl(hash)}" target="_blank" rel="noopener">${t("floorSent")}</a>`
-      : "";
-    el.innerHTML = `<span class="ok">${t("settledTx", { n: String(lastFinish.payout) })}</span>${settleLink}${floorLink}`;
+    lastFinish.paidLimStr = String(lastFinish.payout);
+    lastFinish.txPhase = "settled";
     showSettleWalletHint(false);
     refreshOver();
     window._settleBusy = false;
   } catch (_) {
+    lastFinish.txPhase = "floorDue";
     el.classList.remove("settled");
-    el.textContent = t("floorDue");
     el.style.cursor = "pointer";
     el.onclick = () => retryFloorOverage(el);
+    paintOverTx();
   }
 }
 
@@ -3910,10 +4020,12 @@ async function settleOnchain(got, ticket, score) {
   try {
     el.classList.remove("settled");
     el.onclick = null;
+    lastFinish.txPhase = "settling";
     el.textContent = t("settling");
     const wait = 5500 - (Date.now() - (run?.startedMs || Date.now()));
     if (wait > 0) await new Promise((r) => setTimeout(r, wait));
     const rec = await CatboxChain.settleRun(got, ticket, score, () => {
+      lastFinish.txPhase = "settlingExtra";
       el.textContent = t("settlingExtra");
     });
     paintSettledTx(el, rec);
@@ -3924,6 +4036,7 @@ async function settleOnchain(got, ticket, score) {
     pullLiveBoards(true);
     window._settleBusy = false;
   } catch (e) {
+    lastFinish.txPhase = "txFail";
     el.textContent = t("txFail");
     window._settleBusy = false;
   }

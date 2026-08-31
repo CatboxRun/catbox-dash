@@ -337,6 +337,7 @@ const I18N = {
     floorSent: "extra → floor",
     settledTx: "Received {n} LIM",
     viewTx: "View tx",
+    viewExtra: "extra LIM",
     extraTitle: "OVERTIME LIM",
     extraNeedDeploy: "Deploy once, then deposit LIM for overtime.",
     extraDeploy: "DEPLOY EXTRA",
@@ -705,6 +706,7 @@ const I18N = {
     floorSent: "超额→底池",
     settledTx: "已到账 {n} LIM",
     viewTx: "查看交易",
+    viewExtra: "加时",
     extraTitle: "加时 LIM",
     extraNeedDeploy: "先部署一次，再往加时池存 LIM。",
     extraDeploy: "部署加时合约",
@@ -1082,6 +1084,7 @@ const I18N = {
     floorSent: "超過→フロアプール",
     settledTx: "{n} LIM 受取済み",
     viewTx: "取引を見る",
+    viewExtra: "追加",
     extraTitle: "オーバータイム LIM",
     extraNeedDeploy: "一度デプロイしてから、オーバータイム用に LIM を入れる。",
     extraDeploy: "エクストラをデプロイ",
@@ -1450,6 +1453,7 @@ const I18N = {
     floorSent: "초과→베이스",
     settledTx: "{n} LIM 수령 완료",
     viewTx: "거래 보기",
+    viewExtra: "추가",
     extraTitle: "오버타임 LIM",
     extraNeedDeploy: "한 번 배포한 뒤, 오버타임용 LIM을 넣으세요.",
     extraDeploy: "엑스트라 배포",
@@ -1818,6 +1822,7 @@ const I18N = {
     floorSent: "dư → quỹ nền",
     settledTx: "Đã nhận {n} LIM",
     viewTx: "Xem giao dịch",
+    viewExtra: "LIM thêm",
     extraTitle: "LIM NGOÀI GIỜ",
     extraNeedDeploy: "Triển khai một lần, rồi nạp LIM cho ngoài giờ.",
     extraDeploy: "TRIỂN KHAI EXTRA",
@@ -2186,6 +2191,7 @@ const I18N = {
     floorSent: "ส่วนเกิน→กองทุนฐาน",
     settledTx: "รับแล้ว {n} LIM",
     viewTx: "ดูธุรกรรม",
+    viewExtra: "LIM พิเศษ",
     extraTitle: "LIM นอกเวลา",
     extraNeedDeploy: "ดีพลอยครั้งหนึ่ง แล้วฝาก LIM สำหรับนอกเวลา",
     extraDeploy: "ดีพลอยเอ็กซ์ตร้า",
@@ -2554,6 +2560,7 @@ const I18N = {
     floorSent: "лишнее → пул",
     settledTx: "Получено {n} LIM",
     viewTx: "Смотреть tx",
+    viewExtra: "экстра",
     extraTitle: "ОВЕРТАЙМ LIM",
     extraNeedDeploy: "Задеплойте один раз, затем внесите LIM на овертайм.",
     extraDeploy: "ДЕПЛОЙ EXTRA",
@@ -2913,6 +2920,7 @@ const I18N = {
     floorSent: "extra → kolam",
     settledTx: "Diterima {n} LIM",
     viewTx: "Lihat tx",
+    viewExtra: "extra LIM",
     extraTitle: "LIM OVERTIME",
     extraNeedDeploy: "Deploy sekali, lalu setor LIM untuk overtime.",
     extraDeploy: "DEPLOY EXTRA",
@@ -3297,6 +3305,7 @@ const I18N = {
     floorSent: "extra → floor",
     settledTx: "Natanggap {n} LIM",
     viewTx: "Tingnan ang tx",
+    viewExtra: "extra LIM",
     extraTitle: "OVERTIME LIM",
     extraNeedDeploy: "Mag-deploy minsan, tapos mag-deposit ng LIM para sa overtime.",
     extraDeploy: "I-DEPLOY ANG EXTRA",
@@ -3461,7 +3470,7 @@ function applyI18n() {
   } catch (_) {}
   if (typeof selected !== "undefined" && selected && typeof openPay === "function") {
     const payEl = document.getElementById("pay");
-    if (payEl && !payEl.classList.contains("hidden")) openPay(selected);
+    if (payEl && !payEl.classList.contains("hidden")) openPay(selected, { refresh: true });
   }
   if (typeof refreshHud === "function") refreshHud();
   if (typeof refreshOver === "function") refreshOver();
@@ -3475,4 +3484,8 @@ function applyI18n() {
   if (typeof window.refreshTrackCopy === "function") window.refreshTrackCopy();
   if (typeof window.syncBgmUi === "function") window.syncBgmUi();
   if (typeof refreshTutorialCopy === "function") refreshTutorialCopy();
+  if (typeof refreshInviteUi === "function") refreshInviteUi().catch(() => {});
+  if (typeof refreshClaimUi === "function") refreshClaimUi().catch(() => {});
+  if (typeof refreshFreeUi === "function") refreshFreeUi().catch(() => {});
+  if (typeof paintBoardLookup === "function") paintBoardLookup();
 }
