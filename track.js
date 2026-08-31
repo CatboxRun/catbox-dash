@@ -1126,6 +1126,9 @@
     applyCopy();
     return refreshStats();
   };
-  window.refreshTrackCopy = applyCopy;
+  window.refreshTrackCopy = () => {
+    applyCopy();
+    refreshStats().catch(() => {});
+  };
   bootTrack();
 })();

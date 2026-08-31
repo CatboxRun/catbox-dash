@@ -984,7 +984,10 @@
     applyCopy();
     return refreshStats();
   };
-  window.refreshSicboCopy = applyCopy;
+  window.refreshSicboCopy = () => {
+    applyCopy();
+    refreshStats().catch(() => {});
+  };
   window.resumeSicbo = resumeIfOpen;
   bootSicBo();
 })();
