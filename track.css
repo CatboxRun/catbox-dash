@@ -7,9 +7,22 @@
 .game-card-track .game-card-copy b { color: #f7e7b4; }
 .game-card-track .game-card-copy small { color: rgba(243, 234, 216, 0.8); }
 
-.track-page { position: relative; max-width: 420px; margin: 0 auto; }
+.track-page {
+  position: relative;
+  width: 100%;
+  max-width: 420px;
+  margin: 0 auto;
+  min-width: 0;
+  overflow-x: hidden;
+}
 .track-hero { background: #1c2434; }
-.track-hero img { height: 112px; object-position: center 48%; }
+.track-hero img {
+  display: block;
+  width: 100%;
+  height: 112px;
+  object-fit: cover;
+  object-position: center 48%;
+}
 .track-head {
   display: flex;
   align-items: center;
@@ -67,6 +80,7 @@
 .track-chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .track-chip {
   min-width: 40px;
+  min-height: 40px;
   padding: 8px 10px;
   font: inherit;
   font-size: 12px;
@@ -87,7 +101,7 @@
 }
 .track-row {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 6px;
   margin: 0 0 10px;
 }
@@ -100,7 +114,7 @@
 }
 .track-keys {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 6px;
   margin: 0 0 10px;
 }
@@ -111,6 +125,7 @@
   margin: 0 0 12px;
 }
 .track-actions button {
+  min-height: 44px;
   padding: 10px 12px;
   font: inherit;
   font-size: 13px;
@@ -166,7 +181,7 @@
 .track-hist { margin: 0 0 12px; }
 .track-hist-row {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 4px;
   margin: 0 0 4px;
 }
@@ -220,6 +235,71 @@
   width: 100%;
   min-height: 42px;
 }
+.dy-cell {
+  aspect-ratio: 1 / 1;
+  min-width: 0;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border: 2px solid rgba(28, 20, 8, 0.18);
+  border-radius: 8px;
+  background: #f7f0de;
+  transform-style: preserve-3d;
+  position: relative;
+}
+.dy-cell.has { border-color: rgba(28, 20, 8, 0.38); }
+.dy-cell.mark-hit {
+  background: linear-gradient(180deg, #f0d56a, #c9a227);
+  border-color: #6e520c;
+  border-width: 3px;
+}
+.dy-cell.mark-near {
+  background: #f6efe0;
+  border-color: #c9a227;
+  box-shadow: inset 0 0 0 2px rgba(201, 162, 39, 0.35);
+}
+.dy-cell.mark-miss {
+  background: #2f2a24;
+  border-color: #1c1408;
+}
+.dy-cell.mark-miss .dy-ico { filter: grayscale(1) brightness(0.85); }
+.dy-cell.pop { animation: dyFlip 0.46s ease both; }
+.dy-ico {
+  width: 62%;
+  height: 62%;
+  max-width: 100%;
+  max-height: 100%;
+  display: block;
+  object-fit: contain;
+}
+.dy-ico-box { object-fit: contain; }
+.dy-key {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  padding: 8px 2px 6px;
+  font: inherit;
+  font-size: 10px;
+  font-weight: 800;
+  color: var(--ink);
+  background: #f7f0de;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  cursor: pointer;
+}
+.dy-key .dy-ico {
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+}
+.dy-key span {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .dy-cell.sealed {
   background: linear-gradient(180deg, #3a3224, #1c1408);
   border-color: rgba(201, 162, 39, 0.5);
@@ -231,4 +311,32 @@
 }
 #trTruth.is-sealed .dy-cell {
   box-shadow: inset 0 0 0 1px rgba(201, 162, 39, 0.18);
+}
+
+@keyframes dyFlip {
+  0% { transform: rotateX(0); }
+  48% { transform: rotateX(90deg); }
+  100% { transform: rotateX(0); }
+}
+@keyframes dyShake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-6px); }
+  40% { transform: translateX(6px); }
+  60% { transform: translateX(-4px); }
+  80% { transform: translateX(4px); }
+}
+
+@media (max-width: 420px) {
+  .track-hero img { height: 84px; }
+  .track-lead { font-size: 12px; }
+  .track-pay { gap: 4px; margin-bottom: 10px; }
+  .track-pay span { padding: 6px 3px; font-size: 10px; }
+  .track-pay b { font-size: 12px; }
+  .track-chip { min-width: 36px; min-height: 38px; padding: 7px 8px; }
+  .dy-key { font-size: 9px; padding: 6px 1px 5px; }
+  .dy-key .dy-ico { width: 20px; height: 20px; }
+}
+@media (max-width: 360px) {
+  .track-pay { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .track-hero img { height: 72px; }
 }

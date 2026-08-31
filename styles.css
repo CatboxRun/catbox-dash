@@ -531,16 +531,16 @@ body:not([data-lang="en"]) .meme-line {
   background: linear-gradient(180deg, #edd078, #c9a227);
   border-radius: 0 0 18px 18px;
 }
+.games-stage {
+  min-width: 0;
+  overflow-x: hidden;
+}
 .games-stage-bar {
   display: flex;
   flex-direction: column;
   align-items: stretch;
   gap: 8px;
   margin: 0 0 10px;
-}
-.games-stage:has(#laneSwitch:not(.hidden)) .daily-head,
-.games-stage:has(#laneSwitch:not(.hidden)) .track-head {
-  display: none;
 }
 .games-back {
   display: inline-flex;
