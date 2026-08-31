@@ -380,6 +380,7 @@
   let pendingStake = 0;
   let stakeLim = 1;
   let phase = "edit";
+  let lastOutcome = null;
 
   function dashMode() {
     return Boolean(window.CatboxChain && $("lobby") && $("sbFelt"));
@@ -388,6 +389,7 @@
     lang = COPY[document.body.dataset.lang] ? document.body.dataset.lang : "en";
   }
   const t = (k, vars = {}) => {
+    syncLang();
     let s = (COPY[lang] || COPY.zh)[k] || COPY.en[k] || k;
     Object.entries(vars).forEach(([a, v]) => {
       s = s.replaceAll(`{${a}}`, String(v));
@@ -438,6 +440,7 @@
     setTxt("sbStake", t("stakeLabel"));
     setTxt("sbPopOk", t("ok"));
     paintPhase();
+    paintOutcome();
   }
   function friendly(e) {
     const code = e?.code;
@@ -673,6 +676,7 @@
   function resetRound() {
     phase = "edit";
     pendingLock = 0;
+    lastOutcome = null;
     hidePop();
     coverCup(false);
     setTxt("sbResult", "");
@@ -684,9 +688,16 @@
     paintPhase();
   }
 
-  function showOutcome(side, d1, d2, d3, stake) {
+  function paintOutcome() {
+    if (!lastOutcome) return;
+    if (lastOutcome.kind === "refund") {
+      setTxt("sbTotal", "—");
+      setTxt("sbResult", t("refund"));
+      $("sbResult")?.setAttribute("data-hit", "0");
+      return;
+    }
+    const { side, d1, d2, d3, stake } = lastOutcome;
     const sum = d1 + d2 + d3;
-    setFaces(d1, d2, d3);
     setTxt("sbTotal", t("total", { n: sum }));
     const w = won(side, d1, d2, d3);
     const doubled = String(stake * 2);
@@ -696,6 +707,12 @@
     else if (w.why === "mid") line = t("loseMid");
     setTxt("sbResult", line);
     $("sbResult")?.setAttribute("data-hit", w.ok ? "1" : "0");
+  }
+
+  function showOutcome(side, d1, d2, d3, stake) {
+    lastOutcome = { kind: "settled", side, d1, d2, d3, stake };
+    setFaces(d1, d2, d3);
+    paintOutcome();
     setStatus("");
     hidePop();
     phase = "result";
@@ -786,12 +803,11 @@
     const rec = await tx.wait();
     const ev = parseSettled(g, rec);
     if (ev?.name === "Refunded") {
+      lastOutcome = { kind: "refund" };
       coverCup(false);
       phase = "result";
       pendingLock = 0;
-      setTxt("sbTotal", "—");
-      setTxt("sbResult", t("refund"));
-      $("sbResult")?.setAttribute("data-hit", "0");
+      paintOutcome();
       setStatus("");
       hidePop();
       paintPhase();

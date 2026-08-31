@@ -447,6 +447,8 @@
   let liveOk = false;
   let phase = "edit";
   let shownTrack = null;
+  let statusSpec = null;
+  let statusErr = null;
 
   function dashMode() {
     return Boolean(window.CatboxChain && $("lobby") && $("trRoot"));
@@ -455,6 +457,7 @@
     lang = COPY[document.body.dataset.lang] ? document.body.dataset.lang : "en";
   }
   const tt = (k, vars = {}) => {
+    syncLang();
     if (typeof t === "function" && (k.startsWith("daily") || k === "playTag")) return t(k, vars);
     let s = (COPY[lang] || COPY.zh)[k] || COPY.en[k] || k;
     Object.entries(vars).forEach(([a, v]) => {
@@ -468,6 +471,32 @@
   }
   function setStatus(msg) {
     setTxt("trStatus", msg || "");
+  }
+  function paintStatus() {
+    if (statusErr) {
+      setStatus(friendly(statusErr));
+      return;
+    }
+    if (!statusSpec) return;
+    const line = tt(statusSpec.key, statusSpec.vars);
+    setStatus(statusSpec.hits == null ? line : `${statusSpec.hits}/5 · ${line}`);
+  }
+  function noteStatus(key, vars, hits) {
+    statusErr = null;
+    statusSpec = { key, vars: vars || {}, hits: hits === undefined ? null : hits };
+    paintStatus();
+  }
+  function noteError(e) {
+    statusSpec = null;
+    statusErr = e;
+    const msg = friendly(e);
+    setStatus(msg);
+    return msg;
+  }
+  function clearStatus() {
+    statusSpec = null;
+    statusErr = null;
+    setStatus("");
   }
   function toast(msg) {
     if (typeof showToast === "function") showToast(msg);
@@ -624,11 +653,10 @@
   function paintLiveHint() {
     if (busy || pendingLock || phase !== "edit") return;
     if (!liveOk) {
-      setStatus(tt("noTable"));
+      noteStatus("noTable");
       return;
     }
-    const cur = ($("trStatus")?.textContent || "").trim();
-    if (!cur || cur === COPY.zh.noTable || cur === COPY.en.noTable) setStatus("");
+    if (!statusSpec || statusSpec.key === "noTable") clearStatus();
   }
   function paintPhase() {
     const el = root();
@@ -668,6 +696,7 @@
     if (z) z.textContent = tt("practice");
     paintGo();
     paintLiveHint();
+    paintStatus();
   }
   function friendly(e) {
     const code = e?.code;
@@ -710,14 +739,14 @@
     const tr = unpack(mode);
     row.innerHTML = tr.map((k, i) => cellHtml(k, g[i] === k ? "hit" : "miss")).join("");
   }
-  function showResult(hits, line, track, guess) {
+  function showResult(hits, key, vars, track, guess) {
     phase = "result";
     pendingLock = 0;
     pendingGuess = guess;
     shownTrack = track === "empty" ? null : track;
     paintGuess();
     paintTruth(track, guess);
-    setStatus(hits == null ? line : `${hits}/5 · ${line}`);
+    noteStatus(key, vars, hits);
     $("trStatus")?.setAttribute("data-hit", hits != null && hits >= 2 ? "1" : "0");
     paintGo();
     hidePop();
@@ -729,7 +758,7 @@
     shownTrack = null;
     draft = [];
     $("trStatus")?.removeAttribute("data-hit");
-    setStatus("");
+    clearStatus();
     paintGuess();
     paintTruth("empty");
     paintGo();
@@ -828,7 +857,7 @@
       try {
         const n = Number(await (await readProvider()).getBlockNumber());
         const left = Math.max(0, pendingLock + 1 - n);
-        setStatus(left ? tt("wait", { n: left }) : tt("waitReady"));
+        noteStatus(left ? "wait" : "waitReady", left ? { n: left } : {});
       } catch (_) {}
     } else {
       paintLiveHint();
@@ -859,7 +888,7 @@
       $("trGuess")?.classList.remove("shake");
       void $("trGuess")?.offsetWidth;
       $("trGuess")?.classList.add("shake");
-      setStatus(tt("filling"));
+      noteStatus("filling");
       return;
     }
     pendingGuess = pack(draft);
@@ -867,13 +896,12 @@
     paintGuess();
     paintTruth("sealed");
     paintGo();
-    setStatus(tt("flipping"));
+    noteStatus("flipping");
     await sleep(420);
     const track = practiceTrack();
     const h = hitsOf(pendingGuess, track);
     saveHist({ guess: pendingGuess, track, hits: h, practice: 1 });
-    const line = h >= 2 ? tt("practiceWin", { h }) : tt("practiceLose");
-    showResult(h, line, track, pendingGuess);
+    showResult(h, h >= 2 ? "practiceWin" : "practiceLose", { h }, track, pendingGuess);
   }
 
   async function waitForLock(lockBlock) {
@@ -882,14 +910,14 @@
       const n = Number(await p.getBlockNumber());
       const left = Math.max(0, lockBlock + 1 - n);
       if (n > lockBlock) {
-        setStatus(tt("waitReady"));
+        noteStatus("waitReady");
         return true;
       }
-      setStatus(tt("wait", { n: left }));
+      noteStatus("wait", { n: left });
       paintGo();
       await sleep(1500);
     }
-    setStatus(tt("waitReady"));
+    noteStatus("waitReady");
     return false;
   }
 
@@ -912,7 +940,7 @@
     if (!account) await connect();
     await ensureBsc();
     await waitForLock(pendingLock);
-    setStatus(tt("opening"));
+    noteStatus("opening");
     paintGo();
     const g = gameContract(await signer());
     const tx = await g.settle();
@@ -920,16 +948,15 @@
     const ev = parseSettled(g, rec);
     const guess = pendingGuess;
     if (ev?.name === "Refunded") {
-      showResult(null, tt("refund"), "empty", guess);
+      showResult(null, "refund", {}, "empty", guess);
     } else if (ev?.name === "Settled") {
       const trackN = Number(ev.args.track);
       const h = Number(ev.args.hits);
       const pay = Number(ethers.formatEther(ev.args.payout || 0n));
       saveHist({ guess, track: trackN, hits: h, practice: 0 });
-      const line = h >= 2 ? tt("win", { h, n: String(pay) }) : tt("lose");
-      showResult(h, line, trackN, guess);
+      showResult(h, h >= 2 ? "win" : "lose", { h, n: String(pay) }, trackN, guess);
     } else {
-      setStatus(tt("refund"));
+      noteStatus("refund");
       phase = "edit";
       pendingLock = 0;
       paintGo();
@@ -942,7 +969,7 @@
       $("trGuess")?.classList.remove("shake");
       void $("trGuess")?.offsetWidth;
       $("trGuess")?.classList.add("shake");
-      setStatus(tt("filling"));
+      noteStatus("filling");
       return;
     }
     syncAccount();
@@ -952,7 +979,7 @@
     await checkLive();
     if (!liveOk) {
       toast(tt("noTable"));
-      setStatus(tt("noTable"));
+      noteStatus("noTable");
       return;
     }
     const open = await loadOpenBet();
@@ -961,7 +988,7 @@
       paintTruth("sealed");
       paintGuess();
       paintGo();
-      setStatus(tt("resume"));
+      noteStatus("resume");
       toast(tt("hasOpen"));
       return;
     }
@@ -973,23 +1000,23 @@
     const [free, bal] = await Promise.all([g.freePool(), lim.balanceOf(account)]);
     if (free < cover) {
       toast(tt("noPool"));
-      setStatus(tt("noPool"));
+      noteStatus("noPool");
       return;
     }
     if (bal < amount) {
       toast(tt("needLim"));
-      setStatus(tt("needLim"));
+      noteStatus("needLim");
       return;
     }
     const allow = await lim.allowance(account, trackCfg().address);
     if (allow < amount) {
-      setStatus(tt("approve"));
+      noteStatus("approve");
       toast(tt("approve"));
       const txA = await lim.approve(trackCfg().address, ethers.MaxUint256);
       await txA.wait();
     }
     const guess = pack(draft);
-    setStatus(tt("paying", { n: stakeLim }));
+    noteStatus("paying", { n: stakeLim });
     const tx = await g.placeBet(guess, amount);
     await tx.wait();
     const b = parseBet(await g.bets(account));
@@ -1000,7 +1027,7 @@
     paintGuess();
     paintTruth("sealed");
     paintGo();
-    setStatus(tt("wait", { n: 2 }));
+    noteStatus("wait", { n: 2 });
   }
 
   async function onGo() {
@@ -1016,9 +1043,7 @@
       else if (stakeLim === 0) await runPractice();
       else await liveBet();
     } catch (e) {
-      const msg = friendly(e);
-      setStatus(msg);
-      toast(msg);
+      toast(noteError(e));
     } finally {
       busy = false;
       paintGo();
@@ -1032,7 +1057,7 @@
     if (!account) return;
     await checkLive();
     const b = await loadOpenBet();
-    if (b) setStatus(tt("resume"));
+    if (b) noteStatus("resume");
   }
 
   function bindUi() {
@@ -1051,12 +1076,15 @@
         if (!liveOk && n > 0) {
           stakeLim = 0;
           paintChips();
-          setStatus(tt("noTable"));
+          noteStatus("noTable");
           return;
         }
         stakeLim = n;
         paintChips();
-        if (!pendingLock) setStatus(liveOk ? "" : tt("noTable"));
+        if (!pendingLock) {
+          if (liveOk) clearStatus();
+          else noteStatus("noTable");
+        }
         return;
       }
       if (e.target.closest("#trDel")) {
