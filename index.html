@@ -44,9 +44,8 @@
       href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@500;700&family=Noto+Sans+SC:wght@500;700&family=Noto+Sans+JP:wght@500;700&family=Noto+Sans+KR:wght@500;700&family=Noto+Sans+Thai:wght@500;700&family=Press+Start+2P&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="./styles.css?v=88" />
+    <link rel="stylesheet" href="./styles.css?v=89" />
     <link rel="stylesheet" href="./sicbo.css?v=13" />
-    <link rel="stylesheet" href="./daily.css?v=4" />
     <link rel="stylesheet" href="./track.css?v=8" />
   </head>
   <body>
@@ -158,11 +157,11 @@
                   </span>
                   <span class="game-card-go" data-i18n="playTag">PLAY</span>
                 </button>
-                <button type="button" class="game-card game-card-daily" id="openDaily" data-game="daily">
-                  <img class="game-card-art" src="./assets/daily-card.jpg?v=1" alt="" />
+                <button type="button" class="game-card game-card-track" id="openTrack" data-game="track">
+                  <img class="game-card-art" src="./assets/track-banner.jpg?v=1" alt="" />
                   <span class="game-card-copy">
-                    <b data-i18n="tabDaily">DAILY</b>
-                    <small data-i18n="dailyJumpHint">One puzzle a day · 6 tries</small>
+                    <b data-i18n="tabTrack">REVEAL</b>
+                    <small data-i18n="trackJumpHint">Lock five · exact place pays</small>
                   </span>
                   <span class="game-card-go" data-i18n="playTag">PLAY</span>
                 </button>
@@ -171,10 +170,6 @@
             <div class="games-stage hidden" id="gamesStage">
               <div class="games-stage-bar">
                 <button type="button" class="games-back" id="gamesBack" data-i18n="gamesBack">BACK</button>
-                <div class="lane-switch hidden" id="laneSwitch">
-                  <button type="button" id="laneDaily" data-i18n="laneDaily" aria-pressed="true">TODAY</button>
-                  <button type="button" id="lanePaid" data-i18n="lanePaid" aria-pressed="false">REVEAL</button>
-                </div>
               </div>
               <div class="sicbo-page" id="sbRoot" data-mode="live">
               <p class="sicbo-mode" id="sbMode">Pick a stake, then Small or Big to lock. Wait two blocks, then tap OPEN CUP. A hit pays double.</p>
@@ -223,51 +218,6 @@
               </ul>
               <p class="sicbo-stats" id="sbWallet">LIM — · POOL —</p>
               <p class="sicbo-status" id="sbStatus"></p>
-              </div>
-              <div class="daily-page hidden" id="dyRoot">
-                <div class="daily-head">
-                  <img src="./assets/ticket-scout.png?v=2" alt="" />
-                  <p class="kicker" data-i18n="dailyKicker">CATBOX DAILY</p>
-                </div>
-                <div class="illust-banner daily-hero">
-                  <img src="./assets/daily-banner.jpg?v=1" alt="" />
-                </div>
-                <p class="daily-lead" data-i18n="dailyLead">One track for the world today. Six tries. Then wait until tomorrow.</p>
-                <div class="daily-meta">
-                  <span id="dyDate"></span>
-                  <span id="dyStreak"></span>
-                  <span id="dyTimer" class="hidden"></span>
-                </div>
-                <div class="daily-modes">
-                  <button type="button" id="dyModeFree" class="on">UNTIMED</button>
-                  <button type="button" id="dyModeTimed">60s badge</button>
-                </div>
-                <div class="daily-board" id="dyBoard" aria-label="Daily board"></div>
-                <p class="daily-status" id="dyStatus"></p>
-                <div class="daily-keys" id="dyKeys"></div>
-                <div class="daily-actions">
-                  <button type="button" id="dyDel">DEL</button>
-                  <button type="button" id="dyEnter">ENTER</button>
-                </div>
-                <div class="daily-share hidden" id="dyShareBox">
-                  <div class="daily-card" id="dyCard">
-                    <p class="daily-card-title">CATBOX DAILY</p>
-                    <p class="daily-card-meta" id="dyCardMeta"></p>
-                    <div class="daily-card-grid" id="dyCardGrid"></div>
-                    <p class="daily-card-foot" id="dyCardFoot"></p>
-                  </div>
-                  <button type="button" id="dyShare">SHARE</button>
-                  <p class="daily-share-hint" data-i18n="dailyShareHint">No spoilers. Share the card, not the track.</p>
-                </div>
-                <p class="daily-next hidden" id="dyNext"></p>
-                <button type="button" class="daily-to-track hidden" id="dyToTrack"></button>
-                <ul class="daily-rules">
-                  <li data-i18n="dailyR1">Gold — right piece, right place.</li>
-                  <li data-i18n="dailyR2">Cream — right piece, wrong place.</li>
-                  <li data-i18n="dailyR3">Dark — not on today's track.</li>
-                  <li data-i18n="dailyR4">One puzzle for the world today, from a public rule — not hand-picked. Not a ticket. Not the daily board, invite board, or floor.</li>
-                </ul>
-                <p class="daily-free" data-i18n="dailyFree">Not a ticket. Not the daily board, invite board, or floor. No wallet.</p>
               </div>
               <div class="track-page hidden" id="trRoot">
                 <div class="track-head">
@@ -730,12 +680,11 @@
     <script src="./config.js?v=41"></script>
     <script src="https://cdn.jsdelivr.net/npm/ethers@6.13.5/dist/ethers.umd.min.js"></script>
     <script src="./chain.js?v=104"></script>
-    <script src="./i18n.js?v=134"></script>
-    <script src="./game.js?v=149"></script>
+    <script src="./i18n.js?v=135"></script>
+    <script src="./game.js?v=150"></script>
     <script src="./bgm.js?v=26"></script>
     <script src="./sicbo-config.js?v=2"></script>
     <script src="./sicbo.js?v=18"></script>
-    <script src="./daily.js?v=3"></script>
     <script src="./track-config.js?v=2"></script>
     <script src="./track.js?v=15"></script>
   </body>

@@ -945,8 +945,6 @@ function paintOverShare() {
   if (x) x.href = shareTweetUrl();
 }
 
-const LANE_KEY = "catbox-lane-v1";
-
 function showGamesCatalog() {
   $("gamesCatalog")?.classList.remove("hidden");
   $("gamesStage")?.classList.add("hidden");
@@ -954,35 +952,15 @@ function showGamesCatalog() {
   $("sbPop")?.classList.add("hidden");
 }
 
-function lastLane() {
-  try {
-    return localStorage.getItem(LANE_KEY) === "track" ? "track" : "daily";
-  } catch (_) {
-    return "daily";
-  }
-}
-
 function openArcadeGame(id) {
-  if (id !== "sicbo" && id !== "daily" && id !== "track") return;
+  if (id !== "sicbo" && id !== "track") return;
   $("gamesCatalog")?.classList.add("hidden");
   $("gamesStage")?.classList.remove("hidden");
   $("sbRoot")?.classList.toggle("hidden", id !== "sicbo");
-  $("dyRoot")?.classList.toggle("hidden", id !== "daily");
   $("trRoot")?.classList.toggle("hidden", id !== "track");
-  const lane = id === "daily" || id === "track";
-  $("laneSwitch")?.classList.toggle("hidden", !lane);
-  $("laneDaily")?.classList.toggle("on", id === "daily");
-  $("lanePaid")?.classList.toggle("on", id === "track");
-  $("laneDaily")?.setAttribute("aria-pressed", id === "daily" ? "true" : "false");
-  $("lanePaid")?.setAttribute("aria-pressed", id === "track" ? "true" : "false");
   if (id !== "track") $("trPop")?.classList.add("hidden");
-  if (lane) {
-    try {
-      localStorage.setItem(LANE_KEY, id);
-    } catch (_) {}
-  }
+  if (id !== "sicbo") $("sbPop")?.classList.add("hidden");
   if (id === "sicbo") window.refreshSicbo?.();
-  if (id === "daily") window.refreshDaily?.();
   if (id === "track") window.refreshTrack?.();
 }
 
@@ -1007,12 +985,8 @@ function bootLobbyTabs() {
   if (open) open.onclick = () => setTab("rules");
   const openSicbo = $("openSicbo");
   if (openSicbo) openSicbo.onclick = () => openArcadeGame("sicbo");
-  const openDaily = $("openDaily");
-  if (openDaily) openDaily.onclick = () => openArcadeGame("daily");
-  const laneDaily = $("laneDaily");
-  if (laneDaily) laneDaily.onclick = () => openArcadeGame("daily");
-  const lanePaid = $("lanePaid");
-  if (lanePaid) lanePaid.onclick = () => openArcadeGame("track");
+  const openTrack = $("openTrack");
+  if (openTrack) openTrack.onclick = () => openArcadeGame("track");
   const gamesBack = $("gamesBack");
   if (gamesBack) gamesBack.onclick = () => showGamesCatalog();
   window.setLobbyTab = setTab;

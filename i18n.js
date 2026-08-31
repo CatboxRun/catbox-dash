@@ -3480,7 +3480,6 @@ function applyI18n() {
   if (typeof paintSwapGo === "function") paintSwapGo();
   if (typeof refreshSwap === "function") refreshSwap();
   if (typeof window.refreshSicboCopy === "function") window.refreshSicboCopy();
-  if (typeof window.refreshDailyCopy === "function") window.refreshDailyCopy();
   if (typeof window.refreshTrackCopy === "function") window.refreshTrackCopy();
   if (typeof window.syncBgmUi === "function") window.syncBgmUi();
   if (typeof refreshTutorialCopy === "function") refreshTutorialCopy();

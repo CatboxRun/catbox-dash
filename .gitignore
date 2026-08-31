@@ -4,6 +4,9 @@ package-lock.json
 process_assets.py
 .DS_Store
 tmp-shots/
+.env
+.env.*
+!.env.example
 assets/icon-*-src.png
 data/admin-snapshot.json
 data/_full-admin.json
