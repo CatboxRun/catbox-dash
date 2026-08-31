@@ -444,6 +444,9 @@ body:not([data-lang="en"]) .meme-line {
   grid-template-columns: 1fr 1fr;
   gap: 10px;
 }
+.game-cards:has(.game-card:only-child) {
+  grid-template-columns: minmax(0, 220px);
+}
 .game-card {
   position: relative;
   display: flex;

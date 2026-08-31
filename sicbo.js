@@ -23,6 +23,7 @@
       r3: "216 种点数里，54 面开双倍。",
       r4: "独立奖池。锁注后等两个块，再点揭盅。未揭的注，回来还能继续。",
       r5: "桌池每周销毁约两成。未揭的注不烧。",
+      r6: "开盅由合约自动执行，不人为改点。不进日榜、邀请榜、底池。",
       win: "开中了。{n} LIM 已到钱包。",
       loseMid: "中门入池，再来一盅。",
       loseTriple: "围骰入池，再来一盅。",
@@ -62,6 +63,7 @@
       r3: "54 of 216 faces pay double.",
       r4: "Own pool. After lock, wait two blocks, then tap OPEN CUP. An open cup can be finished later.",
       r5: "Each week about 20% of the table pool is burned. Open cups are not burned.",
+      r6: "The contract opens the cup. Nobody sets the points. Not the daily board, invite board, or floor.",
       win: "Hit. {n} LIM is in the wallet.",
       loseMid: "Middle refill. Open another cup.",
       loseTriple: "Triple refill. Open another cup.",
@@ -101,6 +103,7 @@
       r3: "216 面のうち 54 面が倍。",
       r4: "独立プール。ロック後 2 ブロック待って開く。未開封は後から続けられる。",
       r5: "卓プールは毎週およそ2割をバーン。未開封の賭けは焼かない。",
+      r6: "開封はコントラクトが自動実行。人が目を決めない。日次・招待・フロアプールには入らない。",
       win: "当たり。{n} LIM がウォレットへ。",
       loseMid: "中間はプールへ。もう一回。",
       loseTriple: "ゾロ目はプールへ。もう一回。",
@@ -140,6 +143,7 @@
       r3: "216면 중 54면이 두 배.",
       r4: "독립 풀. 잠근 뒤 두 블록 기다렸다가 연다. 안 연 판은 나중에 이어서.",
       r5: "테이블 풀은 매주 약 20% 소각. 안 연 판은 태우지 않음.",
+      r6: "개봉은 컨트랙트가 자동 실행. 사람이 점을 바꾸지 않음. 일간·초대·베이스 풀에 안 들어감.",
       win: "적중. {n} LIM이 지갑으로.",
       loseMid: "중간은 풀로. 한 판 더.",
       loseTriple: "트리플은 풀로. 한 판 더.",
@@ -179,6 +183,7 @@
       r3: "54/216 mặt trả gấp đôi.",
       r4: "Quỹ riêng. Khóa xong đợi hai khối rồi mở. Chén chưa mở, quay lại vẫn làm tiếp.",
       r5: "Quỹ bàn đốt khoảng 20% mỗi tuần. Chén chưa mở không đốt.",
+      r6: "Hợp đồng tự mở chén, không ai sửa điểm. Không vào bảng ngày, mời, hay quỹ nền.",
       win: "Trúng. {n} LIM đã vào ví.",
       loseMid: "Giữa vào quỹ. Lắc lại.",
       loseTriple: "Tam hoa vào quỹ. Lắc lại.",
@@ -218,6 +223,7 @@
       r3: "54 จาก 216 หน้าจ่ายสองเท่า",
       r4: "กองของโต๊ะ ล็อกแล้วรอสองบล็อกแล้วเปิด ถ้วยที่ยังไม่เปิด กลับมาเปิดต่อได้",
       r5: "กองโต๊ะเผาประมาณสองส่วนในสิบทุกสัปดาห์ ถ้วยที่ยังไม่เปิดไม่เผา",
+      r6: "สัญญาเปิดถ้วยเอง ไม่มีคนแก้แต้ม ไม่เข้ากระดานวัน ชวน หรือกองฐาน",
       win: "ถูก {n} LIM เข้ากระเป๋าแล้ว",
       loseMid: "กลางเข้ากอง เขย่าอีก",
       loseTriple: "ตองเข้ากอง เขย่าอีก",
@@ -257,6 +263,7 @@
       r3: "54 из 216 граней платят ×2.",
       r4: "Свой пул. После блокировки два блока, затем откройте. Неоткрытую чашу можно доиграть позже.",
       r5: "Около 20% пула стола сжигается каждую неделю. Неоткрытые чаши не сжигаются.",
+      r6: "Контракт открывает чашу сам. Очки не задаёт человек. Не дневной, инвайт и не базовый пул.",
       win: "Попадание. {n} LIM на кошельке.",
       loseMid: "Середина в пул. Ещё раз.",
       loseTriple: "Тройка в пул. Ещё раз.",
@@ -296,6 +303,7 @@
       r3: "54 dari 216 muka membayar dobel.",
       r4: "Pool sendiri. Setelah kunci, tunggu dua blok, lalu buka. Mangkuk belum dibuka bisa dilanjut nanti.",
       r5: "Pool meja dibakar sekitar 20% tiap minggu. Mangkuk belum dibuka tidak dibakar.",
+      r6: "Kontrak membuka mangkuk sendiri. Tidak ada yang mengatur mata. Bukan papan harian, undangan, atau pool dasar.",
       win: "Kenai. {n} LIM sudah di dompet.",
       loseMid: "Tengah masuk pool. Goyang lagi.",
       loseTriple: "Triple masuk pool. Goyang lagi.",
@@ -335,6 +343,7 @@
       r3: "54 sa 216 na mukha ang nagbabayad ng doble.",
       r4: "Sariling pool. Pagkatapos mag-lock, maghintay ng dalawang block, tapos buksan. Ang hindi pa nabubuksang tasa, puwedeng tapusin mamaya.",
       r5: "Humigit-kumulang 20% ng pool ng mesa ang sinusunog tuwing linggo. Hindi sinusunog ang hindi pa nabubuksang tasa.",
+      r6: "Kontrata ang nagbubukas ng tasa. Walang tao na nagtatakda ng puntos. Hindi daily board, invite, o floor.",
       win: "Tama. {n} LIM nasa wallet na.",
       loseMid: "Gitna sa pool. Ulit.",
       loseTriple: "Triple sa pool. Ulit.",
@@ -424,6 +433,7 @@
     setTxt("sbR3", t("r3"));
     setTxt("sbR4", t("r4"));
     setTxt("sbR5", t("r5"));
+    setTxt("sbR6", t("r6"));
     setTxt("sbMode", t("mode"));
     setTxt("sbStake", t("stakeLabel"));
     setTxt("sbPopOk", t("ok"));
@@ -497,10 +507,30 @@
     if (side === 0) return { ok: sum >= 4 && sum <= 8, why: "miss" };
     return { ok: sum >= 13 && sum <= 17, why: "miss" };
   }
+  const FACE_PIPS = {
+    1: ["c"],
+    2: ["tl", "br"],
+    3: ["tl", "c", "br"],
+    4: ["tl", "tr", "bl", "br"],
+    5: ["tl", "tr", "c", "bl", "br"],
+    6: ["tl", "ml", "bl", "tr", "mr", "br"],
+  };
+  function paintDie(die, n) {
+    const v = Math.max(1, Math.min(6, Number(n) || 1));
+    die.dataset.face = String(v);
+    const face = die.querySelector(".die-face");
+    if (!face) return;
+    face.replaceChildren();
+    FACE_PIPS[v].forEach((pos) => {
+      const pip = document.createElement("span");
+      pip.className = `pip ${pos}`;
+      face.appendChild(pip);
+    });
+  }
   function setFaces(a, b, c) {
     const dice = diceEls();
     [a, b, c].forEach((n, i) => {
-      if (dice[i]) dice[i].dataset.face = String(n);
+      if (dice[i]) paintDie(dice[i], n);
     });
   }
   function paintChips() {
@@ -528,35 +558,17 @@
   function buildDice() {
     const row = $("sbDice");
     if (!row || row.children.length) return;
-    const faces = {
-      1: ["c"],
-      2: ["tl", "br"],
-      3: ["tl", "c", "br"],
-      4: ["tl", "tr", "bl", "br"],
-      5: ["tl", "tr", "c", "bl", "br"],
-      6: ["tl", "ml", "bl", "tr", "mr", "br"],
-    };
     for (let i = 0; i < 3; i++) {
       const slot = document.createElement("div");
       slot.className = "die-slot";
       const die = document.createElement("div");
       die.className = "die";
-      die.dataset.face = "5";
-      const cube = document.createElement("div");
-      cube.className = "die-cube";
-      for (let n = 1; n <= 6; n++) {
-        const face = document.createElement("div");
-        face.className = `die-face f${n}`;
-        faces[n].forEach((pos) => {
-          const pip = document.createElement("span");
-          pip.className = `pip ${pos}`;
-          face.appendChild(pip);
-        });
-        cube.appendChild(face);
-      }
-      die.appendChild(cube);
+      const face = document.createElement("div");
+      face.className = "die-face";
+      die.appendChild(face);
       slot.appendChild(die);
       row.appendChild(slot);
+      paintDie(die, 5);
     }
   }
   function sleep(ms) {

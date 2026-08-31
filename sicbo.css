@@ -36,7 +36,7 @@ body[data-sicbo] {
   backdrop-filter: blur(16px);
 }
 .sicbo-felt {
-  --die: 58px;
+  --die: 64px;
   position: relative;
   overflow: hidden;
   text-align: center;
@@ -103,83 +103,55 @@ body[data-sicbo] {
   display: flex;
   justify-content: center;
   align-items: flex-end;
-  gap: 14px;
+  gap: 16px;
   height: 78px;
-  perspective: 520px;
-  transform-style: preserve-3d;
 }
 .sicbo-dice .die-slot {
   width: var(--die);
   height: var(--die);
-  perspective: 260px;
-  transform-style: preserve-3d;
-  filter: drop-shadow(0 10px 6px rgba(28, 40, 64, 0.35));
+  filter: drop-shadow(0 6px 4px rgba(28, 40, 64, 0.28));
 }
-.sicbo-dice .die-slot:nth-child(1) { transform: rotate(-12deg) translateY(8px); }
-.sicbo-dice .die-slot:nth-child(2) { transform: rotate(3deg) translateY(-4px); z-index: 2; }
-.sicbo-dice .die-slot:nth-child(3) { transform: rotate(11deg) translateY(7px); }
 .sicbo-dice .die {
   width: var(--die);
   height: var(--die);
   position: relative;
-  transform-style: preserve-3d;
 }
 .sicbo-dice .die.land { animation: sicbo-land 0.48s cubic-bezier(.18, 1.4, .32, 1); }
 @keyframes sicbo-land {
-  0% { transform: translateY(-30px) scale(1.08); }
-  38% { transform: translateY(5px) scale(1); }
-  62% { transform: translateY(-9px); }
+  0% { transform: translateY(-18px) scale(1.06); }
+  38% { transform: translateY(3px) scale(1); }
+  62% { transform: translateY(-6px); }
   100% { transform: translateY(0); }
 }
-.sicbo-dice .die-cube {
-  width: 100%;
-  height: 100%;
-  position: relative;
-  transform-style: preserve-3d;
-  transition: transform 0.28s cubic-bezier(.2, .8, .2, 1);
-}
-.sicbo-stage.shaking .die-cube { animation: sicbo-tumble 0.16s linear infinite; }
-.sicbo-stage.shaking .die-slot:nth-child(2) .die-cube {
+.sicbo-stage.shaking .die { animation: sicbo-spin 0.16s linear infinite; }
+.sicbo-stage.shaking .die-slot:nth-child(2) .die {
   animation-duration: 0.13s;
   animation-direction: reverse;
 }
-.sicbo-stage.shaking .die-slot:nth-child(3) .die-cube { animation-duration: 0.2s; }
-@keyframes sicbo-tumble {
-  0% { transform: rotateX(18deg) rotateY(0deg) rotateZ(-22deg); }
-  50% { transform: rotateX(-55deg) rotateY(180deg) rotateZ(24deg); }
-  100% { transform: rotateX(18deg) rotateY(360deg) rotateZ(-22deg); }
+.sicbo-stage.shaking .die-slot:nth-child(3) .die { animation-duration: 0.2s; }
+@keyframes sicbo-spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
 }
 .sicbo-dice .die-face {
-  position: absolute;
-  inset: 0;
+  width: 100%;
+  height: 100%;
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   grid-template-rows: repeat(3, 1fr);
   place-items: center;
-  padding: 6px;
-  border-radius: 10px;
-  background: linear-gradient(160deg, #fffdf6, #efe2b6 70%, #e4d09a);
-  box-shadow: inset 0 0 0 1px rgba(166, 124, 18, 0.4);
-  backface-visibility: hidden;
+  padding: 7px;
+  border-radius: 12px;
+  background: #fff8ee;
+  box-shadow:
+    inset 0 0 0 3px #efe4c0,
+    inset 0 0 0 4px rgba(166, 124, 18, 0.35);
 }
-.sicbo-dice .die[data-face="1"] .die-cube { transform: rotateX(-24deg) rotateY(-28deg); }
-.sicbo-dice .die[data-face="2"] .die-cube { transform: rotateX(-24deg) rotateY(-118deg); }
-.sicbo-dice .die[data-face="3"] .die-cube { transform: rotateX(-114deg) rotateY(-28deg); }
-.sicbo-dice .die[data-face="4"] .die-cube { transform: rotateX(66deg) rotateY(-28deg); }
-.sicbo-dice .die[data-face="5"] .die-cube { transform: rotateX(-24deg) rotateY(62deg); }
-.sicbo-dice .die[data-face="6"] .die-cube { transform: rotateX(-24deg) rotateY(152deg); }
-.sicbo-dice .f1 { transform: rotateY(0deg) translateZ(calc(var(--die) / 2)); }
-.sicbo-dice .f2 { transform: rotateY(90deg) translateZ(calc(var(--die) / 2)); }
-.sicbo-dice .f3 { transform: rotateX(90deg) translateZ(calc(var(--die) / 2)); }
-.sicbo-dice .f4 { transform: rotateX(-90deg) translateZ(calc(var(--die) / 2)); }
-.sicbo-dice .f5 { transform: rotateY(-90deg) translateZ(calc(var(--die) / 2)); }
-.sicbo-dice .f6 { transform: rotateY(180deg) translateZ(calc(var(--die) / 2)); }
 .sicbo-dice .pip {
-  width: 8px;
-  height: 8px;
+  width: 11px;
+  height: 11px;
   border-radius: 50%;
   background: #1c2740;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18);
 }
 .sicbo-dice .pip.tl { grid-column: 1; grid-row: 1; }
 .sicbo-dice .pip.tr { grid-column: 3; grid-row: 1; }
@@ -360,7 +332,7 @@ body[data-sicbo] {
 }
 @media (prefers-reduced-motion: reduce) {
   .sicbo-stage.shaking,
-  .sicbo-stage.shaking .die-cube,
+  .sicbo-stage.shaking .die,
   .sicbo-felt.shaking .sicbo-mascot,
   .sicbo-dice .die.land {
     animation: none;
