@@ -31,7 +31,7 @@
       waitReady: "可以揭图了。点揭图，在钱包确认。",
       hist: "近局 · 不带进下一局",
       r1: "1–5 LIM 开一局。零注练手：不进池、不派奖。",
-      r2: "对位 3 格 8 倍，4 格 40 倍，5 格 200 倍（不超过桌池一半）。0–2 格不派。",
+      r2: "对位 2 格一半，3 格 8 倍，4 格 40 倍，5 格 200 倍（不超过桌池一半）。0–1 格不派。",
       r3: "只认位置全对。块对位错，不派。",
       r4: "独立桌池。带 LIM 锁图后等两个块，再点揭图。未揭的注，回来还能继续。",
       r5: "揭图由合约自动执行，不人为改图。不进日榜、邀请榜、底池。不是门票。",
@@ -57,6 +57,7 @@
       resume: "你有一局尚未揭图。",
       guess: "你的五格",
       truth: "真图",
+      pay2: "对位 2",
       pay3: "对位 3",
       pay4: "对位 4",
       pay5: "对位 5",
@@ -76,7 +77,7 @@
       waitReady: "Ready. Tap REVEAL and confirm in the wallet.",
       hist: "Recent · not used next round",
       r1: "1–5 LIM per round. Zero is practice — no pool, no payout.",
-      r2: "3 exact 8× · 4 exact 40× · 5 exact 200× (capped at half the table). 0–2 pay nothing.",
+      r2: "2 exact 0.5× · 3 exact 8× · 4 exact 40× · 5 exact 200× (capped at half the table). 0–1 pay nothing.",
       r3: "Exact place only. Right piece, wrong place does not pay.",
       r4: "Own table pool. With LIM, wait two blocks, then tap REVEAL. An open round can be finished later.",
       r5: "The contract reveals the map. Nobody sets the tiles. Not the daily board, invite board, or floor. Not a ticket.",
@@ -102,6 +103,7 @@
       resume: "You have an open round.",
       guess: "YOUR FIVE",
       truth: "THE TRACK",
+      pay2: "2 EXACT",
       pay3: "3 EXACT",
       pay4: "4 EXACT",
       pay5: "5 EXACT",
@@ -121,7 +123,7 @@
       waitReady: "開封できる。開封を押してウォレットで確認。",
       hist: "直近 · 次局には持ち込まない",
       r1: "1–5 LIM で一局。0 は練習：プールなし、配当なし。",
-      r2: "位置一致 3 で 8倍、4 で 40倍、5 で 200倍（卓プールの半分まで）。0–2 は配当なし。",
+      r2: "位置一致 2 で半分、3 で 8倍、4 で 40倍、5 で 200倍（卓プールの半分まで）。0–1 は配当なし。",
       r3: "位置が完全一致のみ。ピース合って位置違いでは払わない。",
       r4: "独立卓プール。LIM でロック後 2 ブロック待って開封。未開封は後から続けられる。",
       r5: "公開はコントラクトが自動実行。人が図を決めない。日次・招待・フロアプールには入らない。チケットではない。",
@@ -147,6 +149,7 @@
       resume: "未開封の局がある。",
       guess: "あなたの5マス",
       truth: "本物",
+      pay2: "一致 2",
       pay3: "一致 3",
       pay4: "一致 4",
       pay5: "一致 5",
@@ -166,7 +169,7 @@
       waitReady: "공개 가능. 공개를 누르고 지갑에서 확인.",
       hist: "최근 · 다음 판에 안 가져감",
       r1: "1–5 LIM 한 판. 0은 연습: 풀 없음, 배당 없음.",
-      r2: "자리 3이면 8배, 4는 40배, 5는 200배(테이블 풀 절반 한도). 0–2는 없음.",
+      r2: "자리 2이면 절반, 3이면 8배, 4는 40배, 5는 200배(테이블 풀 절반 한도). 0–1는 없음.",
       r3: "자리 완전 일치만. 조각은 맞고 자리가 다르면 안 줌.",
       r4: "독립 테이블 풀. LIM으로 잠근 뒤 두 블록 기다렸다가 공개. 안 연 판은 나중에 이어서.",
       r5: "공개는 컨트랙트가 자동 실행. 사람이 그림을 바꾸지 않음. 일간·초대·베이스 풀에 안 들어감. 티켓 아님.",
@@ -192,6 +195,7 @@
       resume: "아직 안 연 판이 있습니다.",
       guess: "당신의 다섯",
       truth: "진트랙",
+      pay2: "일치 2",
       pay3: "일치 3",
       pay4: "일치 4",
       pay5: "일치 5",
@@ -211,7 +215,7 @@
       waitReady: "Lật được rồi. Bấm LẬT và xác nhận trong ví.",
       hist: "Ván gần · không mang sang ván sau",
       r1: "1–5 LIM mỗi ván. 0 là tập: không vào quỹ, không trả thưởng.",
-      r2: "Đúng chỗ 3 thì 8×, 4 thì 40×, 5 thì 200× (không quá nửa quỹ bàn). 0–2 không trả.",
+      r2: "Đúng chỗ 2 thì nửa, 3 thì 8×, 4 thì 40×, 5 thì 200× (không quá nửa quỹ bàn). 0–1 không trả.",
       r3: "Chỉ tính đúng chỗ. Đúng mảnh sai chỗ không trả.",
       r4: "Quỹ bàn riêng. Có LIM khóa xong đợi hai khối rồi lật. Ván chưa lật, quay lại vẫn làm tiếp.",
       r5: "Hợp đồng tự lật hình, không ai sửa ô. Không vào bảng ngày, mời, hay quỹ nền. Không phải vé.",
@@ -237,6 +241,7 @@
       resume: "Bạn còn một ván chưa lật.",
       guess: "NĂM Ô CỦA BẠN",
       truth: "ĐƯỜNG THẬT",
+      pay2: "ĐÚNG 2",
       pay3: "ĐÚNG 3",
       pay4: "ĐÚNG 4",
       pay5: "ĐÚNG 5",
@@ -256,7 +261,7 @@
       waitReady: "เปิดได้แล้ว กดเปิดแล้วยืนยันในกระเป๋า",
       hist: "ตาใกล้ ๆ · ไม่พาไปตาถัดไป",
       r1: "1–5 LIM ต่อตา ศูนย์คือฝึก: ไม่เข้ากอง ไม่จ่าย",
-      r2: "ตรงตำแหน่ง 3 ได้ 8 เท่า 4 ได้ 40 เท่า 5 ได้ 200 เท่า (ไม่เกินครึ่งกองโต๊ะ) 0–2 ไม่จ่าย",
+      r2: "ตรงตำแหน่ง 2 ได้ครึ่ง 3 ได้ 8 เท่า 4 ได้ 40 เท่า 5 ได้ 200 เท่า (ไม่เกินครึ่งกองโต๊ะ) 0–1 ไม่จ่าย",
       r3: "นับเฉพาะตำแหน่งตรง ชิ้นถูกแต่ที่ผิดไม่จ่าย",
       r4: "กองโต๊ะของตัวเอง มี LIM ล็อกแล้วรอสองบล็อกแล้วเปิด ตายังไม่เปิด กลับมาเปิดต่อได้",
       r5: "สัญญาเปิดรูปเอง ไม่มีคนแก้ช่อง ไม่เข้ากระดานวัน ชวน หรือกองฐาน ไม่ใช่ตั๋ว",
@@ -282,6 +287,7 @@
       resume: "คุณมีตาที่ยังไม่เปิด",
       guess: "ห้าช่องของคุณ",
       truth: "แทร็กจริง",
+      pay2: "ตรง 2",
       pay3: "ตรง 3",
       pay4: "ตรง 4",
       pay5: "ตรง 5",
@@ -301,7 +307,7 @@
       waitReady: "Можно открыть. Нажмите ОТКРЫТЬ и подтвердите в кошельке.",
       hist: "Недавние · в следующую игру не идут",
       r1: "1–5 LIM за раунд. Ноль — практика: без пула и выплат.",
-      r2: "3 точных 8× · 4 — 40× · 5 — 200× (не больше половины пула стола). 0–2 не платят.",
+      r2: "2 точных 0.5× · 3 — 8× · 4 — 40× · 5 — 200× (не больше половины пула стола). 0–1 не платят.",
       r3: "Только точное место. Фигура верна, место нет — не платит.",
       r4: "Свой пул стола. С LIM после блокировки два блока, затем откройте. Неоткрытый раунд можно доиграть позже.",
       r5: "Контракт открывает карту сам. Клетки не задаёт человек. Не дневной, инвайт и не базовый пул. Не билет.",
@@ -327,6 +333,7 @@
       resume: "У вас есть неоткрытый раунд.",
       guess: "ВАШИ ПЯТЬ",
       truth: "ТРАССА",
+      pay2: "2 ТОЧНЫХ",
       pay3: "3 ТОЧНЫХ",
       pay4: "4 ТОЧНЫХ",
       pay5: "5 ТОЧНЫХ",
@@ -346,7 +353,7 @@
       waitReady: "Siap. Ketuk BUKA dan konfirmasi di dompet.",
       hist: "Baru-baru · tidak dibawa ke ronde berikutnya",
       r1: "1–5 LIM per ronde. Nol adalah latihan: tanpa pool, tanpa bayaran.",
-      r2: "3 pas 8× · 4 — 40× · 5 — 200× (maksimal setengah pool meja). 0–2 tidak bayar.",
+      r2: "2 pas 0.5× · 3 pas 8× · 4 — 40× · 5 — 200× (maksimal setengah pool meja). 0–1 tidak bayar.",
       r3: "Hanya posisi pas. Keping benar, posisi salah, tidak dibayar.",
       r4: "Pool meja sendiri. Dengan LIM, setelah kunci tunggu dua blok lalu buka. Ronde belum dibuka bisa dilanjut nanti.",
       r5: "Kontrak membuka peta sendiri. Tidak ada yang mengatur kotak. Bukan papan harian, undangan, atau pool dasar. Bukan tiket.",
@@ -372,6 +379,7 @@
       resume: "Anda punya ronde yang belum dibuka.",
       guess: "LIMA ANDA",
       truth: "TREK ASLI",
+      pay2: "2 PAS",
       pay3: "3 PAS",
       pay4: "4 PAS",
       pay5: "5 PAS",
@@ -391,7 +399,7 @@
       waitReady: "Pwede na. Pindutin ang BUNYAG at kumpirmahin sa wallet.",
       hist: "Kamakailan · hindi dadalhin sa susunod",
       r1: "1–5 LIM bawat ronda. Zero ay practice: walang pool, walang bayad.",
-      r2: "3 exact 8× · 4 — 40× · 5 — 200× (hanggang kalahati ng pool ng mesa). 0–2 walang bayad.",
+      r2: "2 exact 0.5× · 3 exact 8× · 4 — 40× · 5 — 200× (hanggang kalahati ng pool ng mesa). 0–1 walang bayad.",
       r3: "Exact place lang. Tama ang piraso, mali ang lugar, hindi nagbabayad.",
       r4: "Sariling pool ng mesa. May LIM, maghintay ng dalawang block pagkatapos mag-lock, tapos bunyagin. Ang hindi pa nabubuksang ronda, puwedeng tapusin mamaya.",
       r5: "Kontrata ang nagbubukas ng mapa. Walang tao na nagtatakda ng tile. Hindi daily board, invite, o floor. Hindi ticket.",
@@ -417,6 +425,7 @@
       resume: "May rondang hindi pa nabubuksan.",
       guess: "LIMANG IYO",
       truth: "ANG TRACK",
+      pay2: "2 EXACT",
       pay3: "3 EXACT",
       pay4: "4 EXACT",
       pay5: "5 EXACT",
@@ -647,6 +656,7 @@
     setTxt("trR4", tt("r4"));
     setTxt("trR5", tt("r5"));
     setTxt("trR6", tt("r6"));
+    setTxt("trPay2k", tt("pay2"));
     setTxt("trPay3k", tt("pay3"));
     setTxt("trPay4k", tt("pay4"));
     setTxt("trPay5k", tt("pay5"));
@@ -708,7 +718,7 @@
     paintGuess();
     paintTruth(track, guess);
     setStatus(hits == null ? line : `${hits}/5 · ${line}`);
-    $("trStatus")?.setAttribute("data-hit", hits != null && hits >= 3 ? "1" : "0");
+    $("trStatus")?.setAttribute("data-hit", hits != null && hits >= 2 ? "1" : "0");
     paintGo();
     hidePop();
   }
@@ -862,7 +872,7 @@
     const track = practiceTrack();
     const h = hitsOf(pendingGuess, track);
     saveHist({ guess: pendingGuess, track, hits: h, practice: 1 });
-    const line = h >= 3 ? tt("practiceWin", { h }) : tt("practiceLose");
+    const line = h >= 2 ? tt("practiceWin", { h }) : tt("practiceLose");
     showResult(h, line, track, pendingGuess);
   }
 
@@ -916,7 +926,7 @@
       const h = Number(ev.args.hits);
       const pay = Number(ethers.formatEther(ev.args.payout || 0n));
       saveHist({ guess, track: trackN, hits: h, practice: 0 });
-      const line = h >= 3 ? tt("win", { h, n: String(pay) }) : tt("lose");
+      const line = h >= 2 ? tt("win", { h, n: String(pay) }) : tt("lose");
       showResult(h, line, trackN, guess);
     } else {
       setStatus(tt("refund"));
