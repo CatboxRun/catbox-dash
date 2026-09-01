@@ -433,6 +433,130 @@ const CatboxChain = (() => {
     return { livePool, liveCount: Number(liveCount) };
   }
 
+  function dropCfg() {
+    return cfg.drop || null;
+  }
+
+  function dropContract(s) {
+    const d = dropCfg();
+    if (!d?.address || !d?.abi) throw new Error("NO_DROP");
+    return new ethers.Contract(d.address, d.abi, s);
+  }
+
+  async function isDropDeployed() {
+    const d = dropCfg();
+    if (!d?.address) return false;
+    try {
+      const p = await publicReadProvider();
+      const code = await withTimeout(p.getCode(d.address), 4000);
+      return Boolean(code && code !== "0x");
+    } catch (_) {
+      return false;
+    }
+  }
+
+  let dropListCache = null;
+  async function loadDropList() {
+    if (dropListCache) return dropListCache;
+    const data = await fetch("./airdrop-list.json").then((r) => r.json());
+    const byAddr = new Map();
+    const leaves = [];
+    for (let i = 0; i < data.rows.length; i++) {
+      const [a, n] = data.rows[i];
+      leaves.push(window.CatboxMerkle.leaf(a, n));
+      byAddr.set(String(a).toLowerCase(), { a, n, i });
+    }
+    dropListCache = { data, leaves, tree: window.CatboxMerkle.build(leaves), byAddr };
+    return dropListCache;
+  }
+
+  async function dropRowOf(addr) {
+    if (!addr || !window.CatboxMerkle) return null;
+    const list = await loadDropList();
+    return list.byAddr.get(String(addr).toLowerCase()) || null;
+  }
+
+  async function dropPendingOf(addr = account) {
+    if (!addr) return 0n;
+    try {
+      if (!(await isDropDeployed())) return 0n;
+      const drop = dropContract(await publicReadProvider());
+      if (await drop.claimed(addr)) return 0n;
+      const row = await dropRowOf(addr);
+      return row ? BigInt(row.n) : 0n;
+    } catch (_) {
+      return 0n;
+    }
+  }
+
+  async function dropClaimedOf(addr = account) {
+    if (!addr) return false;
+    try {
+      if (!(await isDropDeployed())) return false;
+      return Boolean(await dropContract(await publicReadProvider()).claimed(addr));
+    } catch (_) {
+      return false;
+    }
+  }
+
+  async function claimDrop() {
+    await connect();
+    if (!(await isDropDeployed())) throw new Error("LIST");
+    const drop = dropContract(await signer());
+    if (await drop.claimed(account)) throw new Error("DONE");
+    const row = await dropRowOf(account);
+    if (!row) throw new Error("LIST");
+    const amount = BigInt(row.n);
+    const list = await loadDropList();
+    const proof = window.CatboxMerkle.proof(list.tree.layers, row.i);
+    const tx = await drop.claim(amount, proof);
+    return (await tx.wait()).hash;
+  }
+
+  async function fundDrop(limAmount) {
+    await connect();
+    const amt = ethers.parseUnits(String(limAmount), 18);
+    if (amt <= 0n) throw new Error("NO_LIM");
+    if (!(await isDropDeployed())) throw new Error("NO_DROP");
+    const s = await signer();
+    const dest = dropCfg().address;
+    const lim = limContract(s);
+    const drop = dropContract(s);
+    const bal = await lim.balanceOf(account);
+    if (bal < amt) throw new Error("NO_LIM");
+    const allow = await lim.allowance(account, dest);
+    if (allow < amt) {
+      const txA = await lim.approve(dest, ethers.MaxUint256);
+      await txA.wait();
+    }
+    const tx = await drop.fund(amt);
+    return (await tx.wait()).hash;
+  }
+
+  async function withdrawDrop(limAmount) {
+    await connect();
+    if (!isOwner()) throw new Error("NOT_OWNER");
+    if (!(await isDropDeployed())) throw new Error("NO_DROP");
+    const amt = ethers.parseUnits(String(limAmount), 18);
+    if (amt <= 0n) throw new Error("NO_LIM");
+    const tx = await dropContract(await signer()).withdraw(amt);
+    return (await tx.wait()).hash;
+  }
+
+  async function setDropExtra(to, limAmount) {
+    await connect();
+    if (!isOwner()) throw new Error("NOT_OWNER");
+    if (!(await isDropDeployed())) throw new Error("NO_DROP");
+    const amt = ethers.parseUnits(String(limAmount), 18);
+    const tx = await dropContract(await signer()).setExtra(ethers.getAddress(to), amt);
+    return (await tx.wait()).hash;
+  }
+
+  async function dropPoolOf() {
+    if (!(await isDropDeployed())) return 0n;
+    return dropContract(await publicReadProvider()).pool();
+  }
+
   const RPCS = [
     cfg.rpc,
     "https://bsc-dataseed1.binance.org",
@@ -3425,6 +3549,15 @@ const CatboxChain = (() => {
     clearFloorOverage,
     claimFloor,
     floorPoolBalance,
+    isDropDeployed,
+    dropPendingOf,
+    dropClaimedOf,
+    dropRowOf,
+    claimDrop,
+    fundDrop,
+    withdrawDrop,
+    setDropExtra,
+    dropPoolOf,
     withdrawWeekly,
     setTicketPrice,
     txUrl,

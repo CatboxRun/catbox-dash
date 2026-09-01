@@ -484,7 +484,7 @@ async function refreshExtraUi() {
   const amt = $("extraPoolAmt");
   const need = $("extraNeedDeploy");
   const dep = $("extraDeployBtn");
-  if (!amt && !need && !dep) return;
+  if (!amt && !need && !dep && !$("dropPoolAmt")) return;
   if (!window.CatboxChain || !CatboxChain.isOwner()) return;
   try {
     const deployed = await CatboxChain.isExtraDeployed();
@@ -493,6 +493,15 @@ async function refreshExtraUi() {
     if (amt) {
       if (!deployed) amt.textContent = "—";
       else amt.textContent = `${CatboxChain.formatLim(await CatboxChain.extraPoolAmt())} LIM`;
+    }
+    const dropAmt = $("dropPoolAmt");
+    if (dropAmt && CatboxChain.dropPoolOf) {
+      try {
+        const live = await CatboxChain.isDropDeployed();
+        dropAmt.textContent = live ? `${CatboxChain.formatLim(await CatboxChain.dropPoolOf())} LIM` : "—";
+      } catch (_) {
+        dropAmt.textContent = "—";
+      }
     }
   } catch (_) {}
 }
@@ -555,16 +564,31 @@ async function refreshWalletUi() {
   } catch (_) {}
   refreshInviteUi();
   refreshClaimUi();
+  refreshDropUi();
   await refreshFreeUi();
   paintShareCtas();
+}
+
+function boardClaimBtns() {
+  return [$("claimBtn"), $("claimBoardBtn"), $("claimInviteBtn")].filter(Boolean);
+}
+
+function setBoardClaimEnabled(on) {
+  boardClaimBtns().forEach((el) => {
+    el.disabled = !on;
+  });
+}
+
+function setFloorClaimEnabled(on, hide) {
+  const el = $("claimFloorBtn");
+  if (!el) return;
+  el.disabled = !on;
+  el.hidden = Boolean(hide);
 }
 
 async function refreshClaimUi() {
   const amt = $("claimAmt");
   const when = $("claimWhen");
-  const btn = $("claimBtn");
-  const dailyBtn = $("claimDailyBtn");
-  const inviteBtn = $("claimInviteBtn");
   const acc = window.CatboxChain?.account;
   const nextLabel = (ts) => {
     const ms = Math.max(0, Number(ts) * 1000 - Date.now());
@@ -575,15 +599,8 @@ async function refreshClaimUi() {
   const paintWait = (whenText) => {
     if (amt) amt.textContent = t("claimNone");
     if (when) when.textContent = whenText || t("claimWhen");
-    if (btn) btn.disabled = true;
-    if (dailyBtn) {
-      dailyBtn.disabled = true;
-      dailyBtn.hidden = true;
-    }
-    if (inviteBtn) {
-      inviteBtn.disabled = true;
-      inviteBtn.hidden = true;
-    }
+    setBoardClaimEnabled(false);
+    setFloorClaimEnabled(false, true);
   };
   if (!acc || !chainReady) {
     const win = window.CatboxChain?.claimWindow?.();
@@ -606,15 +623,8 @@ async function refreshClaimUi() {
     const text = `${CatboxChain.formatLim(settled)} LIM`;
     if (amt) amt.textContent = settled > 0n ? `${t("claimPending")} ${text}` : t("claimNone");
     if (when) when.textContent = settled > 0n ? t("claimReady") : t("claimOpen");
-    if (btn) btn.disabled = boardSettled === 0n;
-    if (dailyBtn) {
-      dailyBtn.disabled = floorSettled === 0n;
-      dailyBtn.hidden = floorSettled === 0n;
-    }
-    if (inviteBtn) {
-      inviteBtn.disabled = inviteSettled === 0n;
-      inviteBtn.hidden = inviteSettled === 0n;
-    }
+    setBoardClaimEnabled(boardSettled > 0n);
+    setFloorClaimEnabled(floorSettled > 0n, floorSettled === 0n);
   } catch (_) {
     paintWait();
   }
@@ -660,9 +670,6 @@ async function refreshFreeUi() {
 }
 
 async function doClaim() {
-  const btn = $("claimBtn");
-  const dailyBtn = $("claimDailyBtn");
-  const inviteBtn = $("claimInviteBtn");
   const amt = $("claimAmt");
   if (window._claimBusy) return;
   window._claimBusy = true;
@@ -672,9 +679,8 @@ async function doClaim() {
       await refreshClaimUi();
       return;
     }
-    if (btn) btn.disabled = true;
-    if (dailyBtn) dailyBtn.disabled = true;
-    if (inviteBtn) inviteBtn.disabled = true;
+    setBoardClaimEnabled(false);
+    setFloorClaimEnabled(false, $("claimFloorBtn")?.hidden);
     if (amt) amt.textContent = t("claiming");
     const p = await CatboxChain.pendingOf();
     const board = (p.v6 || 0n) + (p.v5 || 0n);
@@ -695,9 +701,6 @@ async function doClaim() {
 }
 
 async function doClaimFloor() {
-  const btn = $("claimBtn");
-  const dailyBtn = $("claimDailyBtn");
-  const inviteBtn = $("claimInviteBtn");
   const amt = $("claimAmt");
   if (window._claimBusy) return;
   window._claimBusy = true;
@@ -707,9 +710,8 @@ async function doClaimFloor() {
       await refreshClaimUi();
       return;
     }
-    if (btn) btn.disabled = true;
-    if (dailyBtn) dailyBtn.disabled = true;
-    if (inviteBtn) inviteBtn.disabled = true;
+    setBoardClaimEnabled(false);
+    setFloorClaimEnabled(false, false);
     if (amt) amt.textContent = t("claiming");
     const p = await CatboxChain.pendingOf();
     if ((p.floor || 0n) === 0n) throw new Error("NONE");
@@ -723,6 +725,88 @@ async function doClaimFloor() {
   } catch (e) {
     if (amt) amt.textContent = e?.shortMessage?.includes("none") || e?.message?.includes("none") || e?.message === "NONE" ? t("claimNone") : t("txFail");
     await refreshClaimUi();
+  } finally {
+    window._claimBusy = false;
+  }
+}
+
+function dropClaimBtns() {
+  return [$("claimDropFab"), $("claimDropPaneBtn")].filter(Boolean);
+}
+
+function setDropClaimEnabled(on, label) {
+  dropClaimBtns().forEach((el) => {
+    el.disabled = !on;
+  });
+  const meta = $("dropMeta");
+  const amt = $("dropAmt");
+  if (label && amt) amt.textContent = label;
+  if (meta && !on && label) meta.textContent = label;
+}
+
+async function refreshDropUi() {
+  const amt = $("dropAmt");
+  const meta = $("dropMeta");
+  const fabAmt = $("dropFabAmt");
+  const fabCta = $("dropFabCta");
+  const acc = window.CatboxChain?.account;
+  const paint = (amountText, why, on) => {
+    if (amt) amt.textContent = amountText;
+    if (meta) meta.textContent = why || "";
+    if (fabAmt) fabAmt.textContent = amountText;
+    if (fabCta) fabCta.textContent = on ? t("claimDrop") : why || t("claimDrop");
+    setDropClaimEnabled(on);
+  };
+  if (!acc || !chainReady || !window.CatboxChain?.dropPendingOf) {
+    paint("—", t("connectFirst"), false);
+    return;
+  }
+  try {
+    const [pend, done] = await Promise.all([
+      CatboxChain.dropPendingOf(acc),
+      CatboxChain.dropClaimedOf(acc),
+    ]);
+    if (done) {
+      paint(t("dropDone"), t("dropDone"), false);
+      return;
+    }
+    if (pend > 0n) {
+      paint(`${CatboxChain.formatLim(pend)} LIM`, t("claimDrop"), true);
+      return;
+    }
+    paint("—", t("dropNone"), false);
+  } catch (_) {
+    paint("—", t("dropNone"), false);
+  }
+}
+
+async function doClaimDrop() {
+  if (window._claimBusy) return;
+  window._claimBusy = true;
+  const amt = $("dropAmt");
+  const fabAmt = $("dropFabAmt");
+  const mark = (text) => {
+    if (amt) amt.textContent = text;
+    if (fabAmt) fabAmt.textContent = text;
+  };
+  try {
+    setDropClaimEnabled(false);
+    mark(t("claiming"));
+    if (!window.CatboxChain?.account) await CatboxChain.connect();
+    const pend = await CatboxChain.dropPendingOf();
+    if (pend <= 0n) throw new Error("LIST");
+    const hash = await CatboxChain.claimDrop();
+    const short = `${hash.slice(0, 10)}…`;
+    if (amt) {
+      amt.innerHTML = `<a href="${CatboxChain.txUrl(hash)}" target="_blank" rel="noopener">${short}</a>`;
+    }
+    if (fabAmt) fabAmt.textContent = short;
+    await refreshWalletUi();
+    await refreshDropUi();
+  } catch (e) {
+    const msg = e?.message || "";
+    mark(msg === "DONE" ? t("dropDone") : msg === "LIST" || msg === "NONE" ? t("dropNone") : t("txFail"));
+    await refreshDropUi();
   } finally {
     window._claimBusy = false;
   }
@@ -990,6 +1074,10 @@ function bootLobbyTabs() {
   const gamesBack = $("gamesBack");
   if (gamesBack) gamesBack.onclick = () => showGamesCatalog();
   window.setLobbyTab = setTab;
+  if (/airdrop/i.test(location.hash || "")) {
+    setTab("pool");
+    queueMicrotask(() => $("dropCard")?.scrollIntoView({ behavior: "smooth", block: "center" }));
+  }
 }
 
 function bootNoticeCarousel() {
@@ -1601,6 +1689,49 @@ async function bootWallet() {
       }
     };
   }
+  if ($("dropFundBtn")) {
+    $("dropFundBtn").onclick = async () => {
+      const status = $("dropAdminStatus");
+      const n = Number($("dropFundInput")?.value);
+      if (!n || n <= 0) return;
+      try {
+        if (status) status.textContent = t("approve");
+        const hash = await CatboxChain.fundDrop(n);
+        if (status) status.innerHTML = `<a href="${CatboxChain.txUrl(hash)}" target="_blank" rel="noopener">${hash.slice(0, 10)}…</a>`;
+        await refreshExtraUi();
+      } catch (e) {
+        if (status) status.textContent = e?.message === "NO_LIM" ? t("noLim") : t("txFail");
+      }
+    };
+  }
+  if ($("dropWithdrawBtn")) {
+    $("dropWithdrawBtn").onclick = async () => {
+      const status = $("dropAdminStatus");
+      const n = Number($("dropFundInput")?.value);
+      if (!n || n <= 0) return;
+      try {
+        const hash = await CatboxChain.withdrawDrop(n);
+        if (status) status.innerHTML = `<a href="${CatboxChain.txUrl(hash)}" target="_blank" rel="noopener">${hash.slice(0, 10)}…</a>`;
+        await refreshExtraUi();
+      } catch (_) {
+        if (status) status.textContent = t("txFail");
+      }
+    };
+  }
+  if ($("dropExtraBtn")) {
+    $("dropExtraBtn").onclick = async () => {
+      const status = $("dropAdminStatus");
+      const to = $("dropExtraAddr")?.value?.trim();
+      const n = Number($("dropExtraAmt")?.value);
+      if (!to || !n || n <= 0) return;
+      try {
+        const hash = await CatboxChain.setDropExtra(to, n);
+        if (status) status.innerHTML = `<a href="${CatboxChain.txUrl(hash)}" target="_blank" rel="noopener">${hash.slice(0, 10)}…</a>`;
+      } catch (_) {
+        if (status) status.textContent = t("txFail");
+      }
+    };
+  }
   if ($("copyInvite")) $("copyInvite").onclick = () => copyInviteLink($("copyInvite"));
   document.querySelectorAll(".js-copy-invite").forEach((btn) => {
     if (btn.id === "copyInvite") return;
@@ -1609,8 +1740,11 @@ async function bootWallet() {
   bootSwap();
   bootShare();
   $("claimBtn") && ($("claimBtn").onclick = doClaim);
-  $("claimDailyBtn") && ($("claimDailyBtn").onclick = doClaimFloor);
+  $("claimBoardBtn") && ($("claimBoardBtn").onclick = doClaim);
   $("claimInviteBtn") && ($("claimInviteBtn").onclick = doClaim);
+  $("claimFloorBtn") && ($("claimFloorBtn").onclick = doClaimFloor);
+  $("claimDropFab") && ($("claimDropFab").onclick = doClaimDrop);
+  $("claimDropPaneBtn") && ($("claimDropPaneBtn").onclick = doClaimDrop);
   try { CatboxChain.referrer(); } catch (_) {}
 }
 

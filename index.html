@@ -44,7 +44,7 @@
       href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@500;700&family=Noto+Sans+SC:wght@500;700&family=Noto+Sans+JP:wght@500;700&family=Noto+Sans+KR:wght@500;700&family=Noto+Sans+Thai:wght@500;700&family=Press+Start+2P&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="./styles.css?v=90" />
+    <link rel="stylesheet" href="./styles.css?v=94" />
     <link rel="stylesheet" href="./sicbo.css?v=13" />
     <link rel="stylesheet" href="./track.css?v=9" />
   </head>
@@ -384,23 +384,41 @@
               <div class="split week">
               <img src="./assets/icon-trophy-glass.png?v=2" alt="" />
                 <b>50%</b><span data-i18n="weekBoard">DAILY · 50%</span><i id="weekPoolAmt">—</i>
-                <small class="split-note" data-i18n="daySplitNote">Split by LIM shards · claim at Singapore midnight.</small>
-                <span class="split-k" data-i18n="hudFloor">FLOOR</span>
-                <i id="floorPoolAmt">—</i>
-                <small id="floorPoolMeta" class="split-live"></small>
+                <small class="split-note" data-i18n="daySplitNote">Split by LIM shards. Same tx as invite · Singapore midnight.</small>
                 <small id="daySplitLive" class="split-live hidden"></small>
-                <button class="ghost split-claim" id="claimDailyBtn" type="button" disabled data-i18n="claimFloor">CLAIM FLOOR</button>
+                <button class="ghost split-claim" id="claimBoardBtn" type="button" disabled data-i18n="claimBoards">CLAIM DAILY + INVITE</button>
               </div>
               <div class="split invite">
               <img src="./assets/icon-invite-glass.png?v=2" alt="" />
                 <b>20%</b><span data-i18n="inviteBoard">INVITE · 20%</span><i id="invitePoolAmt">0</i>
-                <small class="split-note" data-i18n="inviteTopNote">Split by LIM points. Same midnight hour.</small>
+                <small class="split-note" data-i18n="inviteTopNote">Split by invite points. Same tx as the daily board.</small>
                 <small id="inviteTopLive" class="split-live hidden"></small>
-                <button class="ghost split-claim" id="claimInviteBtn" type="button" disabled data-i18n="claimInvite">CLAIM INVITE</button>
+                <button class="ghost split-claim" id="claimInviteBtn" type="button" disabled data-i18n="claimBoards">CLAIM DAILY + INVITE</button>
               </div>
               <div class="split burn">
               <img src="./assets/icon-burn-glass.png?v=2" alt="" />
                 <b>30%</b><span data-i18n="burnTitle">BURN</span><i id="burnedAmt">0</i>
+              </div>
+            </div>
+            <div class="split-row floor-row">
+              <div class="split floor">
+                <span class="split-k" data-i18n="floorBoard">FLOOR · EQUAL SPLIT</span>
+                <i id="floorPoolAmt">—</i>
+                <small class="split-note" data-i18n="floorNote">Half of paid overtime. One share per wallet that settled today. Not the 50% daily board.</small>
+                <small id="floorPoolMeta" class="split-live"></small>
+                <button class="ghost split-claim" id="claimFloorBtn" type="button" disabled data-i18n="claimFloor">CLAIM FLOOR</button>
+              </div>
+            </div>
+            <div class="split-row floor-row">
+              <div class="split drop" id="dropCard">
+                <span class="split-k" data-i18n="dropBoard">SETTLEMENT AIRDROP</span>
+                <i id="dropAmt">—</i>
+                <small class="split-note" data-i18n="dropNote">100,000 LIM settlement. Listed wallets only. Claim anytime — not the midnight window.</small>
+                <small id="dropMeta" class="split-live"></small>
+                <div class="drop-actions">
+                  <button class="primary split-claim" id="claimDropPaneBtn" type="button" disabled data-i18n="claimDrop">CLAIM AIRDROP</button>
+                  <a class="ghost split-claim" href="./airdrop.html" data-i18n="dropListLink">OPEN LIST</a>
+                </div>
               </div>
             </div>
             <div class="board-lookup">
@@ -499,6 +517,23 @@
                 <button class="primary" id="extraGiftBtn" type="button" data-i18n="extraGiftGo">AIRDROP</button>
               </label>
               <p class="tx-line" id="extraStatus"></p>
+              <p class="kicker" data-i18n="dropPool">AIRDROP POOL</p>
+              <p class="tx-line" id="dropPoolAmt">—</p>
+              <div class="row left">
+                <label class="ticket-edit">
+                  <span data-i18n="fundAmt">LIM</span>
+                  <input id="dropFundInput" type="number" min="1" step="1" value="100000" />
+                  <button class="primary" id="dropFundBtn" type="button" data-i18n="dropFund">FUND AIRDROP</button>
+                </label>
+                <button class="ghost" id="dropWithdrawBtn" type="button" data-i18n="dropWithdraw">WITHDRAW AIRDROP</button>
+              </div>
+              <label class="ticket-edit">
+                <span data-i18n="dropExtra">ADD MISS</span>
+                <input id="dropExtraAddr" spellcheck="false" placeholder="0x…" />
+                <input id="dropExtraAmt" type="number" min="0.0001" step="0.0001" value="26.2167" />
+                <button class="primary" id="dropExtraBtn" type="button" data-i18n="dropExtra">ADD MISS</button>
+              </label>
+              <p class="tx-line" id="dropAdminStatus"></p>
               <div class="row left">
                 <button class="ghost" id="withdrawBtn" type="button" data-i18n="withdraw">WITHDRAW DAILY</button>
                 <label class="ticket-edit">
@@ -668,6 +703,14 @@
       </div>
     </div>
 
+    <aside class="drop-fab" id="dropFab" aria-label="Settlement airdrop">
+      <button type="button" class="drop-fab-btn" id="claimDropFab" disabled>
+        <span class="drop-fab-k" data-i18n="dropBoard">SETTLEMENT AIRDROP</span>
+        <span class="drop-fab-amt" id="dropFabAmt">—</span>
+        <span class="drop-fab-cta" id="dropFabCta" data-i18n="claimDrop">CLAIM AIRDROP</span>
+      </button>
+    </aside>
+
     <div id="toast" class="toast hidden" role="status" aria-live="assertive"></div>
 
     <div id="rotateGate" class="rotate-gate hidden">
@@ -677,11 +720,12 @@
       </div>
     </div>
 
-    <script src="./config.js?v=41"></script>
+    <script src="./config.js?v=42"></script>
     <script src="https://cdn.jsdelivr.net/npm/ethers@6.13.5/dist/ethers.umd.min.js"></script>
-    <script src="./chain.js?v=104"></script>
-    <script src="./i18n.js?v=135"></script>
-    <script src="./game.js?v=150"></script>
+    <script src="./airdrop-merkle.js?v=1"></script>
+    <script src="./chain.js?v=106"></script>
+    <script src="./i18n.js?v=137"></script>
+    <script src="./game.js?v=153"></script>
     <script src="./bgm.js?v=26"></script>
     <script src="./sicbo-config.js?v=2"></script>
     <script src="./sicbo.js?v=18"></script>

@@ -175,6 +175,88 @@ body {
   touch-action: manipulation;
 }
 .claim-btn:disabled { opacity: 0.45; cursor: default; }
+.claim-drop-btn {
+  font-family: "Noto Sans", "Noto Sans SC", sans-serif;
+  font-size: 11px;
+  font-weight: 800;
+  padding: 7px 10px;
+  min-height: 32px;
+  cursor: pointer;
+  color: #3a2408;
+  background: linear-gradient(180deg, #f0d27a, #c9a227);
+  border: 1px solid rgba(166, 124, 18, 0.55);
+  border-radius: var(--radius-pill);
+  flex-shrink: 0;
+  touch-action: manipulation;
+}
+.claim-drop-btn:disabled { opacity: 0.45; cursor: default; filter: grayscale(0.35); }
+.drop-fab {
+  position: fixed;
+  right: max(10px, var(--safe-r));
+  top: 46%;
+  z-index: 36;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+.drop-fab-btn {
+  pointer-events: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  width: 118px;
+  padding: 10px 11px 11px;
+  cursor: pointer;
+  text-align: left;
+  color: #3a2408;
+  background: #e8c45a;
+  border: 1px solid rgba(166, 124, 18, 0.7);
+  border-radius: 14px 4px 4px 14px;
+  touch-action: manipulation;
+}
+.drop-fab-btn:disabled {
+  opacity: 0.72;
+  cursor: default;
+  filter: grayscale(0.2);
+}
+.drop-fab-k {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  line-height: 1.25;
+  opacity: 0.8;
+}
+.drop-fab-amt {
+  font-size: 15px;
+  font-weight: 800;
+  line-height: 1.15;
+  word-break: break-all;
+}
+.drop-fab-cta {
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1.2;
+}
+body.playing .drop-fab { z-index: 36; }
+@media (max-width: 900px) {
+  .drop-fab {
+    top: auto;
+    transform: none;
+    bottom: max(14px, var(--safe-b));
+    right: max(8px, var(--safe-r));
+  }
+  .drop-fab-btn {
+    width: auto;
+    min-width: 108px;
+    padding: 8px 10px 9px;
+    border-radius: 14px;
+  }
+}
+body.playing .drop-fab {
+  top: calc(56px + var(--safe-t));
+  bottom: auto;
+  transform: none;
+}
 .swap-modal {
   position: fixed;
   inset: 0;
@@ -775,6 +857,7 @@ body:not([data-lang="en"]) button.ghost,
 body:not([data-lang="en"]) .ticket,
 body:not([data-lang="en"]) .cta-t,
 body:not([data-lang="en"]) .claim-btn,
+body:not([data-lang="en"]) .claim-drop-btn,
 body:not([data-lang="en"]) .swap-btn,
 body:not([data-lang="en"]) .wallet-btn { font-size: 13px; }
 body:not([data-lang="en"]) .ticket h3 { font-size: 15px; }
@@ -1030,6 +1113,16 @@ h1 { font-size: 16px; line-height: 1.6; margin: 0 0 14px; }
 .split.week { border-color: var(--blue); }
 .split.burn { border-color: #d94b3a; }
 .split.invite { border-color: var(--gold); }
+.split.floor { border-color: #5a8f4a; }
+.split.floor .split-k { margin-top: 0; font-size: 12px; }
+.split.drop { border-color: var(--gold); background-image: var(--wash-veil), url("./assets/wash-coins.jpg?v=2"); }
+.split.drop .split-k { margin-top: 0; font-size: 12px; }
+.drop-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; align-items: center; }
+.drop-actions .split-claim { margin-top: 0; }
+.drop-actions a.split-claim { text-decoration: none; display: inline-flex; align-items: center; }
+.split-row.floor-row {
+  grid-template-columns: 1fr;
+}
 .split i { display: block; color: var(--ink); margin-top: 4px; font-style: normal; }
 .split-k {
   display: block;
@@ -1487,6 +1580,8 @@ button.primary, button.ghost {
   .title { font-size: 9px; }
   .sub { display: none; }
   .lang-btn, .wallet-btn, .swap-btn, .claim-btn, .bgm-btn { min-height: 28px; padding: 4px 6px; font-size: 10px; }
+  .drop-fab { right: max(6px, var(--safe-r)); }
+  .drop-fab-btn { width: 102px; padding: 8px 9px 9px; }
   .langs { max-width: none; }
   .panel {
     flex: 1;
