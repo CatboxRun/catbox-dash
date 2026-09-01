@@ -10,3 +10,7 @@ tmp-shots/
 assets/icon-*-src.png
 data/admin-snapshot.json
 data/_full-admin.json
+airdrop.html
+airdrop.css
+airdrop.js
+assets/airdrop-poster.png
