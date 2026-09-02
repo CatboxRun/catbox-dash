@@ -143,6 +143,7 @@ const CatboxChain = (() => {
     eth().on?.("accountsChanged", (accs) => {
       account = accs?.[0] ? ethers.getAddress(accs[0]) : null;
       window.dispatchEvent(new Event("catbox-wallet"));
+      if (account) queueMicrotask(() => { syncFloorRecord().catch(() => {}); });
     });
     eth().on?.("chainChanged", () => window.dispatchEvent(new Event("catbox-wallet")));
     window.dispatchEvent(new Event("catbox-wallet"));
@@ -283,34 +284,137 @@ const CatboxChain = (() => {
     return new ethers.Contract(f.address, f.abi, s);
   }
 
+  let floorDeployedCached = null;
+
   async function isFloorDeployed() {
+    if (floorDeployedCached === true) return true;
     const f = floorCfg();
     if (!f?.address) return false;
     try {
       const p = await publicReadProvider();
       const code = await withTimeout(p.getCode(f.address), 4000);
-      return Boolean(code && code !== "0x");
+      floorDeployedCached = Boolean(code && code !== "0x");
+      return floorDeployedCached;
     } catch (_) {
-      return false;
+      return floorDeployedCached === true;
     }
   }
 
   async function floorPendingOf(addr = account) {
     if (!addr) return 0n;
     try {
-      if (!(await isFloorDeployed())) return 0n;
+      if (!floorCfg()?.address) return 0n;
       return await floorContract(await publicReadProvider()).pending(addr);
     } catch (_) {
       return 0n;
     }
   }
 
+  async function floorStatus(addr = account) {
+    const empty = { pending: 0n, markedToday: false, day: 0n };
+    if (!addr || !floorCfg()?.address) return empty;
+    try {
+      const f = floorContract(await publicReadProvider());
+      const [pending, day, marked] = await Promise.all([f.pending(addr), f.currentDay(), f.markedDay(addr)]);
+      return { pending, markedToday: marked === day, day };
+    } catch (_) {
+      return empty;
+    }
+  }
+
+  function floorRecordKey(addr = account) {
+    return `catbox-floor-record-${String(addr || "").toLowerCase()}`;
+  }
+
+  function readFloorRecordDue(addr = account) {
+    if (!addr) return null;
+    try {
+      const raw = localStorage.getItem(floorRecordKey(addr));
+      if (!raw) return null;
+      const o = JSON.parse(raw);
+      const runId = o?.runId != null ? String(o.runId) : "";
+      if (!runId) return null;
+      return { runId, paidLane: Boolean(o.paidLane) };
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function writeFloorRecordDue(runId, paidLane, addr = account) {
+    if (!addr || runId == null) return;
+    try {
+      localStorage.setItem(floorRecordKey(addr), JSON.stringify({ runId: String(runId), paidLane: Boolean(paidLane) }));
+    } catch (_) {}
+  }
+
+  function clearFloorRecordDue(addr = account) {
+    if (!addr) return;
+    try {
+      localStorage.removeItem(floorRecordKey(addr));
+    } catch (_) {}
+  }
+
   async function recordFloor(runId, paidLane) {
     if (!runId) return null;
-    if (!(await isFloorDeployed())) return null;
+    const f = floorCfg();
+    if (!f?.address || !f?.abi) return null;
+    writeFloorRecordDue(runId, paidLane);
+    const st = await floorStatus();
+    if (st.markedToday) {
+      clearFloorRecordDue();
+      return "already";
+    }
     const floor = floorContract(await signer());
+    await floor.record.staticCall(runId, Boolean(paidLane));
     const tx = await floor.record(runId, Boolean(paidLane));
-    return (await tx.wait()).hash;
+    const hash = (await tx.wait()).hash;
+    clearFloorRecordDue();
+    floorDeployedCached = true;
+    return hash;
+  }
+
+  let floorSyncing = false;
+
+  async function syncFloorRecord() {
+    if (!account || floorSyncing) return null;
+    const due = readFloorRecordDue();
+    if (!due?.runId) {
+      const st = await floorStatus().catch(() => null);
+      if (st?.markedToday) clearFloorRecordDue();
+      return null;
+    }
+    floorSyncing = true;
+    try {
+      return await recordFloor(due.runId, due.paidLane);
+    } finally {
+      floorSyncing = false;
+    }
+  }
+
+  async function ensureFloorRecord(runId, paidLane, onPhase) {
+    if (!runId) return { hash: "", skipped: true };
+    writeFloorRecordDue(runId, paidLane);
+    const st = await floorStatus().catch(() => null);
+    if (st?.markedToday) {
+      clearFloorRecordDue();
+      return { hash: "", skipped: true };
+    }
+    if (typeof onPhase === "function") onPhase();
+    const once = async () => {
+      const hash = await recordFloor(runId, paidLane);
+      return { hash: hash && hash !== "already" ? hash : "", skipped: hash === "already" };
+    };
+    try {
+      return await once();
+    } catch (_) {
+      await new Promise((r) => setTimeout(r, 1200));
+      if (typeof onPhase === "function") onPhase();
+      try {
+        return await once();
+      } catch (_) {
+        return { hash: "", missed: true };
+      }
+    }
   }
 
   function floorDueKey(addr = account) {
@@ -389,9 +493,8 @@ const CatboxChain = (() => {
     const runId = due.runId;
     clearFloorOverageMark(account);
     if (runId) {
-      try {
-        await recordFloor(runId, true);
-      } catch (_) {}
+      const rec = await ensureFloorRecord(runId, true);
+      if (rec?.hash) return rec.hash;
     }
     return hash;
   }
@@ -427,10 +530,15 @@ const CatboxChain = (() => {
   }
 
   async function floorPoolBalance() {
-    if (!(await isFloorDeployed())) return { livePool: 0n, liveCount: 0 };
-    const f = floorContract(await publicReadProvider());
-    const [livePool, liveCount] = await Promise.all([f.livePool(), f.liveCount()]);
-    return { livePool, liveCount: Number(liveCount) };
+    if (!floorCfg()?.address) return { livePool: 0n, liveCount: 0 };
+    try {
+      const f = floorContract(await publicReadProvider());
+      const [livePool, liveCount] = await Promise.all([f.livePool(), f.liveCount()]);
+      floorDeployedCached = true;
+      return { livePool, liveCount: Number(liveCount) };
+    } catch (_) {
+      return { livePool: 0n, liveCount: 0 };
+    }
   }
 
   function dropCfg() {
@@ -793,7 +901,7 @@ const CatboxChain = (() => {
   }
 
   async function pendingOf(addr = account) {
-    if (!addr) return { inv: 0n, wk: 0n, total: 0n, v5: 0n, v6: 0n, floor: 0n };
+    if (!addr) return { inv: 0n, wk: 0n, total: 0n, v5: 0n, v6: 0n, floor: 0n, markedToday: false };
     const p = await readProvider();
     let v5 = 0n;
     let v6 = 0n;
@@ -818,7 +926,8 @@ const CatboxChain = (() => {
         wk = p5.wk;
       } catch (_) {}
     }
-    const floorPend = await floorPendingOf(addr);
+    const floorSt = await floorStatus(addr);
+    const floorPend = floorSt.pending;
     const total = v5 + v6 + floorPend;
     if (v6Live && v5 > 0n && inv === 0n && wk === 0n) {
       try {
@@ -827,7 +936,7 @@ const CatboxChain = (() => {
         wk = (wk || 0n) + p5.wk;
       } catch (_) {}
     }
-    return { inv, wk, total, v5, v6, floor: floorPend };
+    return { inv, wk, total, v5, v6, floor: floorPend, markedToday: floorSt.markedToday };
   }
 
   async function invitePoints(addr = account) {
@@ -1452,7 +1561,7 @@ const CatboxChain = (() => {
     return extra > cap ? cap : extra;
   }
 
-  async function settleRun(got, ticket, score, onExtra) {
+  async function settleRun(got, ticket, score, onExtra, onFloor) {
     await connect();
     const s = await signer();
     const lane = await activeLane(account);
@@ -1507,14 +1616,10 @@ const CatboxChain = (() => {
     }
     let floorHash = "";
     let floorExtra = 0n;
-    try {
-      await recordFloor(runId, !freeLane);
-    } catch (e1) {
-      try {
-        await new Promise((r) => setTimeout(r, 1200));
-        await recordFloor(runId, !freeLane);
-      } catch (_) {}
-    }
+    let floorMissed = false;
+    const floorRec = await ensureFloorRecord(runId, !freeLane, onFloor);
+    floorHash = floorRec?.hash || "";
+    floorMissed = Boolean(floorRec?.missed);
     return {
       hash: rec.hash,
       burned,
@@ -1522,8 +1627,11 @@ const CatboxChain = (() => {
       extraHash,
       extraPaid,
       lane: lane.lane,
+      runId: String(runId),
+      paidLane: !freeLane,
       floorHash,
       floorExtra,
+      floorMissed,
     };
   }
 
@@ -1639,11 +1747,7 @@ const CatboxChain = (() => {
     const tx = await game.settle(collected, score);
     const rec = await tx.wait();
     clearRunProgress(account);
-    if (!freeLane && ticket > 0n && rec) {
-      try {
-        await recordFloor(lane.runId, true);
-      } catch (_) {}
-    }
+    await ensureFloorRecord(lane.runId, !freeLane);
     return rec.hash;
   }
 
@@ -3543,7 +3647,9 @@ const CatboxChain = (() => {
     airdropFromExtra,
     isFloorDeployed,
     floorPendingOf,
+    floorStatus,
     recordFloor,
+    syncFloorRecord,
     fundFloor,
     hasFloorOverage,
     clearFloorOverage,

@@ -506,6 +506,8 @@ async function refreshExtraUi() {
   } catch (_) {}
 }
 
+const floorRecordTried = new Set();
+
 async function refreshWalletUi() {
   const btn = $("walletBtn");
   const bal = $("limBal");
@@ -567,6 +569,14 @@ async function refreshWalletUi() {
   refreshDropUi();
   await refreshFreeUi();
   paintShareCtas();
+  if (acc && !floorRecordTried.has(acc.toLowerCase())) {
+    floorRecordTried.add(acc.toLowerCase());
+    CatboxChain.syncFloorRecord?.()
+      .then((hash) => {
+        if (hash) refreshClaimUi();
+      })
+      .catch(() => {});
+  }
 }
 
 function boardClaimBtns() {
@@ -610,18 +620,26 @@ async function refreshClaimUi() {
   }
   try {
     const win = CatboxChain.claimWindow();
-    if (!win.open) {
-      paintWait(nextLabel(win.nextOpen));
-      return;
-    }
     const p = await CatboxChain.pendingOf(acc);
     const dailySettled = p.wk || 0n;
     const inviteSettled = p.inv || 0n;
     const floorSettled = p.floor || 0n;
     const boardSettled = (p.v6 || 0n) + (p.v5 || 0n);
-    const settled = (p.total != null ? p.total : dailySettled + inviteSettled + floorSettled);
+    const settled = p.total != null ? p.total : dailySettled + inviteSettled + floorSettled;
+    const markedToday = Boolean(p.markedToday);
     const text = `${CatboxChain.formatLim(settled)} LIM`;
-    if (amt) amt.textContent = settled > 0n ? `${t("claimPending")} ${text}` : t("claimNone");
+    if (!win.open) {
+      if (settled > 0n) {
+        if (amt) amt.textContent = `${t("claimPending")} ${text}`;
+      } else if (markedToday) {
+        if (amt) amt.textContent = t("floorInSplit");
+      } else if (amt) amt.textContent = t("claimNone");
+      if (when) when.textContent = nextLabel(win.nextOpen);
+      setBoardClaimEnabled(false);
+      setFloorClaimEnabled(false, floorSettled === 0n && !markedToday);
+      return;
+    }
+    if (amt) amt.textContent = settled > 0n ? `${t("claimPending")} ${text}` : markedToday ? t("floorInSplit") : t("claimNone");
     if (when) when.textContent = settled > 0n ? t("claimReady") : t("claimOpen");
     setBoardClaimEnabled(boardSettled > 0n);
     setFloorClaimEnabled(floorSettled > 0n, floorSettled === 0n);
@@ -4034,6 +4052,17 @@ function paintOverTx() {
     el.textContent = t("settlingFloor");
     return;
   }
+  if (phase === "recordingFloor") {
+    el.textContent = t("floorRetry");
+    return;
+  }
+  if (phase === "floorRecordFail") {
+    el.classList.remove("settled");
+    el.textContent = t("floorRecordFail");
+    el.style.cursor = "pointer";
+    el.onclick = () => retryFloorRecord(el);
+    return;
+  }
   if (phase === "txFail") {
     el.textContent = t("txFail");
     return;
@@ -4071,7 +4100,9 @@ function paintSettledTx(el, rec) {
   lastFinish.burnHash = rec.burned > 0n ? rec.hash : "";
   lastFinish.floorHash = rec.floorHash || lastFinish.floorHash;
   lastFinish.extraHash = rec.extraHash || lastFinish.extraHash;
-  lastFinish.txPhase = "settled";
+  lastFinish.runId = rec.runId || lastFinish.runId;
+  lastFinish.paidLane = rec.paidLane != null ? rec.paidLane : lastFinish.paidLane;
+  lastFinish.txPhase = rec.floorMissed ? "floorRecordFail" : "settled";
   if (rec.burned > 0n) lastFinish.burned = Number(ethers.formatUnits(rec.burned, 18));
   if (rec.payout != null && rec.payout > 0n) {
     lastFinish.payout = Number(ethers.formatUnits(rec.payout, 18));
@@ -4095,6 +4126,28 @@ function paintSettledTx(el, rec) {
   );
   showSettleWalletHint(false);
   refreshOver();
+}
+
+async function retryFloorRecord(el) {
+  if (!el || !window.CatboxChain || !lastFinish) return;
+  el.onclick = null;
+  lastFinish.txPhase = "recordingFloor";
+  paintOverTx();
+  try {
+    const runId = lastFinish.runId;
+    const paidLane = lastFinish.paidLane != null ? lastFinish.paidLane : !lastFinish.free;
+    const hash = runId
+      ? await CatboxChain.recordFloor(runId, paidLane)
+      : await CatboxChain.syncFloorRecord();
+    lastFinish.floorHash = hash && hash !== "already" ? hash : lastFinish.floorHash;
+    lastFinish.txPhase = "settled";
+    showSettleWalletHint(false);
+    refreshOver();
+    refreshClaimUi();
+  } catch (_) {
+    lastFinish.txPhase = "floorRecordFail";
+    paintOverTx();
+  }
 }
 
 async function retryFloorOverage(el) {
@@ -4132,10 +4185,19 @@ async function settleOnchain(got, ticket, score) {
     el.textContent = t("settling");
     const wait = 5500 - (Date.now() - (run?.startedMs || Date.now()));
     if (wait > 0) await new Promise((r) => setTimeout(r, wait));
-    const rec = await CatboxChain.settleRun(got, ticket, score, () => {
-      lastFinish.txPhase = "settlingExtra";
-      el.textContent = t("settlingExtra");
-    });
+    const rec = await CatboxChain.settleRun(
+      got,
+      ticket,
+      score,
+      () => {
+        lastFinish.txPhase = "settlingExtra";
+        el.textContent = t("settlingExtra");
+      },
+      () => {
+        lastFinish.txPhase = "recordingFloor";
+        el.textContent = t("floorRetry");
+      },
+    );
     paintSettledTx(el, rec);
     await syncOnchainPool();
     refreshInviteUi();
