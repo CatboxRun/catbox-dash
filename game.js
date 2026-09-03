@@ -621,16 +621,23 @@ async function refreshClaimUi() {
   try {
     const win = CatboxChain.claimWindow();
     const p = await CatboxChain.pendingOf(acc);
-    const dailySettled = p.wk || 0n;
-    const inviteSettled = p.inv || 0n;
     const floorSettled = p.floor || 0n;
     const boardSettled = (p.v6 || 0n) + (p.v5 || 0n);
-    const settled = p.total != null ? p.total : dailySettled + inviteSettled + floorSettled;
+    const settled = boardSettled + floorSettled;
     const markedToday = Boolean(p.markedToday);
-    const text = `${CatboxChain.formatLim(settled)} LIM`;
+    const boardText = `${CatboxChain.formatLim(boardSettled)} LIM`;
+    const floorText = `${CatboxChain.formatLim(floorSettled)} LIM`;
+    const pendingLabel = () => {
+      if (boardSettled > 0n && floorSettled > 0n) {
+        return `${t("claimPending")} ${boardText} · ${t("claimFloor")} ${floorText}`;
+      }
+      if (boardSettled > 0n) return `${t("claimPending")} ${boardText}`;
+      if (floorSettled > 0n) return `${t("claimPending")} ${t("claimFloor")} ${floorText}`;
+      return "";
+    };
     if (!win.open) {
       if (settled > 0n) {
-        if (amt) amt.textContent = `${t("claimPending")} ${text}`;
+        if (amt) amt.textContent = pendingLabel();
       } else if (markedToday) {
         if (amt) amt.textContent = t("floorInSplit");
       } else if (amt) amt.textContent = t("claimNone");
@@ -639,9 +646,9 @@ async function refreshClaimUi() {
       setFloorClaimEnabled(false, floorSettled === 0n && !markedToday);
       return;
     }
-    if (amt) amt.textContent = settled > 0n ? `${t("claimPending")} ${text}` : markedToday ? t("floorInSplit") : t("claimNone");
+    if (amt) amt.textContent = settled > 0n ? pendingLabel() : markedToday ? t("floorInSplit") : t("claimNone");
     if (when) when.textContent = settled > 0n ? t("claimReady") : t("claimOpen");
-    setBoardClaimEnabled(boardSettled > 0n);
+    setBoardClaimEnabled(boardSettled > 0n || floorSettled > 0n);
     setFloorClaimEnabled(floorSettled > 0n, floorSettled === 0n);
   } catch (_) {
     paintWait();
@@ -702,10 +709,15 @@ async function doClaim() {
     if (amt) amt.textContent = t("claiming");
     const p = await CatboxChain.pendingOf();
     const board = (p.v6 || 0n) + (p.v5 || 0n);
-    if (board === 0n) throw new Error("NONE");
-    const hash = await CatboxChain.claim();
-    if (amt) {
-      amt.innerHTML = `<a href="${CatboxChain.txUrl(hash)}" target="_blank" rel="noopener">${hash.slice(0, 10)}…</a>`;
+    const floor = p.floor || 0n;
+    if (board === 0n && floor === 0n) throw new Error("NONE");
+    const hashes = [];
+    if (board > 0n) hashes.push(await CatboxChain.claim());
+    if (floor > 0n) hashes.push(await CatboxChain.claimFloor());
+    const hash = hashes.filter(Boolean).join(",");
+    if (amt && hash) {
+      const first = hash.split(",")[0];
+      amt.innerHTML = `<a href="${CatboxChain.txUrl(first)}" target="_blank" rel="noopener">${first.slice(0, 10)}…</a>`;
     }
     await refreshWalletUi();
     await refreshClaimUi();
@@ -1950,6 +1962,7 @@ function show(el) {
   [lobby, pay, game, over].forEach((p) => p.classList.add("hidden"));
   el.classList.remove("hidden");
   document.body.classList.toggle("playing", el === game);
+  document.body.classList.toggle("overing", el === over);
   syncRotate();
   requestAnimationFrame(syncRotate);
 }
@@ -2188,7 +2201,7 @@ function openPay(tier, opts = {}) {
 function refreshHud() {
   if (!run || game.classList.contains("hidden")) return;
   const copy = tierText(run.tier.id);
-  $("hudTier").textContent = `${copy.name} · ${run.tier.cost} LIM`;
+  $("hudTier").textContent = copy.name;
   if (run.noteKey && run.noteT > 0) {
     const note = $("runNote");
     if (note) note.textContent = t(run.noteKey);
@@ -2204,6 +2217,19 @@ function fmtRewardPct(bps) {
   return `${pct.toFixed(1)}%`;
 }
 
+function paintOverResult(html, paid) {
+  const el = $("overResult");
+  if (!el) return;
+  const lines = String(html || "")
+    .split(/<br\s*\/?>/i)
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const paidN = Number(paid).toFixed(4);
+  el.innerHTML =
+    `<p class="result-paid"><small>${t("overPaid")}</small><b>${paidN} <span>LIM</span></b></p>` +
+    lines.map((line) => `<p class="result-line">${line}</p>`).join("");
+}
+
 function refreshOver() {
   if (!lastFinish || over.classList.contains("hidden")) return;
   const { cap, ticket, got, leftover, score, coins, whyKey, rank, burned, burnHash, payout, bps, free } = lastFinish;
@@ -2215,9 +2241,15 @@ function refreshOver() {
     if (cap && fail) {
       whyEl.textContent = t(`${whyKey}Cap`);
       whyEl.className = `over-why encore ${whyKey}`;
+      whyEl.hidden = false;
+    } else if (fail) {
+      whyEl.textContent = "";
+      whyEl.className = "over-why";
+      whyEl.hidden = true;
     } else {
       whyEl.textContent = t(whyKey);
       whyEl.className = `over-why ${whyKey}`;
+      whyEl.hidden = false;
     }
   }
   if (cap) {
@@ -2234,13 +2266,11 @@ function refreshOver() {
   const weekAmt = leftover * 0.5;
   const invAmt = leftover * 0.2;
   const burnShown = typeof burned === "number" ? burned : burnAmt;
-  const pct = fmtRewardPct(bps || window._rewardBps || 10500).replace("%", "");
   const paid = payout != null ? payout : displayPayout(got, ticket, bps || window._rewardBps || 10500, lastFinish?.free);
-  $("overResult").innerHTML = t(cap ? "resultFull" : "resultPart", {
+  paintOverResult(t(cap ? "resultFull" : "resultPart", {
     coins,
     got: got.toFixed(4),
     paid: Number(paid).toFixed(4),
-    pct,
     ticket,
     cap: payoutCap(ticket),
     score,
@@ -2248,7 +2278,7 @@ function refreshOver() {
     burn: Number(burnShown).toFixed(4),
     week: weekAmt.toFixed(4),
     invite: invAmt.toFixed(4),
-  });
+  }), paid);
   const posted = $("overPosted");
   if (posted) {
     posted.textContent = free ? t("overPostedSkip") : t("overPosted", { rank: rank || "—" });
@@ -2603,7 +2633,7 @@ function startRun(tier, teach, freeRun) {
     run.magnetPull = 0.28;
     consumeFriendRun();
   }
-  $("hudTier").textContent = `${tierText(tier.id).name} · ${tier.cost} LIM`;
+  $("hudTier").textContent = tierText(tier.id).name;
   $("rebateBar").style.width = "0%";
   $("rebateBar")?.parentElement?.classList.remove("to-floor");
   paintHudLim();
@@ -4032,6 +4062,7 @@ function finish(whyKey) {
 function showSettleWalletHint(on) {
   const hint = $("overSettleHint");
   if (hint) hint.classList.toggle("hidden", !on);
+  over?.classList.toggle("settling", Boolean(on));
 }
 
 function paintOverTx() {

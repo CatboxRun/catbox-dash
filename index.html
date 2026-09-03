@@ -44,7 +44,7 @@
       href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@500;700&family=Noto+Sans+SC:wght@500;700&family=Noto+Sans+JP:wght@500;700&family=Noto+Sans+KR:wght@500;700&family=Noto+Sans+Thai:wght@500;700&family=Press+Start+2P&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="./styles.css?v=94" />
+    <link rel="stylesheet" href="./styles.css?v=97" />
     <link rel="stylesheet" href="./sicbo.css?v=13" />
     <link rel="stylesheet" href="./track.css?v=9" />
   </head>
@@ -597,7 +597,7 @@
       <section id="game" class="panel game hidden">
         <div class="play-stage" id="playStage">
           <div class="hud">
-            <span class="hud-chip tier" id="hudTier"></span>
+            <span class="hud-chip tier"><small data-i18n="hudLane">TIER</small><b id="hudTier"></b></span>
             <span class="hud-chip score"><small data-i18n="hudScore">SCORE</small><b id="hudScore">0</b></span>
             <span class="hud-chip grab"><small data-i18n="hudKeep">KEEP</small><b id="hudRebate">0</b></span>
             <span class="hud-chip floor hidden" id="hudFloorChip"><small data-i18n="hudFloor">FLOOR</small><b id="hudFloorAmt">+0</b></span>
@@ -639,7 +639,7 @@
         </div>
         <p class="tx-line burn-tx" id="overBurn"></p>
         <p class="tx-line" id="overTx"></p>
-        <div class="row">
+        <div class="row over-actions">
           <button class="ghost" id="toLobby" data-i18n="lobby">LOBBY</button>
           <button class="primary pulse-cta" id="again" data-i18n="again">SAME TIER</button>
         </div>
@@ -721,8 +721,8 @@
     <script src="https://cdn.jsdelivr.net/npm/ethers@6.13.5/dist/ethers.umd.min.js"></script>
     <script src="./airdrop-merkle.js?v=1"></script>
     <script src="./chain.js?v=107"></script>
-    <script src="./i18n.js?v=138"></script>
-    <script src="./game.js?v=154"></script>
+    <script src="./i18n.js?v=142"></script>
+    <script src="./game.js?v=157"></script>
     <script src="./bgm.js?v=26"></script>
     <script src="./sicbo-config.js?v=2"></script>
     <script src="./sicbo.js?v=18"></script>
