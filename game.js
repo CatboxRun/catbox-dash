@@ -436,13 +436,6 @@ async function syncOnchainPool() {
       const floor = await CatboxChain.floorPoolBalance();
       const el = $("floorPoolAmt");
       if (el) el.textContent = `${CatboxChain.formatLim(floor.livePool)} LIM`;
-      const meta = $("floorPoolMeta");
-      if (meta) {
-        meta.textContent = t("floorLive", {
-          pool: CatboxChain.formatLim(floor.livePool),
-          n: String(floor.liveCount),
-        });
-      }
     } catch (_) {
       if ($("floorPoolAmt")) $("floorPoolAmt").textContent = "—";
     }
