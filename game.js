@@ -559,7 +559,6 @@ async function refreshWalletUi() {
   } catch (_) {}
   refreshInviteUi();
   refreshClaimUi();
-  refreshDropUi();
   await refreshFreeUi();
   paintShareCtas();
   if (acc && !floorRecordTried.has(acc.toLowerCase())) {
@@ -748,88 +747,6 @@ async function doClaimFloor() {
   } catch (e) {
     if (amt) amt.textContent = e?.shortMessage?.includes("none") || e?.message?.includes("none") || e?.message === "NONE" ? t("claimNone") : t("txFail");
     await refreshClaimUi();
-  } finally {
-    window._claimBusy = false;
-  }
-}
-
-function dropClaimBtns() {
-  return [$("claimDropFab"), $("claimDropPaneBtn")].filter(Boolean);
-}
-
-function setDropClaimEnabled(on, label) {
-  dropClaimBtns().forEach((el) => {
-    el.disabled = !on;
-  });
-  const meta = $("dropMeta");
-  const amt = $("dropAmt");
-  if (label && amt) amt.textContent = label;
-  if (meta && !on && label) meta.textContent = label;
-}
-
-async function refreshDropUi() {
-  const amt = $("dropAmt");
-  const meta = $("dropMeta");
-  const fabAmt = $("dropFabAmt");
-  const fabCta = $("dropFabCta");
-  const acc = window.CatboxChain?.account;
-  const paint = (amountText, why, on) => {
-    if (amt) amt.textContent = amountText;
-    if (meta) meta.textContent = why || "";
-    if (fabAmt) fabAmt.textContent = amountText;
-    if (fabCta) fabCta.textContent = on ? t("claimDrop") : why || t("claimDrop");
-    setDropClaimEnabled(on);
-  };
-  if (!acc || !chainReady || !window.CatboxChain?.dropPendingOf) {
-    paint("—", t("connectFirst"), false);
-    return;
-  }
-  try {
-    const [pend, done] = await Promise.all([
-      CatboxChain.dropPendingOf(acc),
-      CatboxChain.dropClaimedOf(acc),
-    ]);
-    if (done) {
-      paint(t("dropDone"), t("dropDone"), false);
-      return;
-    }
-    if (pend > 0n) {
-      paint(`${CatboxChain.formatLim(pend)} LIM`, t("claimDrop"), true);
-      return;
-    }
-    paint("—", t("dropNone"), false);
-  } catch (_) {
-    paint("—", t("dropNone"), false);
-  }
-}
-
-async function doClaimDrop() {
-  if (window._claimBusy) return;
-  window._claimBusy = true;
-  const amt = $("dropAmt");
-  const fabAmt = $("dropFabAmt");
-  const mark = (text) => {
-    if (amt) amt.textContent = text;
-    if (fabAmt) fabAmt.textContent = text;
-  };
-  try {
-    setDropClaimEnabled(false);
-    mark(t("claiming"));
-    if (!window.CatboxChain?.account) await CatboxChain.connect();
-    const pend = await CatboxChain.dropPendingOf();
-    if (pend <= 0n) throw new Error("LIST");
-    const hash = await CatboxChain.claimDrop();
-    const short = `${hash.slice(0, 10)}…`;
-    if (amt) {
-      amt.innerHTML = `<a href="${CatboxChain.txUrl(hash)}" target="_blank" rel="noopener">${short}</a>`;
-    }
-    if (fabAmt) fabAmt.textContent = short;
-    await refreshWalletUi();
-    await refreshDropUi();
-  } catch (e) {
-    const msg = e?.message || "";
-    mark(msg === "DONE" ? t("dropDone") : msg === "LIST" || msg === "NONE" ? t("dropNone") : t("txFail"));
-    await refreshDropUi();
   } finally {
     window._claimBusy = false;
   }
@@ -1097,10 +1014,6 @@ function bootLobbyTabs() {
   const gamesBack = $("gamesBack");
   if (gamesBack) gamesBack.onclick = () => showGamesCatalog();
   window.setLobbyTab = setTab;
-  if (/airdrop/i.test(location.hash || "")) {
-    setTab("pool");
-    queueMicrotask(() => $("dropCard")?.scrollIntoView({ behavior: "smooth", block: "center" }));
-  }
 }
 
 function bootNoticeCarousel() {
@@ -1766,8 +1679,6 @@ async function bootWallet() {
   $("claimBoardBtn") && ($("claimBoardBtn").onclick = doClaim);
   $("claimInviteBtn") && ($("claimInviteBtn").onclick = doClaim);
   $("claimFloorBtn") && ($("claimFloorBtn").onclick = doClaimFloor);
-  $("claimDropFab") && ($("claimDropFab").onclick = doClaimDrop);
-  $("claimDropPaneBtn") && ($("claimDropPaneBtn").onclick = doClaimDrop);
   try { CatboxChain.referrer(); } catch (_) {}
 }
 
